@@ -3,129 +3,214 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Content Research OS Prototype</title>
+    <title>Viral Radar — Stop guessing what goes viral</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #0a0b0d;
+            --bg-elevated: #131518;
+            --bg-card: #17191d;
+            --border: #262a30;
+            --border-bright: #3a3f47;
+            --acid: #c6ff3d;
+            --acid-dim: #8fb82c;
+            --coral: #ff5a36;
+            --coral-dim: #b33e26;
+            --text: #f2f3f0;
+            --text-dim: #9a9fa6;
+            --text-faint: #5c6169;
+            --font-display: 'Archivo Black', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-body: 'Work Sans', sans-serif;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; }
+        html, body { width: 100%; min-height: 100%; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            background-color: #f3f4f6;
+            position: relative;
+            overflow-x: hidden;
         }
-        #root { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-        .loading-fallback { text-align: center; color: #333; font-size: 18px; padding: 20px; }
-        .spinner {
-            border: 4px solid #e5e7eb;
-            border-top: 4px solid #2563eb;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.035;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        code { font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace; }
-        .min-h-screen { min-height: 100vh; }
-        .bg-gray-100 { background-color: #f3f4f6; }
-        .p-4 { padding: 1rem; }
-        .font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; }
-        .max-w-4xl { max-width: 56rem; }
-        .mx-auto { margin-left: auto; margin-right: auto; }
-        .bg-white { background-color: #ffffff; }
-        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-        .rounded-lg { border-radius: 0.5rem; }
-        .p-6 { padding: 1.5rem; }
-        .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
-        .font-bold { font-weight: 700; }
-        .text-gray-800 { color: #1f2937; }
-        .mb-6 { margin-bottom: 1.5rem; }
-        .text-center { text-align: center; }
-        .mb-4 { margin-bottom: 1rem; }
-        .space-y-4 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 1rem; }
-        .block { display: block; }
-        .text-gray-700 { color: #374151; }
-        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-        .mb-2 { margin-bottom: 0.5rem; }
-        .shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
-        .appearance-none { appearance: none; }
-        .border { border-width: 1px; border-color: #e5e7eb; }
-        .rounded { border-radius: 0.25rem; }
-        .w-full { width: 100%; }
-        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-        .leading-tight { line-height: 1.25; }
-        .focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
-        .focus\:shadow-outline:focus { box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5); }
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .flex-1 { flex: 1 1 0%; }
-        .sm\:flex-row { flex-direction: row; }
-        .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) { margin-left: 1rem; }
-        .sm\:space-y-0 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0; }
-        .bg-blue-600 { background-color: #2563eb; }
-        .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
-        .text-white { color: #ffffff; }
-        .px-4 { padding-left: 1rem; padding-right: 1rem; }
-        .opacity-50 { opacity: 0.5; }
-        .cursor-not-allowed { cursor: not-allowed; }
-        .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
-        .text-blue-500 { color: #3b82f6; }
-        .h-12 { height: 3rem; }
-        .w-12 { width: 3rem; }
-        .bg-red-100 { background-color: #fee2e2; }
-        .border-red-400 { border-color: #f87171; }
-        .text-red-700 { color: #b91c1c; }
-        .relative { position: relative; }
-        .sm\:inline { display: inline; }
-        .mt-8 { margin-top: 2rem; }
-        .space-y-8 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 2rem; }
-        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
-        .border-b { border-bottom-width: 1px; border-color: #e5e7eb; }
-        .pb-2 { padding-bottom: 0.5rem; }
-        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-        .font-semibold { font-weight: 600; }
-        .list-disc { list-style-type: disc; }
-        .list-inside { list-style-position: inside; }
-        .text-gray-600 { color: #4b5563; }
-        .space-y-3 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0.75rem; }
-        .bg-gray-50 { background-color: #f9fafb; }
-        .p-3 { padding: 0.75rem; }
-        .rounded-md { border-radius: 0.375rem; }
-        .border-gray-200 { border-color: #e5e7eb; }
-        .font-medium { font-weight: 500; }
-        .grid { display: grid; }
-        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .gap-2 { gap: 0.5rem; }
-        .mt-4 { margin-top: 1rem; }
-        .pt-4 { padding-top: 1rem; }
-        .border-t { border-top-width: 1px; border-color: #e5e7eb; }
-        .text-gray-500 { color: #6b7280; }
-        .bg-red-50 { background-color: #fef2f2; }
-        .border-red-300 { border-color: #fca5a5; }
-        .text-red-600 { color: #dc2626; }
-        .bg-yellow-50 { background-color: #fef3c7; }
-        .border-yellow-300 { border-color: #fcd34d; }
-        .text-yellow-700 { color: #b45309; }
-        .bg-green-50 { background-color: #f0fdf4; }
-        .border-green-300 { border-color: #86efac; }
-        .text-green-700 { color: #166534; }
-        .text-xs { font-size: 0.75rem; }
-        .underline { text-decoration: underline; }
-        .cursor-pointer { cursor: pointer; }
-        @media (max-width: 640px) {
-            .mobile-ui .flex-col.sm\:flex-row { flex-direction: column; }
-            .mobile-ui .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) { margin-left: 0; margin-top: 1rem; }
-            .mobile-ui .sm\:space-y-0 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 1rem; }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 64px 64px;
+            opacity: 0.25;
+            mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 0%, transparent 70%);
+        }
+        #root { position: relative; z-index: 2; }
+        .spinner { border: 3px solid var(--border); border-top: 3px solid var(--acid); border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        ::selection { background: var(--acid); color: #0a0b0d; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
+
+        .shell { max-width: 880px; margin: 0 auto; padding: 0 20px 100px; }
+
+        /* ---------- NAV ---------- */
+        .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
+        .nav-brand { display: flex; align-items: center; gap: 10px; }
+        .nav-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--acid); font-size: 20px; transform: rotate(0deg); animation: none; }
+        .nav-name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .nav-badge { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); background: rgba(198,255,61,0.07); padding: 4px 10px; border-radius: 20px; letter-spacing: 0.05em; }
+
+        /* ---------- HERO ---------- */
+        .hero { padding: 20px 0 44px; text-align: center; }
+        .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border-bright); padding: 6px 14px; border-radius: 20px; margin-bottom: 26px; letter-spacing: 0.03em; }
+        .hero-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1.6s ease-in-out infinite; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(34px, 6.4vw, 58px); line-height: 1.02; letter-spacing: -0.01em; text-transform: uppercase; margin-bottom: 18px; }
+        .hero h1 span { color: var(--acid); }
+        .hero p { font-size: 16px; color: var(--text-dim); max-width: 480px; margin: 0 auto; line-height: 1.55; }
+
+        /* ---------- CONSOLE INPUT ---------- */
+        .console { margin-top: 36px; background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 4px; box-shadow: 0 0 0 1px rgba(198,255,61,0.03), 0 20px 60px -20px rgba(0,0,0,0.6); }
+        .console-head { display: flex; align-items: center; gap: 7px; padding: 12px 16px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+        .console-head .cdot { width: 8px; height: 8px; border-radius: 50%; }
+        .console-body { padding: 4px 14px 16px; }
+        .console-prompt { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 15px; padding: 6px 4px 16px; }
+        .console-prompt .caret { color: var(--acid); }
+        .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
+        .console-prompt input::placeholder { color: var(--text-faint); }
+        .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
+
+        .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
+        .select-wrap { position: relative; }
+        .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
+        .select-wrap select {
+            width: 100%; appearance: none; background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; padding: 9px 26px 9px 11px;
+            border-radius: 8px; cursor: pointer;
+        }
+        .select-wrap select:hover { border-color: var(--border-bright); color: var(--text); }
+        .select-wrap select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .run-btn {
+            width: 100%; background: var(--acid); color: #0a0b0d; border: none; font-family: var(--font-mono);
+            font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px;
+            border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
+        .run-btn:active:not(:disabled) { transform: translateY(0); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+
+        /* ---------- AGENT STRIP ---------- */
+        .agent-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+        .agent-chip { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; letter-spacing: 0.02em; }
+
+        /* ---------- ERROR ---------- */
+        .error-box { margin-top: 24px; background: rgba(255,90,54,0.08); border: 1px solid var(--coral-dim); color: #ffb199; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-family: var(--font-mono); }
+
+        /* ---------- LOADING ---------- */
+        .loading-box { margin-top: 40px; text-align: center; padding: 40px 0; }
+        .loading-box p { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-top: 16px; letter-spacing: 0.02em; }
+
+        /* ---------- RESULTS ---------- */
+        .results { margin-top: 52px; }
+        .agent-block { margin-bottom: 44px; animation: fadeUp 0.45s ease both; }
+        .agent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .agent-title-row { display: flex; align-items: center; gap: 10px; }
+        .agent-index { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
+        .agent-title { font-family: var(--font-display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.01em; }
+        .agent-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .agent-meta b { color: var(--text-dim); }
+
+        .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
+        .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
+
+        /* Discovery video cards */
+        .video-grid { display: grid; gap: 10px; }
+        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease; }
+        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); }
+        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
+        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .video-sub .views { color: var(--acid); }
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
+        .trend-list { list-style: none; margin-top: 6px; }
+        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
+        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
+
+        /* Scoring bars */
+        .score-hero { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
+        .score-hero .num { font-family: var(--font-display); font-size: 44px; color: var(--acid); line-height: 1; }
+        .score-hero .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+        .score-bars { display: grid; gap: 10px; }
+        .score-row { display: grid; grid-template-columns: 88px 1fr 34px; align-items: center; gap: 10px; }
+        .score-row .name { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+        .score-track { height: 7px; background: var(--bg-card); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+        .score-fill { height: 100%; background: linear-gradient(90deg, var(--acid-dim), var(--acid)); border-radius: 4px; }
+        .score-row .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: right; }
+        .reasoning-box { margin-top: 16px; font-size: 13.5px; color: var(--text-dim); line-height: 1.6; background: var(--bg-card); border: 1px solid var(--border); border-left: 2px solid var(--acid); padding: 12px 14px; border-radius: 0 8px 8px 0; }
+
+        /* Ranking timeline */
+        .timeline { position: relative; padding-left: 34px; }
+        .timeline::before { content: ''; position: absolute; left: 13px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--acid), var(--coral)); opacity: 0.4; }
+        .tl-item { position: relative; padding-bottom: 20px; }
+        .tl-item:last-child { padding-bottom: 0; }
+        .tl-dot { position: absolute; left: -34px; top: 2px; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-card); border: 1.5px solid var(--acid-dim); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--acid); }
+        .tl-seg { font-family: var(--font-mono); font-size: 10.5px; color: var(--coral); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+        .tl-content { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; }
+        .retention-box { margin-top: 18px; background: rgba(198,255,61,0.05); border: 1px solid var(--acid-dim); border-radius: 10px; padding: 13px 15px; font-size: 13px; color: var(--text); line-height: 1.55; }
+        .retention-box .tag-label { color: var(--acid-dim); margin-bottom: 5px; }
+
+        /* SEO */
+        .seo-preview { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+        .seo-title { color: #8ab4ff; font-size: 15px; margin-bottom: 4px; }
+        .seo-desc { font-size: 12.5px; color: var(--text-faint); line-height: 1.5; }
+        .copy-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: all 0.12s ease; }
+        .copy-chip:hover { border-color: var(--acid-dim); color: var(--acid); }
+        .copy-chip.copied { border-color: var(--acid); color: var(--acid); background: rgba(198,255,61,0.08); }
+
+        /* Competitor */
+        .comp-grid { display: grid; gap: 10px; margin-bottom: 18px; }
+        .comp-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+        .comp-name { font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
+        .comp-strategy { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 6px; }
+        .comp-formats { font-family: var(--font-mono); font-size: 10.5px; color: var(--coral); }
+        .gap-list { list-style: none; }
+        .gap-list li { font-size: 13px; color: var(--text-dim); padding: 6px 0 6px 18px; position: relative; border-bottom: 1px solid var(--border); }
+        .gap-list li:last-child { border-bottom: none; }
+        .gap-list li::before { content: '◆'; position: absolute; left: 0; color: var(--coral); font-size: 8px; top: 10px; }
+
+        @media (max-width: 560px) {
+            .config-row { grid-template-columns: 1fr; }
+            .video-thumb { width: 76px; height: 48px; }
+            .score-row { grid-template-columns: 70px 1fr 30px; }
         }
     </style>
 </head>
 <body>
     <div id="root">
-        <div class="loading-fallback">
-            <div class="spinner"></div>
-            <p>Loading AI Content Research OS...</p>
+        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
+            <div class="spinner" style="margin:0 auto 16px;"></div>
+            Booting Viral Radar…
         </div>
     </div>
 
@@ -324,16 +409,14 @@
 
             if (llmResponse.success) {
               const llmData = llmResponse.data;
-              
-              // Extract real YouTube videos
+
               const realVideos = Array.isArray(llmData.real_videos) ? llmData.real_videos : [];
               agentOutput.result.realVideos = realVideos;
               agentOutput.result.videoCandidates = realVideos.map(v => v.title || "");
               agentOutput.result.youtubeLinks = realVideos.map(v => v.url || "");
               agentOutput.result.viewCounts = realVideos.map(v => v.viewCount || 0);
               agentOutput.result.channels = realVideos.map(v => v.channel || "");
-              
-              // Extract trend signals and keywords from LLM response
+
               agentOutput.result.trendSignals = Array.isArray(llmData.trendSignals) ? llmData.trendSignals : (llmData.why_trending ? [llmData.why_trending] : []);
               agentOutput.result.keywords = (llmData.seo_keywords || "").split(",").map(k => k.trim()).filter(Boolean);
 
@@ -366,7 +449,7 @@
 
           try {
             const prompt = `Analyze "${contentDescription}" for platform "${platform || 'general'}". Provide ONLY JSON with individual scores (0-100) for: viralScore, emotionScore, trendScore, hookScore, replayScore, rarityScore, competitionScore, and reasoning. NO prose.
-            
+
             REQUIRED JSON FORMAT:
             { "viralScore": 0, "emotionScore": 0, "trendScore": 0, "hookScore": 0, "replayScore": 0, "rarityScore": 0, "competitionScore": 0, "reasoning": "..." }`;
 
@@ -439,9 +522,9 @@
           try {
             const prompt = `Create a 6-rank narrative structure for: "${contentDescription}" (${platform || 'general'} platform). Use exactly these ranks with segment names:
             6=Hook, 5=Interest, 4=Context, 3=Escalation, 2=False Winner, 1=Payoff
-            
+
             Provide ONLY valid JSON with rankOrder array (6 items exactly) and retentionPrediction. NO prose, NO markdown.
-            
+
             REQUIRED JSON FORMAT:
             { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "..."}, ...], "retentionPrediction": "..." }`;
 
@@ -518,7 +601,7 @@
 
           try {
             const prompt = `Generate SEO for: "${contentDescription}" (${platform || 'general'}, ${language}). Provide ONLY JSON with: title (max 60 chars), description (max 160 chars), keywords array (5-10), hashtags array (3-5). NO prose.
-            
+
             REQUIRED JSON FORMAT:
             { "title": "...", "description": "...", "keywords": ["..."], "hashtags": ["#..."] }`;
 
@@ -571,7 +654,7 @@
 
           try {
             const prompt = `Analyze competitors for: "${topic}" on ${platform || 'general'}. Identify 3+ competitor patterns with name, strategy, winningFormats. Also list contentGaps and winningFormatsSummary. Provide ONLY JSON. NO prose, NO markdown, NO safety warnings.
-            
+
             REQUIRED JSON FORMAT:
             { "competitorPatterns": [{"name": "...", "strategy": "...", "winningFormats": "...", "keywords": ["..."]}], "contentGaps": ["..."], "winningFormatsSummary": ["..."] }`;
 
@@ -669,15 +752,221 @@
 
         const { useState, useEffect } = React;
 
-        function VideoLink({ url, title, views, channel }) {
+        // ---------- UI HELPERS ----------
+
+        function extractYouTubeId(url) {
+          if (!url) return null;
+          const m = url.match(/(?:youtu\.be\/|v=|shorts\/)([a-zA-Z0-9_-]{6,})/);
+          return m ? m[1] : null;
+        }
+
+        function formatViews(n) {
+          if (!n) return null;
+          if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+          if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+          return String(n);
+        }
+
+        function AgentHeader({ index, title, meta }) {
           return (
-            <a href={url} target="_blank" rel="noopener noreferrer" className="block p-2 mb-2 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
-              <span className="text-xs text-blue-600 font-medium break-all">{url}</span>
-              <div className="text-sm text-gray-700 mt-1">{title}</div>
-              {views > 0 && <div className="text-xs text-gray-600">{(views / 1000).toLocaleString()}K views • {channel}</div>}
-            </a>
+            <div className="agent-head">
+              <div className="agent-title-row">
+                <span className="agent-index">{index}</span>
+                <span className="agent-title">{title}</span>
+              </div>
+              {meta && (
+                <span className="agent-meta">
+                  <b>{meta.provider}</b> · {meta.latency}ms
+                </span>
+              )}
+            </div>
           );
         }
+
+        function CopyChip({ text }) {
+          const [copied, setCopied] = useState(false);
+          const handleCopy = () => {
+            navigator.clipboard?.writeText(text).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1400);
+            });
+          };
+          return (
+            <span className={`copy-chip ${copied ? 'copied' : ''}`} onClick={handleCopy}>
+              {copied ? '✓ copied' : text}
+            </span>
+          );
+        }
+
+        function DiscoveryPanel({ result }) {
+          const videos = (result.youtubeLinks || []).map((link, idx) => ({
+            url: link,
+            title: result.videoCandidates?.[idx] || 'Untitled',
+            views: result.viewCounts?.[idx] || 0,
+            channel: result.channels?.[idx] || '',
+          })).filter(v => v.url);
+
+          return (
+            <div>
+              {videos.length > 0 ? (
+                <div className="video-grid">
+                  {videos.map((v, idx) => {
+                    const ytId = extractYouTubeId(v.url);
+                    const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+                    return (
+                      <a key={idx} href={v.url} target="_blank" rel="noopener noreferrer" className="video-card">
+                        {thumb
+                          ? <img className="video-thumb" src={thumb} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
+                          : <div className="video-thumb"></div>}
+                        <div className="video-info">
+                          <div className="video-title">{v.title}</div>
+                          <div className="video-sub">
+                            {v.views > 0 && <span className="views">{formatViews(v.views)} views</span>}
+                            {v.views > 0 && v.channel && ' · '}
+                            {v.channel}
+                          </div>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-panel">No grounded YouTube videos returned for this topic yet.</div>
+              )}
+
+              {result.keywords?.length > 0 && (
+                <div>
+                  <div className="tag-label" style={{ marginTop: 18 }}>Keywords</div>
+                  <div className="tag-row">
+                    {result.keywords.map((k, i) => <span key={i} className="kw-chip">{k}</span>)}
+                  </div>
+                </div>
+              )}
+
+              {result.trendSignals?.length > 0 && (
+                <div>
+                  <div className="tag-label" style={{ marginTop: 18 }}>Why it's trending</div>
+                  <ul className="trend-list">
+                    {result.trendSignals.map((s, i) => <li key={i}>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        function ScoringPanel({ result }) {
+          const bars = [
+            ['Viral', result.viralScore], ['Emotion', result.emotionScore], ['Trend', result.trendScore],
+            ['Hook', result.hookScore], ['Replay', result.replayScore], ['Rarity', result.rarityScore],
+            ['Competition', result.competitionScore],
+          ];
+          return (
+            <div>
+              <div className="score-hero">
+                <span className="num">{result.finalScore}</span>
+                <span className="lbl">/ 100 final score</span>
+              </div>
+              <div className="score-bars">
+                {bars.map(([label, val]) => (
+                  <div className="score-row" key={label}>
+                    <span className="name">{label}</span>
+                    <div className="score-track"><div className="score-fill" style={{ width: `${val}%` }}></div></div>
+                    <span className="val">{val}</span>
+                  </div>
+                ))}
+              </div>
+              {result.reasoning && <div className="reasoning-box">{result.reasoning}</div>}
+            </div>
+          );
+        }
+
+        function RankingPanel({ result }) {
+          return (
+            <div>
+              {result.rankOrder?.length > 0 ? (
+                <div className="timeline">
+                  {result.rankOrder.map((item, idx) => (
+                    <div className="tl-item" key={idx}>
+                      <span className="tl-dot">{item.rank?.replace('#', '')}</span>
+                      <div className="tl-seg">{item.segment}</div>
+                      <div className="tl-content">{item.content}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-panel">No ranked structure generated.</div>
+              )}
+              {result.retentionPrediction && (
+                <div className="retention-box">
+                  <div className="tag-label">Retention prediction</div>
+                  {result.retentionPrediction}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        function SeoPanel({ result }) {
+          return (
+            <div>
+              <div className="seo-preview">
+                <div className="seo-title">{result.title}</div>
+                <div className="seo-desc">{result.description}</div>
+              </div>
+              {result.keywords?.length > 0 && (
+                <div>
+                  <div className="tag-label">Keywords</div>
+                  <div className="tag-row">
+                    {result.keywords.map((k, i) => <CopyChip key={i} text={k} />)}
+                  </div>
+                </div>
+              )}
+              {result.hashtags?.length > 0 && (
+                <div>
+                  <div className="tag-label" style={{ marginTop: 16 }}>Hashtags</div>
+                  <div className="tag-row">
+                    {result.hashtags.map((h, i) => <CopyChip key={i} text={h} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        function CompetitorPanel({ result }) {
+          return (
+            <div>
+              {result.competitorPatterns?.length > 0 && (
+                <div className="comp-grid">
+                  {result.competitorPatterns.map((c, i) => (
+                    <div className="comp-card" key={i}>
+                      <div className="comp-name">{c.name}</div>
+                      <div className="comp-strategy">{c.strategy}</div>
+                      <div className="comp-formats">▸ {c.winningFormats}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.contentGaps?.length > 0 && (
+                <div>
+                  <div className="tag-label">Content gaps you can exploit</div>
+                  <ul className="gap-list">
+                    {result.contentGaps.map((g, i) => <li key={i}>{g}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const AGENT_DISPLAY = {
+          discovery: { title: 'Discovery', Panel: DiscoveryPanel },
+          scoring: { title: 'Scoring', Panel: ScoringPanel },
+          ranking: { title: 'Ranking', Panel: RankingPanel },
+          seo: { title: 'SEO', Panel: SeoPanel },
+          competitor: { title: 'Competitor', Panel: CompetitorPanel },
+        };
 
         function App() {
           const [topic, setTopic] = useState('');
@@ -690,248 +979,149 @@
           const [selectedModel, setSelectedModel] = useState('');
 
           useEffect(() => {
-            const fetchProviderConfig = async () => {
-              const config = AIProvider.listProviders();
-              const currentProviderName = AIProvider.getCurrentProviderName();
-              const currentProvider = config[currentProviderName];
-
-              if (currentProvider) {
-                setActiveProvider(currentProviderName);
-                setAvailableModels(currentProvider.models || []);
-                setSelectedModel(currentProvider.models?.[0]?.id || '');
-              } else {
-                const firstProviderName = Object.keys(config)[0];
-                if (firstProviderName) {
-                  AIProvider.setProvider(firstProviderName);
-                  setActiveProvider(firstProviderName);
-                  setAvailableModels(config[firstProviderName].models || []);
-                  setSelectedModel(config[firstProviderName].models?.[0]?.id || '');
-                }
-              }
-            };
-            fetchProviderConfig();
+            const config = AIProvider.listProviders();
+            const cur = AIProvider.getCurrentProviderName();
+            const provider = config[cur];
+            if (provider) {
+              setActiveProvider(cur);
+              setAvailableModels(provider.models || []);
+              setSelectedModel(provider.models?.[0]?.id || '');
+            }
           }, []);
 
           const handleProviderChange = (e) => {
-            const newProviderName = e.target.value;
-            AIProvider.setProvider(newProviderName);
-            const newProviderConfig = AIProvider.listProviders()[newProviderName];
-            setActiveProvider(newProviderName);
-            setAvailableModels(newProviderConfig?.models || []);
-            setSelectedModel(newProviderConfig?.models?.[0]?.id || '');
-          };
-
-          const handleModelChange = (e) => {
-            setSelectedModel(e.target.value);
+            const name = e.target.value;
+            AIProvider.setProvider(name);
+            const cfg = AIProvider.listProviders()[name];
+            setActiveProvider(name);
+            setAvailableModels(cfg?.models || []);
+            setSelectedModel(cfg?.models?.[0]?.id || '');
           };
 
           const handleResearch = async () => {
+            if (!topic.trim()) { setError("Enter a topic first."); return; }
             setLoading(true);
             setError(null);
             setResults(null);
 
-            if (!topic.trim()) {
-              setError("Please enter a topic to research.");
-              setLoading(false);
-              return;
-            }
-
             try {
               const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 120000 };
               const allAgentResults = {};
-
-              const discoveryOutput = await AgentRouter.routeTask(topic, 'discovery', options);
-              allAgentResults.discovery = discoveryOutput;
-
-              const scoringOutput = await AgentRouter.routeTask(topic, 'scoring', options);
-              allAgentResults.scoring = scoringOutput;
-
-              const rankingOutput = await AgentRouter.routeTask(topic, 'ranking', options);
-              allAgentResults.ranking = rankingOutput;
-
-              const seoOutput = await AgentRouter.routeTask(topic, 'seo', options);
-              allAgentResults.seo = seoOutput;
-
-              const competitorOutput = await AgentRouter.routeTask(topic, 'competitor', options);
-              allAgentResults.competitor = competitorOutput;
-
+              for (const key of ['discovery', 'scoring', 'ranking', 'seo', 'competitor']) {
+                allAgentResults[key] = await AgentRouter.routeTask(topic, key, options);
+              }
               setResults(allAgentResults);
-
             } catch (err) {
-              setError(err.message || "An unknown error occurred during content research.");
+              setError(err.message || "Something went wrong during research.");
             } finally {
               setLoading(false);
             }
           };
 
+          const handleKeyDown = (e) => { if (e.key === 'Enter' && !loading) handleResearch(); };
+
           return (
-            <div className="min-h-screen bg-gray-100 p-4 font-sans mobile-ui">
-              <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
-                <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">AI Content Research OS</h1>
+            <div className="shell">
+              <div className="nav">
+                <div className="nav-brand">
+                  <span className="nav-mark">✦</span>
+                  <span className="nav-name">Viral Radar</span>
+                </div>
+                <span className="nav-badge">FREE · NO SIGNUP</span>
+              </div>
 
-                <div className="mb-6 space-y-4">
-                  <div>
-                    <label htmlFor="topic" className="block text-gray-700 text-sm font-bold mb-2">
-                      Content Topic / Idea:
-                    </label>
-                    <input
-                      type="text"
-                      id="topic"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="e.g., 'How to grow a YouTube channel fast'"
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      disabled={loading}
-                    />
+              <div className="hero">
+                <div className="hero-tag"><span className="dot"></span> 5 AI agents · real YouTube grounding</div>
+                <h1>Stop guessing<br />what goes <span>viral</span>.</h1>
+                <p>Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.</p>
+
+                <div className="console">
+                  <div className="console-head">
+                    <span className="cdot" style={{ background: '#ff5f57' }}></span>
+                    <span className="cdot" style={{ background: '#febc2e' }}></span>
+                    <span className="cdot" style={{ background: '#28c840' }}></span>
+                    <span style={{ marginLeft: 6 }}>research.sh</span>
                   </div>
-
-                  <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-                    <div className="flex-1">
-                      <label htmlFor="platform" className="block text-gray-700 text-sm font-bold mb-2">
-                        Target Platform:
-                      </label>
-                      <select
-                        id="platform"
-                        value={platform}
-                        onChange={(e) => setPlatform(e.target.value)}
-                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  <div className="console-body">
+                    <div className="console-prompt">
+                      <span className="caret">›</span>
+                      <input
+                        type="text"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="how to grow a youtube channel fast"
                         disabled={loading}
-                      >
-                        <option>YouTube</option>
-                        <option>TikTok</option>
-                        <option>Instagram</option>
-                        <option>Twitter</option>
-                        <option>LinkedIn</option>
-                      </select>
+                      />
+                      {!topic && !loading && <span className="console-cursor"></span>}
                     </div>
 
-                    <div className="flex-1">
-                      <label htmlFor="provider" className="block text-gray-700 text-sm font-bold mb-2">
-                        LLM Provider:
-                      </label>
-                      <select
-                        id="provider"
-                        value={activeProvider}
-                        onChange={handleProviderChange}
-                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        disabled={loading}
-                      >
-                        {Object.entries(AIProvider.listProviders()).map(([key, provider]) => (
-                          <option key={key} value={key}>{provider.name}</option>
-                        ))}
-                      </select>
+                    <div className="config-row">
+                      <div className="select-wrap">
+                        <select value={platform} onChange={(e) => setPlatform(e.target.value)} disabled={loading}>
+                          <option>YouTube</option>
+                          <option>TikTok</option>
+                          <option>Instagram</option>
+                          <option>Twitter</option>
+                          <option>LinkedIn</option>
+                        </select>
+                      </div>
+                      <div className="select-wrap">
+                        <select value={activeProvider} onChange={handleProviderChange} disabled={loading}>
+                          {Object.entries(AIProvider.listProviders()).map(([key, p]) => (
+                            <option key={key} value={key}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="select-wrap">
+                        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
+                          {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label htmlFor="model" className="block text-gray-700 text-sm font-bold mb-2">
-                      Model:
-                    </label>
-                    <select
-                      id="model"
-                      value={selectedModel}
-                      onChange={handleModelChange}
-                      className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      disabled={loading || availableModels.length === 0}
-                    >
-                      {availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>{model.name}</option>
-                      ))}
-                    </select>
+                    <button className="run-btn" onClick={handleResearch} disabled={loading}>
+                      {loading ? 'Scanning…' : <>Run Research →</>}
+                    </button>
                   </div>
-
-                  <button
-                    onClick={handleResearch}
-                    disabled={loading}
-                    className={`w-full bg-blue-600 text-white px-4 py-2 rounded ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
-                  >
-                    {loading ? 'Researching...' : 'Start Research'}
-                  </button>
                 </div>
 
-                {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    <strong>Error:</strong> {error}
-                  </div>
-                )}
+                <div className="agent-strip">
+                  {['Discovery', 'Scoring', 'Ranking', 'SEO', 'Competitor'].map((a) => (
+                    <span className="agent-chip" key={a}>{a}Agent</span>
+                  ))}
+                </div>
 
-                {loading && (
-                  <div className="text-center">
-                    <div className="spinner mx-auto mb-4"></div>
-                    <p className="text-gray-700">Analyzing your content with AI agents (2 min timeout)...</p>
-                  </div>
-                )}
+                {error && <div className="error-box">⚠ {error}</div>}
+              </div>
 
-                {results && !loading && (
-                  <div className="mt-8 space-y-8">
-                    {Object.entries(results).map(([agentName, agentResult]) => (
-                      <div key={agentName} className="border-b pb-4">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2">{agentResult.agent}</h2>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Version: {agentResult.version} | Latency: {agentResult.metadata?.latency}ms | Provider: {agentResult.metadata?.provider}
-                        </p>
+              {loading && (
+                <div className="loading-box">
+                  <div className="spinner" style={{ margin: '0 auto' }}></div>
+                  <p>running 5 agents · up to 2 min on cold providers</p>
+                </div>
+              )}
 
+              {results && !loading && (
+                <div className="results">
+                  {Object.entries(results).map(([key, agentResult], idx) => {
+                    const display = AGENT_DISPLAY[key] || { title: key, Panel: null };
+                    const Panel = display.Panel;
+                    return (
+                      <div className="agent-block" key={key} style={{ animationDelay: `${idx * 0.06}s` }}>
+                        <AgentHeader index={idx + 1} title={display.title} meta={!agentResult.error ? agentResult.metadata : null} />
                         {agentResult.error ? (
-                          <div className="bg-red-50 border border-red-300 text-red-600 px-3 py-2 rounded">
-                            <strong>Error:</strong> {agentResult.error}
-                          </div>
-                        ) : agentResult.result && Object.keys(agentResult.result).length > 0 ? (
-                          <div className="bg-green-50 border border-green-300 p-3 rounded-md">
-                            {agentName === 'discovery' && (
-                              <div>
-                                <div className="font-semibold text-green-700 mb-2">✓ Real YouTube Videos</div>
-                                {agentResult.result.youtubeLinks && agentResult.result.youtubeLinks.length > 0 ? (
-                                  <div>
-                                    {agentResult.result.youtubeLinks.map((link, idx) => (
-                                      <VideoLink
-                                        key={idx}
-                                        url={link}
-                                        title={agentResult.result.videoCandidates[idx] || 'Video'}
-                                        views={agentResult.result.viewCounts[idx] || 0}
-                                        channel={agentResult.result.channels[idx] || ''}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-600">No real YouTube videos found</p>
-                                )}
-                                {agentResult.result.keywords && agentResult.result.keywords.length > 0 && (
-                                  <div className="mt-3">
-                                    <div className="text-sm font-medium text-green-700">Keywords:</div>
-                                    <div className="text-sm text-gray-700">{agentResult.result.keywords.join(', ')}</div>
-                                  </div>
-                                )}
-                                {agentResult.result.trendSignals && agentResult.result.trendSignals.length > 0 && (
-                                  <div className="mt-3">
-                                    <div className="text-sm font-medium text-green-700">Trends:</div>
-                                    <ul className="text-sm text-gray-700 list-disc list-inside">
-                                      {agentResult.result.trendSignals.map((signal, idx) => (
-                                        <li key={idx}>{signal}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {agentName !== 'discovery' && (
-                              <details>
-                                <summary className="font-semibold text-green-700 cursor-pointer">✓ Results (click to expand)</summary>
-                                <pre className="text-sm text-gray-700 overflow-auto mt-2 bg-white p-2 rounded border border-green-200">
-                                  {JSON.stringify(agentResult.result, null, 2)}
-                                </pre>
-                              </details>
-                            )}
-                          </div>
+                          <div className="err-panel">⚠ {agentResult.error}</div>
+                        ) : agentResult.result && Panel ? (
+                          <Panel result={agentResult.result} />
                         ) : (
-                          <div className="bg-yellow-50 border border-yellow-300 text-yellow-700 px-3 py-2 rounded">
-                            No results generated.
-                          </div>
+                          <div className="empty-panel">No results generated.</div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         }
