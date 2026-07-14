@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Content Research OS Prototype</title>
     <style>
-        /* Critical initial styles - prevent blank screen */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; }
         body {
@@ -16,12 +15,7 @@
             background-color: #f3f4f6;
         }
         #root { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-        .loading-fallback {
-            text-align: center;
-            color: #333;
-            font-size: 18px;
-            padding: 20px;
-        }
+        .loading-fallback { text-align: center; color: #333; font-size: 18px; padding: 20px; }
         .spinner {
             border: 4px solid #e5e7eb;
             border-top: 4px solid #2563eb;
@@ -31,16 +25,8 @@
             animation: spin 1s linear infinite;
             margin: 20px auto;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        code {
-            font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
-        }
-
-        /* Tailwind-like utilities */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        code { font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace; }
         .min-h-screen { min-height: 100vh; }
         .bg-gray-100 { background-color: #f3f4f6; }
         .p-4 { padding: 1rem; }
@@ -119,7 +105,12 @@
         .bg-red-50 { background-color: #fef2f2; }
         .border-red-300 { border-color: #fca5a5; }
         .text-red-600 { color: #dc2626; }
-
+        .bg-yellow-50 { background-color: #fef3c7; }
+        .border-yellow-300 { border-color: #fcd34d; }
+        .text-yellow-700 { color: #b45309; }
+        .bg-green-50 { background-color: #f0fdf4; }
+        .border-green-300 { border-color: #86efac; }
+        .text-green-700 { color: #166534; }
         @media (max-width: 640px) {
             .mobile-ui .flex-col.sm\:flex-row { flex-direction: column; }
             .mobile-ui .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) { margin-left: 0; margin-top: 1rem; }
@@ -135,38 +126,76 @@
         </div>
     </div>
 
-    <!-- React and ReactDOM with CDN fallback -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
     <script type="text/babel">
-        // --- src/providers/llmRouter.js ---
-        const DEFAULT_TIMEOUT = 15000;
+        const DEFAULT_TIMEOUT = 120000; // Increased to 2 minutes
         const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+        const MAX_RETRIES = 2;
+        const RETRY_DELAY = 1000; // 1 second between retries
 
         const providersConfig = {
-            openrouter: {
-                name: "OpenRouter",
-                models: [
-                    { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                    { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-                ]
-            },
-            google: {
-                name: "Google AI Studio",
-                models: [
-                    { id: "gemini-pro", name: "Gemini Pro" }
-                ]
-            },
-            cloudflare: {
-                name: "Cloudflare Workers AI",
-                models: [{ id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]
-            }
+            openrouter: { name: "OpenRouter", models: [
+                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
+                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
+            ]},
+            google: { name: "Google AI Studio", models: [{ id: "gemini-pro", name: "Gemini Pro" }]},
+            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]}
         };
 
         let currentProviderName = "openrouter";
+
+        // Enhanced JSON cleanup function
+        function cleanJsonResponse(text) {
+            if (!text || typeof text !== 'string') return '';
+            // Remove common safety warnings and prose prefixes
+            text = text
+                .replace(/^.*?User Safety:.*?(?=\{)/is, '')
+                .replace(/^.*?I cannot.*?(?=\{)/is, '')
+                .replace(/^.*?I don't.*?(?=\{)/is, '')
+                .replace(/^```json\s*/i, '')
+                .replace(/^```\s*/i, '')
+                .replace(/\s*```$/i, '')
+                .trim();
+
+            // Find first { and last }
+            const start = text.indexOf('{');
+            const end = text.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) {
+                return text.slice(start, end + 1);
+            }
+            return text;
+        }
+
+        // Retry wrapper with exponential backoff
+        async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
+            let lastError;
+            for (let i = 0; i <= maxRetries; i++) {
+                try {
+                    const resp = await fetch(url, options);
+                    const data = await resp.json();
+                    if (!resp.ok && resp.status === 503) {
+                        if (i < maxRetries) {
+                            const delay = RETRY_DELAY * Math.pow(2, i);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                    }
+                    return { ok: resp.ok, status: resp.status, data };
+                } catch (err) {
+                    lastError = err;
+                    if (i < maxRetries) {
+                        const delay = RETRY_DELAY * Math.pow(2, i);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                }
+            }
+            throw lastError || new Error('Max retries exceeded');
+        }
 
         const AIProvider = {
             async analyze(prompt, options = {}) {
@@ -185,17 +214,17 @@
                 let usedProvider = providerName;
 
                 try {
-                  const resp = await fetch(workerUrl, {
+                  const { ok, status, data } = await fetchWithRetry(workerUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ prompt, provider: providerName || null, model: model || null }),
                     signal: signal
                   });
-                  rawData = await resp.json();
+                  rawData = data;
                   clearTimeout(timer);
 
-                  if (!resp.ok) {
-                    errorMessage = rawData.error || `Worker request failed with status ${resp.status}`;
+                  if (!ok) {
+                    errorMessage = rawData.error || `Worker request failed with status ${status}`;
                   } else {
                     success = true;
                     usedProvider = rawData.provider_used || providerName;
@@ -214,37 +243,28 @@
                 }
 
                 try {
-                  const parsed = outputSchema ? JSON.parse(rawData.text.replace(/```json|```/g, "").trim()) : rawData.text;
+                  const cleaned = cleanJsonResponse(rawData.text);
+                  const parsed = outputSchema ? JSON.parse(cleaned) : rawData.text;
                   return { success: true, data: parsed, provider: usedProvider, model: model, metadata: { latency, timestamp } };
                 } catch (e) {
-                  return { success: false, error: `Invalid JSON from LLM: ${e.message}`, provider: usedProvider, model: model, metadata: { latency, timestamp } };
+                  return { success: false, error: `Invalid JSON from LLM: ${e.message}. Raw: ${(rawData.text || '').slice(0, 100)}...`, provider: usedProvider, model: model, metadata: { latency, timestamp } };
                 }
             },
 
             setProvider(name) {
-                if (providersConfig[name]) {
-                    currentProviderName = name;
-                    return true;
-                }
+                if (providersConfig[name]) { currentProviderName = name; return true; }
                 console.warn(`Provider "${name}" not found in client config.`);
                 return false;
             },
 
-            getCurrentProviderName() {
-                return currentProviderName;
-            },
-
-            listProviders() {
-                return providersConfig;
-            }
+            getCurrentProviderName() { return currentProviderName; },
+            listProviders() { return providersConfig; }
         };
 
-        // --- AGENTS (Discovery, Scoring, Ranking, SEO, Competitor) ---
         async function runDiscovery({ task, platform, providerName, model, timeout }) {
           const agentStartTime = Date.now();
           let agentOutput = {
-            agent: "DiscoveryAgent",
-            version: "1.0.0",
+            agent: "DiscoveryAgent", version: "1.0.0",
             capability: ["viral discovery", "trend analysis", "keyword extraction"],
             result: { videoCandidates: [], trendSignals: [], keywords: [] },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
@@ -252,7 +272,10 @@
           };
 
           try {
-            const prompt = `Based on the topic "${task}" for platform "${platform}", identify potential viral video opportunities. Provide a list of video candidates, key trend signals, and relevant SEO keywords. Format as JSON.`;
+            const prompt = `Based on the topic "${task}" for platform "${platform}", identify potential viral video opportunities. Provide ONLY a valid JSON object with videoCandidates, trendSignals, and keywords arrays. NO prose, NO markdown, NO explanations.
+            
+            REQUIRED JSON FORMAT:
+            { "videoCandidates": ["..."], "trendSignals": ["..."], "keywords": ["..."] }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -278,15 +301,12 @@
               agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
             } else {
               agentOutput.error = llmResponse.error || `LLM analysis failed for Discovery Agent`;
-              console.error(`Discovery Agent LLM Call Failed: ${agentOutput.error}`);
             }
           } catch (err) {
             agentOutput.error = `Discovery Agent execution error: ${err.message}`;
-            console.error(`Discovery Agent Error:`, err);
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
-
           return agentOutput;
         }
 
@@ -295,16 +315,18 @@
           const scoringWeights = { viral: 0.25, emotion: 0.20, trend: 0.15, hook: 0.15, replay: 0.10, rarity: 0.10, competition: 0.05 };
 
           let agentOutput = {
-            agent: "ScoringAgent",
-            version: "1.0.0",
+            agent: "ScoringAgent", version: "1.0.0",
             capability: ["viral scoring", "content evaluation", "retention analysis"],
-            result: { viralScore: 0, emotionScore: 0, trendScore: 0, hookScore: 0, replayScore: 0, rarityScore: 0, competitionScore: 0, finalScore: 0, reasoning: "Scores not calculated due to an error or incomplete data." },
+            result: { viralScore: 0, emotionScore: 0, trendScore: 0, hookScore: 0, replayScore: 0, rarityScore: 0, competitionScore: 0, finalScore: 0, reasoning: "Scores not calculated." },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
             error: null
           };
 
           try {
-            const prompt = `Analyze the content idea "${contentDescription}" for platform "${platform || 'general'}" and provide individual scores (0-100) for virality, emotional impact, trend relevance, hook strength, replay value, rarity, and competition. Also provide reasoning. Format as JSON.`;
+            const prompt = `Analyze "${contentDescription}" for platform "${platform || 'general'}". Provide ONLY JSON with individual scores (0-100) for: viralScore, emotionScore, trendScore, hookScore, replayScore, rarityScore, competitionScore, and reasoning. NO prose.
+            
+            REQUIRED JSON FORMAT:
+            { "viralScore": 0, "emotionScore": 0, "trendScore": 0, "hookScore": 0, "replayScore": 0, "rarityScore": 0, "competitionScore": 0, "reasoning": "..." }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -335,7 +357,7 @@
               agentOutput.result.replayScore = getValidScore(llmData.replayScore);
               agentOutput.result.rarityScore = getValidScore(llmData.rarityScore);
               agentOutput.result.competitionScore = getValidScore(llmData.competitionScore);
-              agentOutput.result.reasoning = llmData.reasoning || "No specific reasoning provided by LLM.";
+              agentOutput.result.reasoning = llmData.reasoning || "No reasoning provided.";
 
               agentOutput.result.finalScore = Math.round(
                 (agentOutput.result.viralScore * scoringWeights.viral) +
@@ -353,31 +375,33 @@
               agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
             } else {
               agentOutput.error = llmResponse.error || `LLM analysis failed for Scoring Agent`;
-              console.error(`Scoring Agent LLM Call Failed: ${agentOutput.error}`);
             }
           } catch (err) {
             agentOutput.error = `Scoring Agent execution error: ${err.message}`;
-            console.error(`Scoring Agent Error:`, err);
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
-
           return agentOutput;
         }
 
         async function runRanking({ contentDescription, platform, providerName, model, timeout }) {
           const agentStartTime = Date.now();
           let agentOutput = {
-            agent: "RankingAgent",
-            version: "1.0.0",
+            agent: "RankingAgent", version: "1.0.0",
             capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization"],
-            result: { rankOrder: [], retentionPrediction: "No ranking performed due to an error or incomplete data." },
+            result: { rankOrder: [], retentionPrediction: "No ranking performed." },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
             error: null
           };
 
           try {
-            const prompt = `Given the content idea: "${contentDescription}" (targeting ${platform || 'general platforms'}), create a 6-rank narrative structure for optimal viewer retention. Use these ranks: #6 Hook, #5 Interest, #4 Context, #3 Escalation, #2 False Winner, #1 Payoff. Format as JSON with rankOrder array and retentionPrediction.`;
+            const prompt = `Create a 6-rank narrative structure for: "${contentDescription}" (${platform || 'general'} platform). Use exactly these ranks with segment names:
+            6=Hook, 5=Interest, 4=Context, 3=Escalation, 2=False Winner, 1=Payoff
+            
+            Provide ONLY valid JSON with rankOrder array (6 items exactly) and retentionPrediction. NO prose, NO markdown.
+            
+            REQUIRED JSON FORMAT:
+            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "..."}, ...], "retentionPrediction": "..." }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -416,11 +440,11 @@
                 }).map(({ rankNum, ...rest }) => rest);
 
                 if (validatedRankOrder.length !== 6) {
-                  agentOutput.error = "LLM did not return a valid 6-rank structure. Missing or duplicate ranks.";
+                  agentOutput.error = "LLM did not return a valid 6-rank structure.";
                   validatedRankOrder = [];
                 }
               } else {
-                agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length or format.";
+                agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length.";
               }
 
               agentOutput.result.rankOrder = validatedRankOrder;
@@ -431,23 +455,19 @@
               agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
             } else {
               agentOutput.error = llmResponse.error || `LLM analysis failed for Ranking Agent`;
-              console.error(`Ranking Agent LLM Call Failed: ${agentOutput.error}`);
             }
           } catch (err) {
             agentOutput.error = `Ranking Agent execution error: ${err.message}`;
-            console.error(`Ranking Agent Error:`, err);
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
-
           return agentOutput;
         }
 
         async function runSeo({ contentDescription, platform, language = 'en', providerName, model, timeout }) {
           const agentStartTime = Date.now();
           let agentOutput = {
-            agent: "SEOAgent",
-            version: "1.0.0",
+            agent: "SEOAgent", version: "1.0.0",
             capability: ["seo generation", "keyword optimization", "content discoverability"],
             result: { title: "Optimized Content Title", description: "Optimized content description for discoverability.", keywords: [], hashtags: [], generated: false, source: "fallback" },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
@@ -455,7 +475,10 @@
           };
 
           try {
-            const prompt = `Generate an SEO optimized title (under 60 chars), meta description (under 160 chars), 5-10 keywords, and 3-5 hashtags for: "${contentDescription}". Platform: ${platform || 'general'}. Language: ${language}. Format as JSON.`;
+            const prompt = `Generate SEO for: "${contentDescription}" (${platform || 'general'}, ${language}). Provide ONLY JSON with: title (max 60 chars), description (max 160 chars), keywords array (5-10), hashtags array (3-5). NO prose.
+            
+            REQUIRED JSON FORMAT:
+            { "title": "...", "description": "...", "keywords": ["..."], "hashtags": ["#..."] }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -485,23 +508,19 @@
               agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
             } else {
               agentOutput.error = llmResponse.error || `LLM analysis failed for SEO Agent. Using fallback content.`;
-              console.error(`SEO Agent LLM Call Failed: ${agentOutput.error}`);
             }
           } catch (err) {
             agentOutput.error = `SEO Agent execution error: ${err.message}. Using fallback content.`;
-            console.error(`SEO Agent Error:`, err);
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
-
           return agentOutput;
         }
 
         async function runCompetitorAnalysis({ topic, platform, providerName, model, timeout }) {
           const agentStartTime = Date.now();
           let agentOutput = {
-            agent: "CompetitorAgent",
-            version: "1.0.0",
+            agent: "CompetitorAgent", version: "1.0.0",
             capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"],
             result: { competitorPatterns: [], contentGaps: [], winningFormatsSummary: [] },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
@@ -509,7 +528,10 @@
           };
 
           try {
-            const prompt = `Perform a competitor analysis for content related to: "${topic}" on "${platform || 'general'}". Identify key competitor patterns, successful formats, and content gaps. Analyze at least 3 distinct patterns. Format as JSON.`;
+            const prompt = `Analyze competitors for: "${topic}" on ${platform || 'general'}. Identify 3+ competitor patterns with name, strategy, winningFormats. Also list contentGaps and winningFormatsSummary. Provide ONLY JSON. NO prose, NO markdown, NO safety warnings.
+            
+            REQUIRED JSON FORMAT:
+            { "competitorPatterns": [{"name": "...", "strategy": "...", "winningFormats": "...", "keywords": ["..."]}], "contentGaps": ["..."], "winningFormatsSummary": ["..."] }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -539,19 +561,15 @@
               agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
             } else {
               agentOutput.error = llmResponse.error || `LLM analysis failed for Competitor Agent`;
-              console.error(`Competitor Agent LLM Call Failed: ${agentOutput.error}`);
             }
           } catch (err) {
             agentOutput.error = `Competitor Agent execution error: ${err.message}`;
-            console.error(`Competitor Agent Error:`, err);
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
-
           return agentOutput;
         }
 
-        // --- AGENT ROUTER ---
         const AgentRegistry = {
           discovery: { agentFunction: runDiscovery, version: "1.0.0", capability: ["viral discovery", "trend analysis", "keyword extraction"] },
           scoring: { agentFunction: runScoring, version: "1.0.0", capability: ["viral scoring", "content evaluation", "retention analysis"] },
@@ -566,18 +584,13 @@
             const agentConfig = AgentRegistry[agentType.toLowerCase()];
 
             let agentResult = {
-              agent: agentType,
-              version: agentConfig?.version || "N/A",
-              capability: agentConfig?.capability || [],
-              task: task,
-              result: null,
-              error: null,
+              agent: agentType, version: agentConfig?.version || "N/A", capability: agentConfig?.capability || [],
+              task: task, result: null, error: null,
               metadata: { totalLatency: 0, success: false, timestamp: new Date().toISOString() }
             };
 
             if (!agentConfig || typeof agentConfig.agentFunction !== 'function') {
               agentResult.error = `Agent type "${agentType}" not found or not properly configured in AgentRegistry.`;
-              console.error(agentResult.error);
               return agentResult;
             }
 
@@ -594,7 +607,6 @@
               agentResult.capability = individualAgentOutput.capability;
 
             } catch (err) {
-              console.error(`Error during ${agentType} agent execution:`, err.message);
               agentResult.error = err.message;
               agentResult.metadata.success = false;
             } finally {
@@ -613,7 +625,6 @@
           }
         };
 
-        // --- REACT APP ---
         const { useState, useEffect } = React;
 
         function App() {
@@ -674,33 +685,27 @@
             }
 
             try {
-              const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 60000 };
+              const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 120000 };
               const allAgentResults = {};
 
               const discoveryOutput = await AgentRouter.routeTask(topic, 'discovery', options);
-              if (discoveryOutput.error) throw new Error(`Discovery Agent: ${discoveryOutput.error}`);
               allAgentResults.discovery = discoveryOutput;
 
               const scoringOutput = await AgentRouter.routeTask(topic, 'scoring', options);
-              if (scoringOutput.error) throw new Error(`Scoring Agent: ${scoringOutput.error}`);
               allAgentResults.scoring = scoringOutput;
 
               const rankingOutput = await AgentRouter.routeTask(topic, 'ranking', options);
-              if (rankingOutput.error) throw new Error(`Ranking Agent: ${rankingOutput.error}`);
               allAgentResults.ranking = rankingOutput;
 
               const seoOutput = await AgentRouter.routeTask(topic, 'seo', options);
-              if (seoOutput.error) throw new Error(`SEO Agent: ${seoOutput.error}`);
               allAgentResults.seo = seoOutput;
 
               const competitorOutput = await AgentRouter.routeTask(topic, 'competitor', options);
-              if (competitorOutput.error) throw new Error(`Competitor Agent: ${competitorOutput.error}`);
               allAgentResults.competitor = competitorOutput;
 
               setResults(allAgentResults);
 
             } catch (err) {
-              console.error("Orchestration error:", err);
               setError(err.message || "An unknown error occurred during content research.");
             } finally {
               setLoading(false);
@@ -801,7 +806,7 @@
                 {loading && (
                   <div className="text-center">
                     <div className="spinner mx-auto mb-4"></div>
-                    <p className="text-gray-700">Analyzing your content with AI agents...</p>
+                    <p className="text-gray-700">Analyzing your content with AI agents (2 min timeout)...</p>
                   </div>
                 )}
 
@@ -810,17 +815,26 @@
                     {Object.entries(results).map(([agentName, agentResult]) => (
                       <div key={agentName} className="border-b pb-4">
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">{agentResult.agent}</h2>
-                        <p className="text-sm text-gray-600 mb-4">Version: {agentResult.version} | Latency: {agentResult.metadata?.latency}ms | Provider: {agentResult.metadata?.provider}</p>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Version: {agentResult.version} | Latency: {agentResult.metadata?.latency}ms | Provider: {agentResult.metadata?.provider}
+                        </p>
 
                         {agentResult.error ? (
                           <div className="bg-red-50 border border-red-300 text-red-600 px-3 py-2 rounded">
                             <strong>Error:</strong> {agentResult.error}
                           </div>
+                        ) : agentResult.result && Object.keys(agentResult.result).length > 0 ? (
+                          <div className="bg-green-50 border border-green-300 p-3 rounded-md">
+                            <details>
+                              <summary className="font-semibold text-green-700 cursor-pointer">✓ Results (click to expand)</summary>
+                              <pre className="text-sm text-gray-700 overflow-auto mt-2 bg-white p-2 rounded border border-green-200">
+                                {JSON.stringify(agentResult.result, null, 2)}
+                              </pre>
+                            </details>
+                          </div>
                         ) : (
-                          <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                            <pre className="text-sm text-gray-700 overflow-auto">
-                              {JSON.stringify(agentResult.result, null, 2)}
-                            </pre>
+                          <div className="bg-yellow-50 border border-yellow-300 text-yellow-700 px-3 py-2 rounded">
+                            No results generated.
                           </div>
                         )}
                       </div>
@@ -832,7 +846,6 @@
           );
         }
 
-        // Mount React app
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
