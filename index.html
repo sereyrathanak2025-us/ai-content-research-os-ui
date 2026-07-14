@@ -111,6 +111,9 @@
         .bg-green-50 { background-color: #f0fdf4; }
         .border-green-300 { border-color: #86efac; }
         .text-green-700 { color: #166534; }
+        .text-xs { font-size: 0.75rem; }
+        .underline { text-decoration: underline; }
+        .cursor-pointer { cursor: pointer; }
         @media (max-width: 640px) {
             .mobile-ui .flex-col.sm\:flex-row { flex-direction: column; }
             .mobile-ui .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) { margin-left: 0; margin-top: 1rem; }
@@ -131,10 +134,10 @@
     <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
     <script type="text/babel">
-        const DEFAULT_TIMEOUT = 120000; // Increased to 2 minutes
+        const DEFAULT_TIMEOUT = 120000;
         const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
         const MAX_RETRIES = 2;
-        const RETRY_DELAY = 1000; // 1 second between retries
+        const RETRY_DELAY = 1000;
 
         const providersConfig = {
             openrouter: { name: "OpenRouter", models: [
@@ -148,10 +151,8 @@
 
         let currentProviderName = "openrouter";
 
-        // Enhanced JSON cleanup function
         function cleanJsonResponse(text) {
             if (!text || typeof text !== 'string') return '';
-            // Remove common safety warnings and prose prefixes
             text = text
                 .replace(/^.*?User Safety:.*?(?=\{)/is, '')
                 .replace(/^.*?I cannot.*?(?=\{)/is, '')
@@ -161,7 +162,6 @@
                 .replace(/\s*```$/i, '')
                 .trim();
 
-            // Find first { and last }
             const start = text.indexOf('{');
             const end = text.lastIndexOf('}');
             if (start !== -1 && end !== -1 && end > start) {
@@ -170,7 +170,6 @@
             return text;
         }
 
-        // Retry wrapper with exponential backoff
         async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
             let lastError;
             for (let i = 0; i <= maxRetries; i++) {
@@ -251,6 +250,53 @@
                 }
             },
 
+            async generateWithYouTube(topic, options = {}) {
+                const { providerName, model } = options;
+                const workerUrl = `${WORKER_BASE_URL}/api/generate`;
+
+                const controller = new AbortController();
+                const signal = controller.signal;
+                const timeout = options.timeout || DEFAULT_TIMEOUT;
+                const timer = setTimeout(() => controller.abort(), timeout);
+                const startTime = Date.now();
+
+                let errorMessage = null;
+                let rawData = null;
+                let success = false;
+                let usedProvider = providerName;
+
+                try {
+                  const { ok, status, data } = await fetchWithRetry(workerUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ topic, dateFilter: "7 Days", provider: providerName || null }),
+                    signal: signal
+                  });
+                  rawData = data;
+                  clearTimeout(timer);
+
+                  if (!ok) {
+                    errorMessage = rawData.error || `Worker request failed with status ${status}`;
+                  } else {
+                    success = true;
+                    usedProvider = rawData.provider_used || providerName;
+                  }
+
+                } catch (err) {
+                  clearTimeout(timer);
+                  errorMessage = err.name === 'AbortError' ? `Request timed out after ${timeout}ms.` : err.message;
+                }
+
+                const latency = Date.now() - startTime;
+                const timestamp = new Date().toISOString();
+
+                if (!success) {
+                  return { success: false, error: errorMessage, provider: usedProvider, model: model, metadata: { latency, timestamp } };
+                }
+
+                return { success: true, data: rawData, provider: usedProvider, model: model, metadata: { latency, timestamp } };
+            },
+
             setProvider(name) {
                 if (providersConfig[name]) { currentProviderName = name; return true; }
                 console.warn(`Provider "${name}" not found in client config.`);
@@ -265,36 +311,32 @@
           const agentStartTime = Date.now();
           let agentOutput = {
             agent: "DiscoveryAgent", version: "1.0.0",
-            capability: ["viral discovery", "trend analysis", "keyword extraction"],
-            result: { videoCandidates: [], trendSignals: [], keywords: [] },
+            capability: ["viral discovery", "trend analysis", "keyword extraction", "youtube grounding"],
+            result: { videoCandidates: [], youtubeLinks: [], viewCounts: [], channels: [], trendSignals: [], keywords: [], realVideos: [] },
             metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
             error: null
           };
 
           try {
-            const prompt = `Based on the topic "${task}" for platform "${platform}", identify potential viral video opportunities. Provide ONLY a valid JSON object with videoCandidates, trendSignals, and keywords arrays. NO prose, NO markdown, NO explanations.
-            
-            REQUIRED JSON FORMAT:
-            { "videoCandidates": ["..."], "trendSignals": ["..."], "keywords": ["..."] }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  videoCandidates: { type: "array", items: { type: "string" } },
-                  trendSignals: { type: "array", items: { type: "string" } },
-                  keywords: { type: "array", items: { type: "string" } }
-                },
-                required: ["videoCandidates", "trendSignals", "keywords"]
-              }
+            const llmResponse = await AIProvider.generateWithYouTube(task, {
+              providerName, model, timeout
             });
 
             if (llmResponse.success) {
               const llmData = llmResponse.data;
-              agentOutput.result.videoCandidates = Array.isArray(llmData?.videoCandidates) ? llmData.videoCandidates : [];
-              agentOutput.result.trendSignals = Array.isArray(llmData?.trendSignals) ? llmData.trendSignals : [];
-              agentOutput.result.keywords = Array.isArray(llmData?.keywords) ? llmData.keywords : [];
+              
+              // Extract real YouTube videos
+              const realVideos = Array.isArray(llmData.real_videos) ? llmData.real_videos : [];
+              agentOutput.result.realVideos = realVideos;
+              agentOutput.result.videoCandidates = realVideos.map(v => v.title || "");
+              agentOutput.result.youtubeLinks = realVideos.map(v => v.url || "");
+              agentOutput.result.viewCounts = realVideos.map(v => v.viewCount || 0);
+              agentOutput.result.channels = realVideos.map(v => v.channel || "");
+              
+              // Extract trend signals and keywords from LLM response
+              agentOutput.result.trendSignals = Array.isArray(llmData.trendSignals) ? llmData.trendSignals : (llmData.why_trending ? [llmData.why_trending] : []);
+              agentOutput.result.keywords = (llmData.seo_keywords || "").split(",").map(k => k.trim()).filter(Boolean);
+
               agentOutput.metadata.provider = llmResponse.provider || "Unknown";
               agentOutput.metadata.model = llmResponse.model || "Unknown";
               agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
@@ -571,7 +613,7 @@
         }
 
         const AgentRegistry = {
-          discovery: { agentFunction: runDiscovery, version: "1.0.0", capability: ["viral discovery", "trend analysis", "keyword extraction"] },
+          discovery: { agentFunction: runDiscovery, version: "1.0.0", capability: ["viral discovery", "trend analysis", "keyword extraction", "youtube grounding"] },
           scoring: { agentFunction: runScoring, version: "1.0.0", capability: ["viral scoring", "content evaluation", "retention analysis"] },
           ranking: { agentFunction: runRanking, version: "1.0.0", capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization"] },
           seo: { agentFunction: runSeo, version: "1.0.0", capability: ["seo generation", "keyword optimization", "content discoverability"] },
@@ -626,6 +668,16 @@
         };
 
         const { useState, useEffect } = React;
+
+        function VideoLink({ url, title, views, channel }) {
+          return (
+            <a href={url} target="_blank" rel="noopener noreferrer" className="block p-2 mb-2 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100">
+              <span className="text-xs text-blue-600 font-medium break-all">{url}</span>
+              <div className="text-sm text-gray-700 mt-1">{title}</div>
+              {views > 0 && <div className="text-xs text-gray-600">{(views / 1000).toLocaleString()}K views • {channel}</div>}
+            </a>
+          );
+        }
 
         function App() {
           const [topic, setTopic] = useState('');
@@ -825,12 +877,50 @@
                           </div>
                         ) : agentResult.result && Object.keys(agentResult.result).length > 0 ? (
                           <div className="bg-green-50 border border-green-300 p-3 rounded-md">
-                            <details>
-                              <summary className="font-semibold text-green-700 cursor-pointer">✓ Results (click to expand)</summary>
-                              <pre className="text-sm text-gray-700 overflow-auto mt-2 bg-white p-2 rounded border border-green-200">
-                                {JSON.stringify(agentResult.result, null, 2)}
-                              </pre>
-                            </details>
+                            {agentName === 'discovery' && (
+                              <div>
+                                <div className="font-semibold text-green-700 mb-2">✓ Real YouTube Videos</div>
+                                {agentResult.result.youtubeLinks && agentResult.result.youtubeLinks.length > 0 ? (
+                                  <div>
+                                    {agentResult.result.youtubeLinks.map((link, idx) => (
+                                      <VideoLink
+                                        key={idx}
+                                        url={link}
+                                        title={agentResult.result.videoCandidates[idx] || 'Video'}
+                                        views={agentResult.result.viewCounts[idx] || 0}
+                                        channel={agentResult.result.channels[idx] || ''}
+                                      />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-600">No real YouTube videos found</p>
+                                )}
+                                {agentResult.result.keywords && agentResult.result.keywords.length > 0 && (
+                                  <div className="mt-3">
+                                    <div className="text-sm font-medium text-green-700">Keywords:</div>
+                                    <div className="text-sm text-gray-700">{agentResult.result.keywords.join(', ')}</div>
+                                  </div>
+                                )}
+                                {agentResult.result.trendSignals && agentResult.result.trendSignals.length > 0 && (
+                                  <div className="mt-3">
+                                    <div className="text-sm font-medium text-green-700">Trends:</div>
+                                    <ul className="text-sm text-gray-700 list-disc list-inside">
+                                      {agentResult.result.trendSignals.map((signal, idx) => (
+                                        <li key={idx}>{signal}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {agentName !== 'discovery' && (
+                              <details>
+                                <summary className="font-semibold text-green-700 cursor-pointer">✓ Results (click to expand)</summary>
+                                <pre className="text-sm text-gray-700 overflow-auto mt-2 bg-white p-2 rounded border border-green-200">
+                                  {JSON.stringify(agentResult.result, null, 2)}
+                                </pre>
+                              </details>
+                            )}
                           </div>
                         ) : (
                           <div className="bg-yellow-50 border border-yellow-300 text-yellow-700 px-3 py-2 rounded">
