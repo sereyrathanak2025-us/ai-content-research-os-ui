@@ -94,6 +94,9 @@
         .console-prompt .caret { color: var(--acid); }
         .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
         .console-prompt input::placeholder { color: var(--text-faint); }
+        .surprise-btn { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 7px; font-size: 15px; padding: 5px 9px; cursor: pointer; line-height: 1; transition: transform 0.15s ease, border-color 0.15s ease; }
+        .surprise-btn:hover:not(:disabled) { border-color: var(--acid-dim); transform: rotate(-8deg) scale(1.08); }
+        .surprise-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
 
         .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
@@ -289,7 +292,7 @@
                 try {
                     const resp = await fetch(url, options);
                     const data = await resp.json();
-                    if (!resp.ok && resp.status === 503) {
+                    if (!resp.ok && (resp.status === 503 || resp.status === 502)) {
                         if (i < maxRetries) {
                             const delay = RETRY_DELAY * Math.pow(2, i);
                             await new Promise(resolve => setTimeout(resolve, delay));
@@ -364,7 +367,7 @@
             },
 
             async generateWithYouTube(topic, options = {}) {
-                const { providerName, model } = options;
+                const { providerName, model, dateFilter, searchQuery } = options;
                 const workerUrl = `${WORKER_BASE_URL}/api/generate`;
 
                 const controller = new AbortController();
@@ -382,7 +385,7 @@
                   const { ok, status, data } = await fetchWithRetry(workerUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ topic, dateFilter: "7 Days", provider: providerName || null }),
+                    body: JSON.stringify({ topic: searchQuery || topic, dateFilter: dateFilter || "7 Days", provider: providerName || null }),
                     signal: signal
                   });
                   rawData = data;
@@ -430,9 +433,26 @@
             error: null
           };
 
+          // Vary repeat searches of the same topic — rotate the date window and nudge the
+          // query so the same request isn't sent twice in a row. This is a client-side
+          // mitigation only: the actual grounded search runs inside the Cloudflare Worker
+          // (/api/generate), whose source we don't control, so it can't fully guarantee
+          // fresh results if the Worker itself caches by exact query text.
+          const DATE_FILTERS = ["7 Days", "30 Days", "This Month", "This Year"];
+          const VARIATION_HINTS = ["", " (surface different channels than typical top results)", " (include more recent uploads)", " (prioritize less mainstream creators)"];
+          let dateFilter = DATE_FILTERS[0], searchQuery = task;
+          try {
+            const seenKey = 'viralRadarSeen_' + task.trim().toLowerCase().replace(/\s+/g, '_').slice(0, 60);
+            const seenCount = parseInt(localStorage.getItem(seenKey) || '0', 10);
+            dateFilter = DATE_FILTERS[seenCount % DATE_FILTERS.length];
+            const hint = VARIATION_HINTS[seenCount % VARIATION_HINTS.length];
+            searchQuery = task + hint;
+            localStorage.setItem(seenKey, String(seenCount + 1));
+          } catch (e) { /* localStorage unavailable — proceed without variation */ }
+
           try {
             const llmResponse = await AIProvider.generateWithYouTube(task, {
-              providerName, model, timeout
+              providerName, model, timeout, dateFilter, searchQuery
             });
 
             if (llmResponse.success) {
@@ -1186,6 +1206,16 @@ REQUIRED JSON FORMAT:
           competitor: { title: 'Competitor', Panel: CompetitorPanel },
         };
 
+        const SURPRISE_NICHES = [
+          "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
+          "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
+          "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
+          "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
+          "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
+          "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
+          "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
+        ];
+
         const STORAGE_KEY = 'viralRadarState_v1';
 
         function App() {
@@ -1287,6 +1317,11 @@ REQUIRED JSON FORMAT:
 
           const handleKeyDown = (e) => { if (e.key === 'Enter' && !loading) handleResearch(); };
 
+          const handleSurpriseMe = () => {
+            const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+            setTopic(pick);
+          };
+
           return (
             <div className="shell">
               <div className="nav">
@@ -1321,6 +1356,7 @@ REQUIRED JSON FORMAT:
                         disabled={loading}
                       />
                       {!topic && !loading && <span className="console-cursor"></span>}
+                      <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
                     </div>
 
                     <div className="config-row">
