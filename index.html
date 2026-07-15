@@ -180,6 +180,22 @@
         .retention-box { margin-top: 18px; background: rgba(198,255,61,0.05); border: 1px solid var(--acid-dim); border-radius: 10px; padding: 13px 15px; font-size: 13px; color: var(--text); line-height: 1.55; }
         .retention-box .tag-label { color: var(--acid-dim); margin-bottom: 5px; }
 
+        /* AI Suggestion labeling — always visually distinct from evidence */
+        .sugg-badge { display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: #ffcf5c; background: rgba(255,207,92,0.1); border: 1px solid #b8933f; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+        .sugg-badge.inline { margin-left: 8px; vertical-align: middle; }
+        .suggestion-box { margin-top: 8px; padding: 9px 11px; background: rgba(255,207,92,0.04); border: 1px dashed #6b5a30; border-radius: 7px; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+        .sugg-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; flex: 1; min-width: 160px; }
+
+        .pattern-list { display: grid; gap: 8px; margin-top: 8px; }
+        .pattern-row { display: flex; gap: 12px; align-items: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; }
+        .pattern-coverage { font-family: var(--font-mono); font-size: 11px; color: var(--acid); background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 3px 8px; flex-shrink: 0; white-space: nowrap; }
+        .pattern-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+        .pattern-note { font-size: 12px; color: var(--text-faint); line-height: 1.45; }
+
+        .gap-box { margin-top: 20px; background: rgba(255,90,54,0.04); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 13px 15px; }
+        .gap-row { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-top: 4px; }
+        .gap-row b { color: var(--text); font-weight: 600; }
+
         /* SEO */
         .seo-preview { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
         .seo-title { color: #8ab4ff; font-size: 15px; margin-bottom: 4px; }
@@ -523,10 +539,13 @@
             const prompt = `Create a 6-rank narrative structure for: "${contentDescription}" (${platform || 'general'} platform). Use exactly these ranks with segment names:
             6=Hook, 5=Interest, 4=Context, 3=Escalation, 2=False Winner, 1=Payoff
 
+            For EACH rank item, also include a "momentSuggestion" object with editorial guidance (a suggestion, not a verified fact — you have not watched any video frame-by-frame):
+            { "suggestion": "short editorial idea for this beat, e.g. 'lead with a fast zoom on the reaction'", "confidence": 0.0-1.0 }
+
             Provide ONLY valid JSON with rankOrder array (6 items exactly) and retentionPrediction. NO prose, NO markdown.
 
             REQUIRED JSON FORMAT:
-            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "..."}, ...], "retentionPrediction": "..." }`;
+            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "...", "momentSuggestion": {"suggestion": "...", "confidence": 0.7}}, ...], "retentionPrediction": "..." }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -535,7 +554,10 @@
                 properties: {
                   rankOrder: {
                     type: "array",
-                    items: { type: "object", properties: { rank: { type: "string" }, segment: { type: "string" }, content: { type: "string" } }, required: ["rank", "segment", "content"] },
+                    items: { type: "object", properties: {
+                      rank: { type: "string" }, segment: { type: "string" }, content: { type: "string" },
+                      momentSuggestion: { type: "object", properties: { suggestion: { type: "string" }, confidence: { type: "number", minimum: 0, maximum: 1 } } }
+                    }, required: ["rank", "segment", "content"] },
                     minItems: 6, maxItems: 6
                   },
                   retentionPrediction: { type: "string" }
@@ -554,7 +576,16 @@
                   if (typeof rawRank === 'number') { rankNum = rawRank; }
                   else if (typeof rawRank === 'string') { rankNum = parseInt(rawRank.replace('#', '').trim(), 10) || 0; }
                   if (!rankNum && llmData.rankOrder.length === 6) { rankNum = 6 - idx; }
-                  return { ...rankItem, rank: rankItem.rank ? String(rankItem.rank) : `#${rankNum}`, rankNum: Number.isInteger(rankNum) ? rankNum : 0 };
+                  // Label editorial guidance explicitly as AI_SUGGESTION per JSON_CONTRACT.md v0.2 —
+                  // never presented as verified evidence, always requires human review.
+                  const rawSuggestion = rankItem.momentSuggestion;
+                  const momentSuggestion = rawSuggestion && rawSuggestion.suggestion ? {
+                    type: "AI_SUGGESTION",
+                    suggestion: String(rawSuggestion.suggestion),
+                    confidence: typeof rawSuggestion.confidence === 'number' ? Math.min(1, Math.max(0, rawSuggestion.confidence)) : 0.5,
+                    requires_human_review: true
+                  } : null;
+                  return { ...rankItem, rank: rankItem.rank ? String(rankItem.rank) : `#${rankNum}`, rankNum: Number.isInteger(rankNum) ? rankNum : 0, momentSuggestion };
                 }).filter(item => item.rankNum >= 1 && item.rankNum <= 6);
 
                 parsedRanks.sort((a, b) => b.rankNum - a.rankNum);
@@ -583,6 +614,82 @@
             }
           } catch (err) {
             agentOutput.error = `Ranking Agent execution error: ${err.message}`;
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
+          return agentOutput;
+        }
+
+        async function runIntelligence({ contentDescription, platform, videoTitles, providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          let agentOutput = {
+            agent: "IntelligenceAgent", version: "1.0.0",
+            capability: ["cross-video pattern synthesis", "opportunity gap analysis"],
+            result: { crossVideoPatterns: [], opportunityGap: null },
+            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
+            error: null
+          };
+
+          const titles = Array.isArray(videoTitles) ? videoTitles.filter(Boolean).slice(0, 10) : [];
+
+          if (titles.length < 2) {
+            agentOutput.error = "Not enough discovered videos to synthesize cross-video patterns yet.";
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+            return agentOutput;
+          }
+
+          try {
+            const titleList = titles.map((t, i) => `${i + 1}. ${t}`).join("\n");
+            const prompt = `You are analyzing ONLY the titles/metadata of these ${titles.length} real top-performing videos for the topic "${contentDescription}" (${platform || 'general'}). You have NOT watched the videos — do not invent timestamps, scenes, or frame-level detail.
+
+Titles:
+${titleList}
+
+Task 1 — Cross-video patterns: Identify 3-5 structural/format patterns that repeat across multiple titles (e.g. "countdown format", "shock reveal in title", "comparison framing"). For each, estimate how many of the ${titles.length} titles fit it (as "x/${titles.length}").
+
+Task 2 — Opportunity gap: Based on what the existing videos emphasize, identify ONE underused angle a new creator could differentiate with, for the idea "${contentDescription}".
+
+Provide ONLY JSON. NO prose, NO markdown, NO exact-timestamp or scene-level claims.
+
+REQUIRED JSON FORMAT:
+{ "crossVideoPatterns": [{"pattern": "...", "coverage": "x/${titles.length}", "note": "..."}], "opportunityGap": {"existingFocus": "...", "underusedAngle": "...", "differentiation": "..."} }`;
+
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName, model, timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  crossVideoPatterns: {
+                    type: "array",
+                    items: { type: "object", properties: { pattern: { type: "string" }, coverage: { type: "string" }, note: { type: "string" } }, required: ["pattern", "coverage"] }
+                  },
+                  opportunityGap: {
+                    type: "object",
+                    properties: { existingFocus: { type: "string" }, underusedAngle: { type: "string" }, differentiation: { type: "string" } }
+                  }
+                },
+                required: ["crossVideoPatterns", "opportunityGap"]
+              }
+            });
+
+            if (llmResponse.success && llmResponse.data) {
+              const llmData = llmResponse.data;
+              // Everything from this agent is synthesis/inference over titles only — mark explicitly as AI_SUGGESTION.
+              agentOutput.result.crossVideoPatterns = (Array.isArray(llmData.crossVideoPatterns) ? llmData.crossVideoPatterns : []).map(p => ({
+                type: "AI_SUGGESTION", pattern: p.pattern, coverage: p.coverage || '', note: p.note || '', requires_human_review: true
+              }));
+              agentOutput.result.opportunityGap = llmData.opportunityGap ? {
+                type: "AI_SUGGESTION", ...llmData.opportunityGap, requires_human_review: true
+              } : null;
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Intelligence Agent`;
+            }
+          } catch (err) {
+            agentOutput.error = `Intelligence Agent execution error: ${err.message}`;
           } finally {
             agentOutput.metadata.latency = Date.now() - agentStartTime;
           }
@@ -698,9 +805,10 @@
         const AgentRegistry = {
           discovery: { agentFunction: runDiscovery, version: "1.0.0", capability: ["viral discovery", "trend analysis", "keyword extraction", "youtube grounding"] },
           scoring: { agentFunction: runScoring, version: "1.0.0", capability: ["viral scoring", "content evaluation", "retention analysis"] },
-          ranking: { agentFunction: runRanking, version: "1.0.0", capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization"] },
+          ranking: { agentFunction: runRanking, version: "1.1.0", capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization", "moment suggestion (AI_SUGGESTION)"] },
           seo: { agentFunction: runSeo, version: "1.0.0", capability: ["seo generation", "keyword optimization", "content discoverability"] },
-          competitor: { agentFunction: runCompetitorAnalysis, version: "1.0.0", capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"] }
+          competitor: { agentFunction: runCompetitorAnalysis, version: "1.0.0", capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"] },
+          intelligence: { agentFunction: runIntelligence, version: "1.0.0", capability: ["cross-video pattern synthesis (AI_SUGGESTION)", "opportunity gap analysis (AI_SUGGESTION)"] }
         };
 
         const AgentRouter = {
@@ -721,7 +829,7 @@
 
             try {
               const individualAgentOutput = await agentConfig.agentFunction({
-                contentDescription: task, task, platform: options.platform, providerName: options.providerName, model: options.model, timeout: options.timeout
+                contentDescription: task, task, ...options
               });
 
               agentResult.result = individualAgentOutput.result;
@@ -891,6 +999,12 @@
                       <span className="tl-dot">{item.rank?.replace('#', '')}</span>
                       <div className="tl-seg">{item.segment}</div>
                       <div className="tl-content">{item.content}</div>
+                      {item.momentSuggestion?.suggestion && (
+                        <div className="suggestion-box">
+                          <span className="sugg-badge">AI SUGGESTION · {Math.round((item.momentSuggestion.confidence || 0) * 100)}%</span>
+                          <span className="sugg-text">{item.momentSuggestion.suggestion}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -901,6 +1015,42 @@
                 <div className="retention-box">
                   <div className="tag-label">Retention prediction</div>
                   {result.retentionPrediction}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        function IntelligencePanel({ result }) {
+          const patterns = result.crossVideoPatterns || [];
+          const gap = result.opportunityGap;
+          return (
+            <div>
+              {patterns.length > 0 ? (
+                <div>
+                  <div className="tag-label">Cross-video patterns <span className="sugg-badge inline">AI SUGGESTION</span></div>
+                  <div className="pattern-list">
+                    {patterns.map((p, i) => (
+                      <div className="pattern-row" key={i}>
+                        <span className="pattern-coverage">{p.coverage}</span>
+                        <div>
+                          <div className="pattern-name">{p.pattern}</div>
+                          {p.note && <div className="pattern-note">{p.note}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-panel">Not enough discovered videos yet to synthesize patterns.</div>
+              )}
+
+              {gap && (
+                <div className="gap-box">
+                  <div className="tag-label">Opportunity gap <span className="sugg-badge inline">AI SUGGESTION</span></div>
+                  {gap.existingFocus && <div className="gap-row"><b>Existing videos focus on:</b> {gap.existingFocus}</div>}
+                  {gap.underusedAngle && <div className="gap-row"><b>Underused angle:</b> {gap.underusedAngle}</div>}
+                  {gap.differentiation && <div className="gap-row"><b>Try:</b> {gap.differentiation}</div>}
                 </div>
               )}
             </div>
@@ -964,6 +1114,7 @@
           discovery: { title: 'Discovery', Panel: DiscoveryPanel },
           scoring: { title: 'Scoring', Panel: ScoringPanel },
           ranking: { title: 'Ranking', Panel: RankingPanel },
+          intelligence: { title: 'Intelligence', Panel: IntelligencePanel },
           seo: { title: 'SEO', Panel: SeoPanel },
           competitor: { title: 'Competitor', Panel: CompetitorPanel },
         };
@@ -1007,8 +1158,14 @@
             try {
               const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 120000 };
               const allAgentResults = {};
-              for (const key of ['discovery', 'scoring', 'ranking', 'seo', 'competitor']) {
-                allAgentResults[key] = await AgentRouter.routeTask(topic, key, options);
+
+              // Discovery runs first — its real video titles feed the Intelligence agent below.
+              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', options);
+              const videoTitles = allAgentResults.discovery?.result?.videoCandidates || [];
+
+              for (const key of ['scoring', 'ranking', 'intelligence', 'seo', 'competitor']) {
+                const agentOptions = key === 'intelligence' ? { ...options, videoTitles } : options;
+                allAgentResults[key] = await AgentRouter.routeTask(topic, key, agentOptions);
               }
               setResults(allAgentResults);
             } catch (err) {
@@ -1087,7 +1244,7 @@
                 </div>
 
                 <div className="agent-strip">
-                  {['Discovery', 'Scoring', 'Ranking', 'SEO', 'Competitor'].map((a) => (
+                  {['Discovery', 'Scoring', 'Ranking', 'Intelligence', 'SEO', 'Competitor'].map((a) => (
                     <span className="agent-chip" key={a}>{a}Agent</span>
                   ))}
                 </div>
