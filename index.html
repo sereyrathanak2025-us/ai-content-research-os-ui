@@ -1,3 +1,4 @@
+ខ្ញុំនៅមិនទាន់ចូលប្រើនឹង តេស្តបានទេ វា វិលខ្ញាល់រហូត បង
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,14 +25,6 @@
             --font-display: 'Archivo Black', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
             --font-body: 'Work Sans', sans-serif;
-
-            /* Viral Engine specific colors */
-            --rank6-color: #FF6B35;
-            --rank5-color: #F7931E;
-            --rank4-color: #FFD700;
-            --rank3-color: #FF4444;
-            --rank2-color: #CC00FF;
-            --rank1-color: #FF0050;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; min-height: 100%; }
@@ -76,7 +69,7 @@
         ::-webkit-scrollbar-track { background: var(--bg); }
         ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
 
-        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
+        .shell { max-width: 880px; margin: 0 auto; padding: 0 20px 100px; }
 
         /* ---------- NAV ---------- */
         .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
@@ -163,198 +156,566 @@
         .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
         .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
 
+        /* Discovery video cards */
+        .video-grid { display: grid; gap: 10px; }
+        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease; }
+        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.08), 0 8px 24px -12px rgba(198,255,61,0.25); }
+        .video-card.featured { flex-direction: column; margin-bottom: 12px; padding: 14px; background: linear-gradient(160deg, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--acid-dim); position: relative; overflow: hidden; }
+        .video-card.featured::before { content: ''; position: absolute; top: -40%; right: -20%; width: 60%; height: 140%; background: radial-gradient(circle, rgba(198,255,61,0.08), transparent 65%); pointer-events: none; }
+        .video-card.featured:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.15), 0 16px 40px -16px rgba(198,255,61,0.35); }
+        .featured-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--acid); margin-bottom: 10px; display: inline-block; }
+        .featured-body { display: flex; gap: 14px; align-items: center; }
+        .featured-thumb { width: 132px; height: 82px; }
+        .featured-title { font-size: 15px; -webkit-line-clamp: 3; }
+        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
+        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .video-sub .views { color: var(--acid); }
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
+        .trend-list { list-style: none; margin-top: 6px; }
+        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
+        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
+
         /* Styling for the new 'viral engine' UI components */
-        .retention-curve { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px; margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px; }
-        .retention-curve-label { font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px; }
-        .retention-bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .retention-percent { font-size: 8px; font-weight: 700; }
-        .retention-bar { width: 100%; border-radius: 3px 3px 0 0; }
-        .retention-rank { font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700; }
-
-        .mode-selector { display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07); }
-        .mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left; }
-        .mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35); }
-        .mode-btn-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
-        .mode-btn-title.active { color: #FF0050; }
-        .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
-        .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
-
-        .console-input-section { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; margin-bottom: 20px; }
-        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: rgba(240,240,245,0.3); text-transform: uppercase; margin-bottom: 9px; }
-        .console-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: #F0F0F5; outline: none; box-sizing: border-box; margin-bottom: 12px; }
-        .console-input::placeholder { color: rgba(240,240,245,0.16); }
-        .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .example-topic-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 600; }
-        .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
-        .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .date-filter-section { margin-bottom: 14px; }
-        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px; }
-        .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .date-filter-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 700; }
-        .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
-        .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .generate-btn { width: 100%; background: linear-gradient(135deg,#FF0050,#CC00FF); border: none; border-radius: 10px; padding: 14px 20px; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer; letter-spacing: 0.04em; box-shadow: 0 4px 20px rgba(255,0,80,0.28); opacity: 1; transition: all 0.18s; }
-        .generate-btn.loading { background: rgba(255,0,80,0.22); box-shadow: none; cursor: not-allowed; }
-        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; }
-        .generate-btn:hover:not(.loading):not(.disabled) { filter: brightness(1.08); }
-
-        .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
-
-        .result-summary-box { background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
-        .result-summary-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px; }
-        .result-summary-topic { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
-        .result-summary-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
-        .summary-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
-        .summary-badge.trend { border-color: var(--trend-color)40; color: var(--trend-color); }
-        .summary-badge.opportunity { background: rgba(255,0,80,0.12); border-color: rgba(255,0,80,0.26); color: #FF0050; }
-        .summary-badge.viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
-        .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
-        .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
-
-        .open-loop-hook { background: rgba(255,107,53,0.07); border: 1px solid rgba(255,107,53,0.18); border-radius: 10px; padding: 13px 17px; margin-bottom: 16px; }
-        .open-loop-hook-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF6B35; text-transform: uppercase; margin-bottom: 4px; }
-        .open-loop-hook-text { font-size: 15px; font-weight: 700; font-style: italic; }
-
-        .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-        .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
-        .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
-        .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
-        .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .editor-note-value { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
-
-        .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
-        .view-mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050; }
-
-        .rank-selector { display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .rank-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; color: rgba(240,240,245,0.28); cursor: pointer; transition: all 0.16s; }
-        .rank-btn.active { color: #fff; }
-        .rank-btn-glow { box-shadow: 0 0 13px; }
-
-        /* Card styles (ScriptCard, ResearchCard) */
-        .card { background: rgba(255,255,255,0.03); border-radius: 16px; overflow: hidden; animation: fadeUp 0.25s ease; }
-        .card.script { border: 1px solid var(--rank-color)38; box-shadow: 0 0 36px var(--rank-glow); }
-        .card-header { background: linear-gradient(135deg,var(--rank-color)16,transparent); border-bottom: 1px solid var(--rank-color)25; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
-        .card-header-left { display: flex; align-items: center; gap: 12px; }
-        .rank-badge { background: var(--rank-color); border-radius: 9px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900; color: #fff; box-shadow: 0 0 12px var(--rank-glow); }
-        .rank-label-small { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--rank-color); text-transform: uppercase; margin-bottom: 2px; }
-        .card-title { font-size: 13px; font-weight: 700; }
-        .card-header-right { display: flex; gap: 7px; flex-wrap: wrap; }
-        .retention-badge { background: var(--rank-color)16; border: 1px solid var(--rank-color)30; border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 800; color: var(--rank-color); }
-        .caption-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
-        .card-body { padding: 18px 20px; }
-        .clip-description { font-size: 13px; line-height: 1.65; color: rgba(240,240,245,0.85); margin-bottom: 16px; }
-        .detail-grid { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px; }
-        .detail-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px; }
-        .detail-label { font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 4px; }
-        .detail-value { font-size: 11px; color: rgba(240,240,245,0.65); line-height: 1.45; }
-        .transition-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 9px; padding: 10px 14px; display: flex; alignItems: center; gap: 9px; margin-top: 14px; }
-        .transition-label { font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; flex-shrink: 0; }
-        .transition-text { font-size: 12px; font-weight: 700; font-style: italic; color: rgba(240,240,245,0.68); }
-
-        /* Source Panel */
-        .source-panel { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; margin-top: 14px; }
-        .source-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2); }
-        .source-tab-btn { flex: 1; padding: 9px 4px; font-size: 11px; font-weight: 700; border: none; background: transparent; border-bottom: 2px solid transparent; cursor: pointer; }
-        .source-tab-btn.active { color: var(--platform-color); background: var(--platform-color)10; border-bottom-color: var(--platform-color); }
-        .source-tab-btn.inactive { color: rgba(240,240,245,0.28); }
-        .source-content { padding: 14px 16px; }
-        .source-section-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--platform-color); text-transform: uppercase; margin-bottom: 8px; opacity: 0.8; }
-        .source-query-item { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
-        .source-query-text { font-size: 11px; color: rgba(240,240,245,0.65); flex: 1; line-height: 1.4; }
-        .platform-btn { display: inline-flex; alignItems: center; gap: 5px; border-radius: 7px; padding: 5px 11px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-        .platform-btn-small { padding: 4px 9px; font-size: 10px; }
-        .platform-btn-icon { font-size: 10px; }
-        .platform-btn-icon-small { font-size: 9px; }
-        .platform-btn-arrow { font-size: 8px; opacity: 0.55; }
-
-        /* Research card specific */
-        .card.research { border: 1px solid var(--rank-color)38; box-shadow: 0 0 36px var(--rank-glow); }
-        .research-clip-name { font-size: 15px; font-weight: 800; line-height: 1.3; }
-        .research-summary-badges { display: flex; flex-wrap: wrap; gap: 7px; }
-        .research-summary-badge { background: rgba(255,255,255,0.06); border: 1px solid; border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 700; }
-        .research-primary-keyword { margin-bottom: 14px; }
-        .research-primary-keyword .detail-label { color: rgba(240,240,245,0.28); }
-        .research-primary-keyword-value { background: var(--rank-color)12; border: 1px solid var(--rank-color)30; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 800; color: var(--rank-color); }
-        .research-secondary-keywords { margin-bottom: 16px; }
-        .research-secondary-keywords-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .research-secondary-keyword-chip { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 3px 10px; font-size: 11px; color: rgba(240,240,245,0.65); font-weight: 600; }
-        .research-why-here { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 11px 14px; margin-bottom: 16px; }
-        .research-why-here-label { font-size: 9px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.27); text-transform: uppercase; margin-bottom: 5px; }
-        .research-why-here-value { font-size: 12px; color: rgba(240,240,245,0.72); line-height: 1.5; }
-
-        .research-emotion-scores { margin-bottom: 14px; }
-        .research-emotion-scores-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px; }
-        .emotion-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
-        .emotion-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; }
-        .emotion-label { font-size: 9px; font-weight: 700; color: rgba(240,240,245,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
-        .emotion-score-row { display: flex; align-items: center; gap: 7px; }
-        .emotion-score-value { font-size: 13px; font-weight: 800; }
-        .score-bar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; flex: 1; }
-        .score-bar-fill { height: 100%; width: 0%; background: #FF0050; border-radius: 3px; transition: width 0.6s ease; }
-
-        .viral-score-wheel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px 16px; }
-        .viral-score-wheel-header { display: flex; alignItems: center; justifyContent: space-between; margin-bottom: 12px; }
-        .viral-score-wheel-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.3); text-transform: uppercase; }
-        .viral-score-wheel-final { font-size: 22px; font-weight: 900; }
-        .viral-score-wheel-final small { font-size: 11px; opacity: 0.5; }
-        .viral-score-item { display: flex; alignItems: center; gap: 8px; margin-bottom: 6px; }
-        .viral-score-item-label { font-size: 10px; color: rgba(240,240,245,0.45); width: 110px; flex-shrink: 0; }
-        .viral-score-item-value { font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); width: 26px; text-align: right; }
-        .viral-score-item-weight { font-size: 9px; color: rgba(240,240,245,0.2); width: 28px; }
-
-        /* All Sources View */
-        .all-sources-platform-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .all-sources-platform-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 8px; font-size: 12px; font-weight: 700; color: rgba(240,240,245,0.35); cursor: pointer; transition: all 0.15s; }
-        .all-sources-platform-btn.active { background: var(--platform-color)14; border-color: var(--platform-color)35; color: var(--platform-color); }
-        .all-sources-content-box { background: rgba(255,255,255,0.03); border-radius: 14px; overflow: hidden; }
-        .all-sources-header { background: var(--platform-color)0e; border-bottom: 1px solid var(--platform-color)20; padding: 12px 18px; }
-        .all-sources-header-title { font-size: 13px; font-weight: 800; color: var(--platform-color); }
-        .all-sources-rank-list { padding: 14px 18px; }
-        .all-sources-rank-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 14px; margin-bottom: 14px; }
-        .all-sources-rank-item:last-child { border-bottom: none; margin-bottom: 0; }
-        .all-sources-rank-header { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
-        .all-sources-rank-badge { background: var(--rank-color); border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; color: #fff; }
-        .all-sources-rank-label { font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.5); }
-        .all-sources-clip-name { font-size: 11px; color: rgba(240,240,245,0.35); }
-        .all-sources-queries-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
-        .all-sources-extras-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-
-        .clip-dna-box { flex: 1; min-width: 220px; background: rgba(204,0,255,0.05); border: 1px solid rgba(204,0,255,0.16); border-radius: 13px; padding: 14px 18px; }
-        .clip-dna-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 10px; }
-        .clip-dna-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-        .clip-dna-item { background: rgba(255,255,255,0.04); border: 1px solid rgba(204,0,255,0.12); border-radius: 6px; padding: 5px 10px; }
-        .clip-dna-item-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 2px; }
-        .clip-dna-item-value { font-size: 11px; color: rgba(240,240,245,0.75); font-weight: 600; }
-
-        .replay-hook-box { flex: 1; min-width: 180px; background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2); border-radius: 13px; padding: 14px 18px; display: flex; flex-direction: column; justify-content: center; }
-        .replay-hook-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF0050; text-transform: uppercase; margin-bottom: 7px; }
-        .replay-hook-text { font-size: 15px; font-weight: 800; }
-
-        /* General utility classes */
-        .flex-row { display: flex; align-items: center; }
-        .flex-col { display: flex; flex-direction: column; }
-        .gap-4 { gap: 4px; }
-        .gap-6 { gap: 6px; }
-        .gap-7 { gap: 7px; }
-        .gap-8 { gap: 8px; }
-        .gap-9 { gap: 9px; }
-        .gap-10 { gap: 10px; }
-        .mt-8 { margin-top: 8px; }
-        .mb-10 { margin-bottom: 10px; }
-        .mb-14 { margin-bottom: 14px; }
-        .mb-16 { margin-bottom: 16px; }
-        .mb-24 { margin-bottom: 24px; }
-        .text-center { text-align: center; }
-        .hidden { display: none !important; }
-
-        @media (max-width: 560px) {
-            .config-row { grid-template-columns: 1fr; }
-            /* More responsive adjustments if needed */
+        /* --- General Styling for Viral Engine --- */
+        .viral-engine-container {
+            min-height: 100vh; background: #09090E; color: #F0F0F5; font-family: "'Inter',-apple-system,sans-serif"; overflow-x: hidden;
+            position: relative; z-index: 1; /* Ensure it's above the body::after grid */
         }
-    </style>
+        .viral-engine-container::before {
+            content: ''; position: fixed; inset: 0; background-image: "radial-gradient(ellipse 80% 50% at 50% -15%,rgba(255,0,80,0.10) 0%,transparent 60%)"; pointer-events: "none"; z-index: 0;
+        }
+
+        .viral-engine-shell {
+            max-width: 940px; margin: 0 auto; padding: 0 16px 80px; position: relative; z-index: 1;
+        }
+
+        /* --- Header --- */
+        .viral-engine-header {
+            text-align: center; padding-top: 46px; padding-bottom: 32px;
+        }
+        .viral-engine-tag {
+            display: inline-block; background: rgba(255,0,80,0.10); border: 1px solid rgba(255,0,80,0.26); border-radius: 7px; padding: 3px 12px;
+            font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: #FF0050; margin-bottom: 16px; text-transform: uppercase;
+        }
+        .viral-engine-header h1 {
+            font-size: clamp(24px,5vw,46px); font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 9px;
+        }
+        .viral-engine-header h1 span {
+            background: linear-gradient(90deg,#FF0050,#CC00FF,#FF6B35); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .viral-engine-header p {
+            color: rgba(240,240,245,0.38); font-size: 13px; margin: 0;
+        }
+
+        /* --- Retention Curve --- */
+        .retention-curve {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
+            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
+        }
+        .retention-curve-label {
+            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
+            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
+        }
+        .retention-rank-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .retention-rank-item span:first-of-type {
+            font-size: 8px; font-weight: 700;
+        }
+        .retention-bar {
+            width: 100%; border-radius: 3px 3px 0 0;
+        }
+        .retention-rank-item span:last-of-type {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
+        }
+
+        /* --- Mode Selector --- */
+        .mode-selector {
+            display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07);
+        }
+        .mode-selector button {
+            flex: 1; border: transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left;
+        }
+        .mode-selector button.active {
+            background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35);
+        }
+        .mode-selector button:not(.active) {
+            background: transparent;
+        }
+        .mode-selector button div:first-child {
+            font-size: 13px; font-weight: 800; margin-bottom: 2px;
+        }
+        .mode-selector button.active div:first-child { color: #FF0050; }
+        .mode-selector button:not(.active) div:first-child { color: rgba(240,240,245,0.45); }
+        .mode-selector button div:last-child {
+            font-size: 10px; color: rgba(240,240,245,0.28);
+        }
+
+        /* --- Input Section --- */
+        .input-section {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; margin-bottom: 20px;
+        }
+        .input-section label {
+            display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: rgba(240,240,245,0.3); text-transform: uppercase; margin-bottom: 9px;
+        }
+        .input-section input[type="text"] {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; padding: 12px 14px;
+            font-size: 14px; color: #F0F0F5; outline: none; box-sizing: border-box; margin-bottom: 12px;
+        }
+        .input-section input[type="text"]:focus {
+            border-color: rgba(255,0,80,0.4)!important; box-shadow: 0 0 0 3px rgba(255,0,80,0.08);
+        }
+        .input-section input[type="text"]::placeholder {
+            color: rgba(240,240,245,0.16);
+        }
+        .example-topics button {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 10px;
+            font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 600;
+        }
+        .example-topics button.active {
+            background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050;
+        }
+        .date-filter-section {
+            margin-bottom: 14px;
+        }
+        .date-filter-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px;
+        }
+        .date-filter-buttons button {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 11px;
+            font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 700;
+        }
+        .date-filter-buttons button.active {
+            background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF;
+        }
+
+        /* --- Run Button --- */
+        .generate-button {
+            width: 100%; background: linear-gradient(135deg,#FF0050,#CC00FF); border: none; border-radius: 10px; padding: 14px 20px;
+            font-size: 13px; font-weight: 800; color: #fff; cursor: pointer; letter-spacing: 0.04em;
+            box-shadow: 0 4px 20px rgba(255,0,80,0.28); opacity: 1; transition: all 0.18s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .generate-button:hover:not(:disabled) {
+            filter: brightness(1.08);
+        }
+        .generate-button:disabled {
+            background: rgba(255,0,80,0.22); cursor: not-allowed; box-shadow: none; opacity: 0.35;
+        }
+        .generate-button.loading {
+            background: rgba(255,0,80,0.22); cursor: not-allowed; box-shadow: none; opacity: 1;
+        }
+
+        /* --- Retry Message --- */
+        .retry-message {
+            margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px;
+            font-size: 11px; color: #FFA500; text-align: center;
+        }
+
+        /* --- Error Message --- */
+        .error-display {
+            background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.25); border-radius: 10px; padding: 12px 16px;
+            color: #FF6666; font-size: 12px; margin-bottom: 18px;
+        }
+
+        /* --- Results Panel --- */
+        .results-panel {
+            animation: fadeUp 0.4s ease;
+        }
+        .results-header {
+            background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px;
+            margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px;
+        }
+        .results-header div:first-child div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px;
+        }
+        .results-header div:first-child div:last-child {
+            font-size: 16px; font-weight: 800; letter-spacing: -0.02em;
+        }
+        .results-meta-tags {
+            display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+        }
+        .results-meta-tags span {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px;
+            font-size: 10px; font-weight: 700;
+        }
+        .results-meta-tags .trend-status { color: #4CAF50; } /* Example, adjust based on TREND_COLOR */
+        .results-meta-tags .opportunity-score { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .results-meta-tags .viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .copy-button {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px;
+            font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer;
+        }
+        .copy-button.copied {
+            background: rgba(0,200,100,0.12); border: 1px solid rgba(0,200,100,0.26); color: #00C864;
+        }
+
+        /* --- Hook Section (Script Mode) --- */
+        .hook-section {
+            background: rgba(255,107,53,0.07); border: 1px solid rgba(255,107,53,0.18); border-radius: 10px; padding: 13px 17px; margin-bottom: 16px;
+        }
+        .hook-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF6B35; text-transform: uppercase; margin-bottom: 4px;
+        }
+        .hook-section div:last-child {
+            font-size: 15px; font-weight: 700; font-style: italic;
+        }
+
+        /* --- Editor Intelligence (Research Mode) --- */
+        .editor-intelligence {
+            background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+        }
+        .editor-intelligence div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px;
+        }
+        .editor-notes-grid {
+            display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px;
+        }
+        .editor-note-item {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px;
+        }
+        .editor-note-item div:first-child {
+            font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;
+        }
+        .editor-note-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4;
+        }
+
+        /* --- View Selector --- */
+        .view-selector {
+            display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .view-selector button {
+            flex: 1; border: transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+        }
+        .view-selector button.active {
+            background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050;
+        }
+        .view-selector button:not(.active) {
+            background: transparent; color: rgba(240,240,245,0.36);
+        }
+
+        /* --- Rank Selector --- */
+        .rank-selector {
+            display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .rank-selector button {
+            flex: 1; border: transparent; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.16s;
+        }
+        .rank-selector button.active {
+            color: #fff;
+        }
+        .rank-selector button:not(.active) {
+            background: transparent; color: rgba(240,240,245,0.28);
+        }
+        /* Dynamic rank button backgrounds and shadows will be handled by JS */
+
+        /* --- Card Styles (ScriptCard & ResearchCard) --- */
+        .card-base {
+            background: rgba(255,255,255,0.03); border-radius: 16px; overflow: hidden; animation: fadeUp 0.25s ease;
+        }
+        .card-header {
+            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px;
+        }
+        .rank-display {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .rank-circle {
+            border-radius: 9px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+            font-size: 17px; font-weight: 900; color: #fff;
+        }
+        .rank-text div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; margin-bottom: 2px;
+        }
+        .rank-text div:last-child {
+            font-size: 13px; font-weight: 700;
+        }
+        .card-tags {
+            display: flex; gap: 7px; flex-wrap: wrap;
+        }
+        .card-tag {
+            border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 800;
+        }
+        .card-body {
+            padding: 18px 20px;
+        }
+        .clip-description {
+            font-size: 13px; line-height: 1.65; color: rgba(240,240,245,0.85); margin-bottom: 16px;
+        }
+        .info-grid {
+            display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .info-item {
+            flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px;
+        }
+        .info-item div:first-child {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 4px;
+        }
+        .info-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.65); line-height: 1.45;
+        }
+        .src-panel-container {
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; margin-top: 14px;
+        }
+        .src-panel-tabs {
+            display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2);
+        }
+        .src-panel-tabs button {
+            flex: 1; padding: 9px 4px; font-size: 11px; font-weight: 700; border: none; cursor: pointer;
+        }
+        .src-panel-tabs button.active {
+            border-bottom: 2px solid;
+        }
+        .src-panel-tabs button:not(.active) {
+            color: rgba(240,240,245,0.28); background: transparent; border-bottom: 2px solid transparent;
+        }
+        .src-panel-content {
+            padding: 14px 16px;
+        }
+        .src-query-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; opacity: 0.8;
+        }
+        .src-query-item {
+            display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+        }
+        .src-query-item span:first-child {
+            font-size: 11px; color: rgba(240,240,245,0.65); flex: 1; line-height: 1.4;
+        }
+        .src-extra-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin: 12px 0 8px; opacity: 0.8;
+        }
+        .platform-btn {
+            display: inline-flex; alignItems: "center", gap: 5;
+            borderRadius: 7px; cursor: pointer; whiteSpace: "nowrap";
+        }
+        .platform-btn.small {
+            padding: 4px 9px; font-size: 10px;
+        }
+        .platform-btn.normal {
+            padding: 5px 11px; font-size: 11px;
+        }
+        .platform-btn span:first-child {
+            font-size: 9px;
+        }
+        .platform-btn span:last-child {
+            font-size: 8px; opacity: 0.55;
+        }
+
+        .transition-text {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 9px; padding: 10px 14px;
+            display: flex; align-items: center; gap: 9px; margin-top: 14px;
+        }
+        .transition-text span:first-child {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; flex-shrink: 0;
+        }
+        .transition-text span:last-child {
+            font-size: 12px; font-weight: 700; font-style: italic; color: rgba(240,240,245,0.68);
+        }
+
+        /* --- Research Card Specific --- */
+        .research-card-header-meta {
+            display: flex; flex-wrap: wrap; gap: 7px;
+        }
+        .research-card-header-meta span {
+            border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 700;
+        }
+        .research-card-alerts {
+            display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px;
+        }
+        .research-card-alerts span {
+            border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 800;
+        }
+        .primary-keyword-section {
+            margin-bottom: 14px;
+        }
+        .primary-keyword-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 7px;
+        }
+        .primary-keyword-display {
+            border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 800;
+        }
+        .secondary-keywords-section {
+            margin-bottom: 16px;
+        }
+        .secondary-keywords-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 7px;
+        }
+        .secondary-keywords-display {
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .secondary-keywords-display span {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 3px 10px;
+            font-size: 11px; color: rgba(240,240,245,0.65); font-weight: 600;
+        }
+        .why-it-ranks-box {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 11px 14px; margin-bottom: 16px;
+        }
+        .why-it-ranks-box div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.27); text-transform: uppercase; margin-bottom: 5px;
+        }
+        .why-it-ranks-box div:last-child {
+            font-size: 12px; color: rgba(240,240,245,0.72); line-height: 1.5;
+        }
+        .hook-escalation-scores {
+            display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .score-display-item {
+            flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px;
+        }
+        .score-display-item div:first-child {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 6px;
+        }
+        .score-value-bar {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .score-value-bar span:first-child {
+            font-size: 15px; font-weight: 800;
+        }
+        .score-bar-fill {
+            height: 5px; background: "rgba(255,255,255,0.07)"; borderRadius: 3px; overflow: "hidden"; flex: 1;
+        }
+        .score-bar-inner {
+            height: "100%"; borderRadius: 3px; transition: "width 0.6s ease";
+        }
+        .emotion-scores-section {
+            margin-bottom: 14px;
+        }
+        .emotion-scores-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px;
+        }
+        .emotion-grid {
+            display: grid; grid-template-columns: repeat(3,1fr); gap: 7px;
+        }
+        .emotion-grid-item {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px;
+        }
+        .emotion-grid-item div:first-child {
+            font-size: 9px; font-weight: 700; color: rgba(240,240,245,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px;
+        }
+        .emotion-grid-item div:last-child {
+            display: flex; align-items: center; gap: 7px;
+        }
+        .emotion-grid-item div:last-child span:first-child {
+            font-size: 13px; font-weight: 800;
+        }
+        .viral-score-wheel-section {
+            margin-bottom: 14px;
+        }
+        .viral-score-wheel-container {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px 16px;
+        }
+        .viral-score-wheel-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+        }
+        .viral-score-wheel-header span:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.3); text-transform: uppercase;
+        }
+        .viral-score-wheel-header span:last-child {
+            font-size: 22px; font-weight: 900;
+        }
+        .viral-score-wheel-header span:last-child span {
+            font-size: 11px; opacity: 0.5;
+        }
+        .viral-score-component-row {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+        }
+        .viral-score-component-row span:first-child {
+            font-size: 10px; color: rgba(240,240,245,0.45); width: 110px; flex-shrink: 0;
+        }
+        .viral-score-component-row span:nth-child(3) {
+            font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); width: 26px; text-align: right;
+        }
+        .viral-score-component-row span:last-child {
+            font-size: 9px; color: rgba(240,240,245,0.2); width: 28px;
+        }
+
+        /* --- All Sources View --- */
+        .all-sources-view-tabs {
+            display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .all-sources-view-tabs button {
+            flex: 1; border-radius: 9px; padding: 9px 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+        }
+        .all-sources-view-tabs button.active {
+            background: transparent;
+        }
+        .all-sources-view-container {
+            border-radius: 14px; overflow: hidden;
+        }
+        .all-sources-view-header {
+            padding: 12px 18px;
+        }
+        .all-sources-view-header span {
+            font-size: 13px; font-weight: 800;
+        }
+        .all-sources-view-content {
+            padding: 14px 18px;
+        }
+        .all-sources-rank-item {
+            border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 14px; margin-bottom: 14px;
+        }
+        .all-sources-rank-item:last-child {
+            border-bottom: none;
+        }
+        .all-sources-rank-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+        }
+        .all-sources-rank-header span:first-child {
+            border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; color: #fff;
+        }
+        .all-sources-rank-header span:nth-child(2) {
+            font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.5);
+        }
+        .all-sources-rank-header span:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.35);
+        }
+        .all-sources-query-row {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px;
+        }
+        .all-sources-extra-row {
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+
+        /* --- Footer --- */
+        .dna-section, .replay-section {
+            border-radius: 13px; padding: 14px 18px;
+        }
+        .dna-section {
+            background: rgba(204,0,255,0.05); border: 1px solid rgba(204,0,255,0.16);
+        }
+        .dna-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 10px;
+        }
+        .dna-items {
+            display: flex; flex-wrap: wrap; gap: 7px;
+        }
+        .dna-item {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(204,0,255,0.12); border-radius: 6px; padding: 5px 10px;
+        }
+        .dna-item div:first-child {
+            font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 2px;
+        }
+        .dna-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.75); font-weight: 600;
+        }
+        .replay-section {
+            background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2);
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .replay-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF0050; text-transform: uppercase; margin-bottom: 7px;
+        }
+        .replay-section div:last-child {
+            font-size: 15px; font-weight: 800;
+        }
+
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
 </head>
 <body>
     <div id="root">
@@ -365,7 +726,7 @@
     </div>
 
     <script>
-        // --- Constants ---
+        // --- Constants (Global) ---
         const RANK_META = [
             { rank: 6, label: "SCROLL STOPPER", retention: "85%", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
             { rank: 5, label: "INTEREST", retention: "65%", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
@@ -395,63 +756,62 @@
                 searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
                 subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
             instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
-                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`, // Fixed: removed trailing /
-                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}` }, // Fixed: removed trailing /
-            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
-                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
-                tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
-            linkedin: { name: "LinkedIn", icon: "in", color: "#0A66C2", bg: "rgba(10,102,194,0.08)", border: "rgba(10,102,194,0.25)",
-                searchUrl: (q) => `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(q)}` },
+                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ""))/}`,
+                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g,""))}` },
         };
 
-        const SURPRISE_NICHES = [
-            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
-            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
-            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
-            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
-            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
-            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
-            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
-        ];
-
-        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
-        const TREND_DIR_COLOR = { Rising: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
         const RARITY_COLOR = { Common: "#888", Uncommon: "#4CAF50", Rare: "#2196F3", "Very Rare": "#CC00FF", Legendary: "#FF0050" };
         const COMP_COLOR = { Low: "#4CAF50", Medium: "#FFD700", High: "#FF4444" };
+        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
+        const TREND_DIR_COLOR = { Rising: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444" };
         const ALERT_META = {
             "Hidden Gem": { icon: "💎", color: "#CC00FF" },
             "Emerging Trend": { icon: "📈", color: "#4CAF50" },
             "Viral Potential": { icon: "🔥", color: "#FF0050" },
             "Early Opportunity": { icon: "🚀", color: "#FFD700" },
         };
+
         function opportunityColor(score) { return score >= 75 ? "#FF0050" : score >= 50 ? "#CC00FF" : score >= 25 ? "#FFD700" : "#888"; }
 
-        // --- API Helper ---
-        const DEFAULT_TIMEOUT = 120000;
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; // <<-- Make sure this is YOUR Cloudflare Worker URL
+        const SCRIPT_PROMPT_TEMPLATE = (topic) => `You are an elite viral short-form content strategist for YouTube Shorts, TikTok, and Reels.
 
-        // THIS IS FOR LLM Providers, NOT platforms like YouTube/TikTok
-        const providersConfig = {
-            openrouter: { name: "OpenRouter", models: [
-                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
-                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-            ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-flash-latest", name: "Gemini Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
-            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
-            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
-            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
-        };
+Create a 6-rank viral video script. STRICT rules:
 
-        let currentProviderName = "google"; // Default to google or first available
-        // Ensure currentProviderName is one of the keys in providersConfig
-        if (!providersConfig[currentProviderName] && Object.keys(providersConfig).length > 0) {
-            currentProviderName = Object.keys(providersConfig)[0];
-        } else if (Object.keys(providersConfig).length === 0) {
-            currentProviderName = ''; // No providers available
-        }
+EMOTIONAL CURVE: Shock→Curiosity→Interest→Escalation→Tension→Payoff→Replay
 
+RANKS: #6=Scroll Stopper(85%) #5=Interest(65%) #4=Introduction(50%) #3=Escalation(75%) #2=False Winner(95%) #1=Final Payoff(100%)
+
+RULES: All clips same category. Each rank escalates. #2 feels like winner. #1 exceeds everything.
+
+Per rank generate:
+- 2 YouTube search queries + 2 Shorts queries
+- 2 TikTok search queries + 2 hashtags (no # symbol)
+- 2 Reddit search queries + 2 subreddit names (no r/ prefix)
+
+Output ONLY valid JSON:
+{
+  "topic":"${topic}","emotionalCurve":"string","escalationLogic":"string",
+  "openLoopHook":"string","viralPotential":"High|Very High|Extreme",
+  "replayQuestion":"string",
+  "clipDNA":{"object":"string","environment":"string","emotion":"string","escalation":"string","ending":"string"},
+  "ranks":[{
+    "rank":6,"label":"SCROLL STOPPER","emotionalPurpose":"string",
+    "clipDescription":"vivid 2-3 sentences","whyStronger":"string",
+    "emotionalLevel":"string","expectationSet":"string",
+    "retentionScore":"85%","caption":"Max 4 words + emoji",
+    "transitionText":"But it gets worse...",
+    "sources":{
+      "youtube":{"queries":["q1","q2"],"shorts":["s1","s2"]},
+      "tiktok":{"queries":["q1","q2"],"hashtags":["h1","h2"]},
+      "reddit":{"queries":["q1","q2"],"subreddits":["r1","r2"]}
+    }
+  }]
+}
+Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
+
+
+        // --- API Helper (Worker Interaction) ---
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; // <<-- Make sure this is YOUR Worker URL
 
         function cleanJsonResponse(text) {
             if (!text || typeof text !== 'string') return '';
@@ -472,319 +832,264 @@
             return text;
         }
 
-        async function fetchWorker(endpoint, payload, options = {}) {
-            const { providerName, model, dateFilter, referenceChannels, styleInstructions } = options;
-            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
-
+        async function callWorkerAPI(endpoint, payload) {
             const controller = new AbortController();
             const signal = controller.signal;
-            const timeout = options.timeout || DEFAULT_TIMEOUT;
+            const timeout = 120000; // 2 minutes timeout
             const timer = setTimeout(() => controller.abort(), timeout);
 
             try {
-                const body = {
-                    topic: payload.topic,
-                    dateFilter: dateFilter,
-                    provider: providerName || null,
-                    model: model || null,
-                    referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined,
-                    styleInstructions: styleInstructions || undefined,
-                    prompt: payload.prompt || undefined // For /api/complete
-                };
-                console.log("Sending payload to worker:", body); // Debug log
-
-                const res = await fetch(workerUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
+                const response = await fetch(`${WORKER_BASE_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
                     signal: signal
                 });
                 clearTimeout(timer);
 
-                const data = await res.json();
-                console.log("Received response from worker:", data); // Debug log
+                const data = await response.json();
 
-                if (!res.ok) {
-                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
+                if (!response.ok) {
+                    const errorMsg = data.error || `Worker request failed with status ${response.status}`;
+                    throw new Error(errorMsg);
                 }
+
                 return data;
-
-            } catch (err) {
-                clearTimeout(timer);
-                console.error("Error fetching from worker:", err); // Debug log
-                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    throw new Error(`Request timed out after ${timeout / 1000}s.`);
+                }
+                throw error;
             }
         }
 
-        // --- UI Helper Functions (Vanilla JS) ---
-        function createEl(tag, attrs = {}, children = []) {
-            const el = document.createElement(tag);
-            for (const key in attrs) {
-                if (key === 'style') {
-                    for (const prop in attrs[key]) {
-                        el.style[prop] = attrs[key][prop];
-                    }
-                } else if (key === 'className') {
-                    el.className = attrs[key];
-                } else if (key === 'onClick') {
-                    el.addEventListener('click', attrs[key]);
-                } else if (key === 'onInput') {
-                    el.addEventListener('input', attrs[key]);
-                } else if (key === 'onKeyDown') {
-                    el.addEventListener('keydown', attrs[key]);
-                } else if (key === 'value') { // Handle value for input/select/textarea
-                    el.value = attrs[key];
-                }
-                else {
-                    el.setAttribute(key, attrs[key]);
-                }
-            }
-            children.forEach(child => {
-                if (typeof child === 'string') {
-                    el.appendChild(document.createTextNode(child));
-                } else if (child instanceof Node) {
-                    el.appendChild(child);
-                } else if (child !== null && child !== undefined) { // Handle null/undefined children
-                    el.appendChild(document.createTextNode(String(child)));
-                }
-            });
-            return el;
-        }
-
-        function clearChildren(element) {
-            while (element && element.firstChild) {
-                element.removeChild(element.firstChild);
-            }
-        }
-
-        let state = {
-            topic: '',
-            mode: 'research',
-            dateFilter: '7 Days',
-            loading: false,
-            retryMsg: '',
-            scriptData: null,
-            researchData: null,
-            error: null,
-            activeRank: 6, // Default to 6
-            activeView: 'ranks',
-            copied: false,
-            phaseIdx: 0,
-            activeProvider: currentProviderName,
-            availableModels: [],
-            selectedModel: ''
-        };
-
-        const phases = [
-            "Analyzing viral potential…", "Mapping emotional curve…", "Building escalation logic…",
-            "Scanning trend signals…", "Generating clip sources…", "Unlocking final payoff…",
-        ];
-
-        let phaseInterval = null;
-
-        function updateState(newState) {
-            state = { ...state, ...newState };
-            renderApp();
-            persistState();
-        }
+        // --- UI Rendering Functions (Vanilla JS) ---
 
         function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
 
-        function PlatformBtn(platform, label, url, small = false) {
+        function createPlatformBtn(platform, label, url, small) {
             const c = PLATFORM_CFG[platform];
-            if (!c) { // Fallback for undefined platform
-                console.warn(`Platform config not found for: ${platform}`);
-                return createEl('button', { className: 'platform-btn-small', disabled: true }, [`${label}`]);
-            }
-            return createEl('button', {
-                onClick: () => openLink(url),
-                style: {
-                    display: "inline-flex", alignItems: "center", gap: "5px",
-                    background: c.bg, border: `1px solid ${c.border}`,
-                    borderRadius: "7px", padding: small ? "4px 9px" : "5px 11px",
-                    fontSize: small ? "10px" : "11px", fontWeight: "700", color: c.color,
-                    cursor: "pointer", whiteWhiteSpace: "nowrap",
-                },
-                className: small ? 'platform-btn-small' : 'platform-btn'
-            }, [
-                createEl('span', { style: { fontSize: small ? "9px" : "10px" }, className: small ? 'platform-btn-icon-small' : 'platform-btn-icon' }, [c.icon]),
-                label,
-                createEl('span', { style: { fontSize: "8px", opacity: 0.55 }, className: 'platform-btn-arrow' }, ['↗'])
-            ]);
+            const button = document.createElement('button');
+            button.className = `platform-btn ${small ? 'small' : 'normal'}`;
+            button.onclick = () => openLink(url);
+            button.style.background = c.bg;
+            button.style.border = `1px solid ${c.border}`;
+            button.style.color = c.color;
+
+            const iconSpan = document.createElement('span');
+            iconSpan.textContent = c.icon;
+            iconSpan.style.fontSize = small ? '9px' : '10px';
+            button.appendChild(iconSpan);
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = label;
+            button.appendChild(labelSpan);
+
+            const arrowSpan = document.createElement('span');
+            arrowSpan.textContent = '↗';
+            button.appendChild(arrowSpan);
+
+            return button;
         }
 
-        function ScoreBar(value, color, max = 100) {
-            return createEl('div', { style: { height: "5px", background: "rgba(255,255,255,0.07)", borderRadius: "3px", overflow: "hidden", flex: 1 }, className: 'score-bar' }, [
-                createEl('div', { style: { height: "100%", width: `${(value / max) * 100}%`, background: color, borderRadius: "3px", transition: "width 0.6s ease" }, className: 'score-bar-fill' })
-            ]);
+        function createScoreBar(value, color, max = 100) {
+            const container = document.createElement('div');
+            container.className = 'score-bar-fill';
+            const innerBar = document.createElement('div');
+            innerBar.className = 'score-bar-inner';
+            innerBar.style.width = `${(value / max) * 100}%`;
+            innerBar.style.background = color;
+            container.appendChild(innerBar);
+            return container;
         }
 
-        function RetentionCurve() {
-            return createEl('div', { className: 'retention-curve' }, [
-                createEl('div', { className: 'retention-curve-label' }, ['Retention']),
-                ...[...RANK_META].reverse().map(m => createEl('div', { className: 'retention-bar-item' }, [
-                    createEl('span', { className: 'retention-percent', style: { color: m.color } }, [m.retention]),
-                    createEl('div', { className: 'retention-bar', style: { height: `${m.bar * 0.5}px`, background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`, boxShadow: `0 -3px 10px ${m.glow}` } }),
-                    createEl('span', { className: 'retention-rank', style: { color: 'rgba(240,240,245,0.28)' } }, [`#${m.rank}`]) // Added explicit color
-                ]))
-            ]);
+        function renderRetentionCurve(container) {
+            container.innerHTML = ''; // Clear previous content
+            const label = document.createElement('div');
+            label.className = 'retention-curve-label';
+            label.textContent = 'Retention';
+            container.appendChild(label);
+
+            [...RANK_META].reverse().forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'retention-rank-item';
+
+                const retentionSpan = document.createElement('span');
+                retentionSpan.textContent = m.retention;
+                retentionSpan.style.color = m.color;
+                item.appendChild(retentionSpan);
+
+                const barDiv = document.createElement('div');
+                barDiv.className = 'retention-bar';
+                barDiv.style.height = `${m.bar * 0.5}px`;
+                barDiv.style.background = `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`;
+                barDiv.style.boxShadow = `0 -3px 10px ${m.glow}`;
+                item.appendChild(barDiv);
+
+                const rankSpan = document.createElement('span');
+                rankSpan.textContent = `#${m.rank}`;
+                item.appendChild(rankSpan);
+                container.appendChild(item);
+            });
         }
 
-        function SrcPanel(sources) {
+        function renderSrcPanel(container, sources) {
+            container.innerHTML = ''; // Clear previous content
             let currentTab = 'youtube'; // Default tab
-            // Find the first available platform in sources to set as default
-            if (sources && Object.keys(sources).length > 0) {
-                currentTab = Object.keys(PLATFORM_CFG).find(p => sources[p] && (sources[p]?.queries?.length > 0 || sources[p]?.shorts?.length > 0 || sources[p]?.hashtags?.length > 0 || sources[p]?.subreddits?.length > 0)) || 'youtube';
-            }
 
+            const tabHeader = document.createElement('div');
+            tabHeader.className = 'src-panel-tabs';
+            ['youtube', 'tiktok', 'reddit'].forEach(p => {
+                const pc = PLATFORM_CFG[p];
+                const button = document.createElement('button');
+                button.textContent = `${pc.icon} ${pc.name}`;
+                button.onclick = () => {
+                    currentTab = p;
+                    updateSrcPanelContent();
+                    Array.from(tabHeader.children).forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    button.style.borderBottom = `2px solid ${pc.color}`;
+                    button.style.color = pc.color;
+                    button.style.background = `${pc.color}10`;
+                };
+                tabHeader.appendChild(button);
+            });
+            container.appendChild(tabHeader);
 
-            const panel = createEl('div', { className: 'source-panel' });
-            const tabsContainer = createEl('div', { className: 'source-tabs' });
-            const contentContainer = createEl('div', { className: 'source-content' });
+            const contentArea = document.createElement('div');
+            contentArea.className = 'src-panel-content';
+            container.appendChild(contentArea);
 
-            const updateSourcePanel = (platformKey) => {
-                currentTab = platformKey;
-                const newCfg = PLATFORM_CFG[currentTab];
-                if (!newCfg) {
-                    console.error(`Platform config for ${currentTab} not found.`);
-                    return;
-                }
-                const newSrc = sources?.[currentTab] || {};
-                const newQueries = newSrc.queries || [];
-                const newShorts = newSrc.shorts || [];
-                const newHashtags = newSrc.hashtags || [];
-                const newSubreddits = newSrc.subreddits || [];
+            function updateSrcPanelContent() {
+                contentArea.innerHTML = '';
+                const cfg = PLATFORM_CFG[currentTab];
+                const src = sources?.[currentTab] || {};
+                const queries = src.queries || [];
+                const extras = src.shorts || src.hashtags || src.subreddits || [];
 
-                clearChildren(tabsContainer);
-                clearChildren(contentContainer);
+                // Queries
+                const queryLabel = document.createElement('div');
+                queryLabel.className = 'src-query-label';
+                queryLabel.textContent = '🔍 Search Queries';
+                queryLabel.style.color = cfg.color;
+                contentArea.appendChild(queryLabel);
 
-                ['youtube', 'tiktok', 'instagram', 'reddit'].forEach(p => {
-                    const pc = PLATFORM_CFG[p];
-                    if (!pc) return; // Skip if platform config is missing
-                    const active = currentTab === p;
-                    tabsContainer.appendChild(createEl('button', {
-                        onClick: () => updateSourcePanel(p),
-                        className: `source-tab-btn ${active ? 'active' : 'inactive'}`,
-                        style: { '--platform-color': pc.color }
-                    }, [pc.icon + ' ' + pc.name]));
+                queries.forEach(q => {
+                    const item = document.createElement('div');
+                    item.className = 'src-query-item';
+                    const qSpan = document.createElement('span');
+                    qSpan.textContent = `"${q}"`;
+                    item.appendChild(qSpan);
+                    item.appendChild(createPlatformBtn(currentTab, 'Search', PLATFORM_CFG[currentTab].searchUrl(q), true));
+                    contentArea.appendChild(item);
                 });
 
-                contentContainer.appendChild(createEl('div', { className: 'source-section-label', style: { '--platform-color': newCfg.color } }, ['🔍 Search Queries']));
-                if (newQueries.length > 0) {
-                    newQueries.forEach((q) => {
-                        contentContainer.appendChild(createEl('div', { className: 'source-query-item' }, [
-                            createEl('span', { className: 'source-query-text' }, [`"${q}"`]),
-                            PlatformBtn(currentTab, 'Search', newCfg.searchUrl(q), true)
-                        ]));
-                    });
-                } else {
-                    contentContainer.appendChild(createEl('div', { className: 'source-query-text', style: { opacity: 0.5 } }, ['No specific queries.']));
-                }
+                // Extras (Shorts/Hashtags/Subreddits)
+                const extraLabel = document.createElement('div');
+                extraLabel.className = 'src-extra-label';
+                extraLabel.style.color = cfg.color;
+                extraLabel.textContent = currentTab === "youtube" ? "📱 Shorts" : currentTab === "tiktok" ? "#️⃣ Hashtags" : "🏠 Subreddits";
+                contentArea.appendChild(extraLabel);
 
+                const extraContainer = document.createElement('div');
+                extraContainer.style.display = 'flex';
+                extraContainer.style.flexWrap = 'wrap';
+                extraContainer.style.gap = '6px';
 
-                let extraLabel = '';
-                let extras = [];
-                if (currentTab === "youtube") { extraLabel = "📱 Shorts"; extras = newShorts; }
-                else if (currentTab === "tiktok") { extraLabel = "#️⃣ Hashtags"; extras = newHashtags; }
-                else if (currentTab === "instagram") { extraLabel = "#️⃣ Hashtags"; extras = newHashtags; }
-                else { extraLabel = "🏠 Subreddits"; extras = newSubreddits; }
+                extras.forEach(x => {
+                    let url, lbl;
+                    if (currentTab === "youtube") {
+                        url = PLATFORM_CFG.youtube.shortsUrl(x);
+                        lbl = `"${x}"`;
+                    } else if (currentTab === "tiktok") {
+                        url = PLATFORM_CFG.tiktok.tagUrl(x);
+                        lbl = `#${x}`;
+                    } else { // reddit
+                        url = PLATFORM_CFG.reddit.subUrl(x);
+                        lbl = `r/${x}`;
+                    }
+                    extraContainer.appendChild(createPlatformBtn(currentTab, lbl, url, true));
+                });
+                contentArea.appendChild(extraContainer);
 
-                contentContainer.appendChild(createEl('div', { className: 'source-section-label', style: { '--platform-color': newCfg.color, marginTop: "12px", marginBottom: "8px" } }, [extraLabel]));
-                const extrasGrid = createEl('div', { className: 'flex-row gap-6', style: { flexWrap: "wrap" } });
-                if (extras.length > 0) {
-                    extras.forEach((x) => {
-                        let url, lbl;
-                        if (currentTab === "youtube") {
-                            url = newCfg.shortsUrl ? newCfg.shortsUrl(x) : '';
-                            lbl = `"${x}"`;
-                        } else if (currentTab === "tiktok") {
-                            url = newCfg.tagUrl ? newCfg.tagUrl(x) : '';
-                            lbl = `#${x}`;
-                        } else if (currentTab === "instagram") {
-                            url = newCfg.tagUrl ? newCfg.tagUrl(x) : '';
-                            lbl = `#${x}`;
-                        } else { // reddit
-                            url = newCfg.subUrl ? newCfg.subUrl(x) : '';
-                            lbl = `r/${x}`;
-                        }
-                        if (url) extrasGrid.appendChild(PlatformBtn(currentTab, lbl, url, true));
-                    });
-                } else {
-                    extrasGrid.appendChild(createEl('div', { className: 'source-query-text', style: { opacity: 0.5 } }, ['No specific items.']));
-                }
-                contentContainer.appendChild(extrasGrid);
-            };
+                // Highlight active tab
+                Array.from(tabHeader.children).forEach(btn => btn.classList.remove('active'));
+                tabHeader.children[0].classList.add('active'); // Default to YouTube active initially
+                tabHeader.children[0].style.borderBottom = `2px solid ${PLATFORM_CFG.youtube.color}`;
+                tabHeader.children[0].style.color = PLATFORM_CFG.youtube.color;
+                tabHeader.children[0].style.background = `${PLATFORM_CFG.youtube.color}10`;
+            }
 
-            panel.appendChild(tabsContainer);
-            panel.appendChild(contentContainer);
-            updateSourcePanel(currentTab); // Initial render
-
-            return panel;
+            updateSrcPanelContent(); // Initial render
         }
 
-        function ScriptCard(rd, meta) {
-            if (!rd || !meta) return createEl('div');
-            return createEl('div', {
-                className: 'card script',
-                style: {
-                    '--rank-color': meta.color,
-                    '--rank-glow': meta.glow,
-                    'border': `1px solid ${meta.color}38`,
-                    'boxShadow': `0 0 36px ${meta.glow}`
-                }
-            }, [
-                createEl('div', { className: 'card-header' }, [
-                    createEl('div', { className: 'card-header-left' }, [
-                        createEl('div', { className: 'rank-badge', style: { background: meta.color, boxShadow: `0 0 12px ${meta.glow}` } }, [`#${meta.rank}`]),
-                        createEl('div', {}, [
-                            createEl('div', { className: 'rank-label-small', style: { color: meta.color } }, [meta.label]),
-                            createEl('div', { className: 'card-title' }, [rd.emotionalPurpose || ''])
-                        ])
-                    ]),
-                    createEl('div', { className: 'card-header-right' }, [
-                        createEl('span', { className: 'retention-badge', style: { background: `${meta.color}16`, borderColor: `${meta.color}30`, color: meta.color } }, [rd.retentionScore]),
-                        createEl('span', { className: 'caption-badge' }, [rd.caption])
-                    ])
-                ]),
-                createEl('div', { className: 'card-body' }, [
-                    createEl('div', { className: 'clip-description' }, [rd.clipDescription]),
-                    createEl('div', { className: 'detail-grid' }, [
-                        createEl('div', { className: 'detail-item' }, [
-                            createEl('div', { className: 'detail-label' }, ['📈 Why Stronger']),
-                            createEl('div', { className: 'detail-value' }, [rd.whyStronger])
-                        ]),
-                        createEl('div', { className: 'detail-item' }, [
-                            createEl('div', { className: 'detail-label' }, ['⚡ Emotional Level']),
-                            createEl('div', { className: 'detail-value' }, [rd.emotionalLevel])
-                        ]),
-                        createEl('div', { className: 'detail-item' }, [
-                            createEl('div', { className: 'detail-label' }, ['🎯 Next Expectation']),
-                            createEl('div', { className: 'detail-value' }, [rd.expectationSet])
-                        ])
-                    ]),
-                    SrcPanel(rd.sources),
-                    rd.transitionText ? createEl('div', { className: 'transition-box' }, [
-                        createEl('span', { className: 'transition-label' }, ['Transition →']),
-                        createEl('span', { className: 'transition-text' }, [rd.transitionText])
-                    ]) : null
-                ])
-            ]);
+        function renderScriptCard(container, rd, meta) {
+            if (!rd || !meta) { container.innerHTML = ''; return; }
+            container.innerHTML = `
+                <div class="card-base" style="border: 1px solid ${meta.color}38; box-shadow: 0 0 36px ${meta.glow};">
+                    <div class="card-header" style="background: linear-gradient(135deg,${meta.color}16,transparent); border-bottom: 1px solid ${meta.color}25;">
+                        <div class="rank-display">
+                            <div class="rank-circle" style="background: ${meta.color}; box-shadow: 0 0 12px ${meta.glow};">#${meta.rank}</div>
+                            <div class="rank-text">
+                                <div style="color: ${meta.color};">${meta.label}</div>
+                                <div>${rd.emotionalPurpose}</div>
+                            </div>
+                        </div>
+                        <div class="card-tags">
+                            <span class="card-tag" style="background: ${meta.color}16; border: 1px solid ${meta.color}30; color: ${meta.color};">${rd.retentionScore}</span>
+                            <span class="card-tag" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); color: rgba(240,240,245,0.7); font-weight: 700;">${rd.caption}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="clip-description">${rd.clipDescription}</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">📈 Why Stronger</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.whyStronger}</div>
+                            </div>
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">⚡ Emotional Level</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.emotionalLevel}</div>
+                            </div>
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">🎯 Next Expectation</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.expectationSet}</div>
+                            </div>
+                        </div>
+                        <div class="src-panel-container"></div>
+                        ${rd.transitionText ? `
+                            <div class="transition-text">
+                                <span>Transition →</span>
+                                <span>${rd.transitionText}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            renderSrcPanel(container.querySelector('.src-panel-container'), rd.sources);
         }
 
-        function EmotionGrid(scores) {
-            return createEl('div', { className: 'emotion-grid' }, [
-                ...Object.entries(scores || {}).map(([k, v]) => createEl('div', { className: 'emotion-item' }, [
-                    createEl('div', { className: 'emotion-label' }, [k]),
-                    createEl('div', { className: 'emotion-score-row' }, [
-                        createEl('span', { className: 'emotion-score-value', style: { color: v >= 8 ? "#FF0050" : v >= 6 ? "#FFD700" : "#888" } }, [v]),
-                        ScoreBar(v, v >= 8 ? "#FF0050" : v >= 6 ? "#FFD700" : "#4CAF50", 10)
-                    ])
-                ]))
-            ]);
+        function renderEmotionGrid(container, scores) {
+            container.innerHTML = '';
+            if (!scores) return;
+            Object.entries(scores).forEach(([k, v]) => {
+                const item = document.createElement('div');
+                item.className = 'emotion-grid-item';
+                item.innerHTML = `
+                    <div style="color: rgba(240,240,245,0.35);">${k}</div>
+                    <div>
+                        <span style="color: ${v >= 8 ? '#FF0050' : v >= 6 ? '#FFD700' : '#888'};">${v}</span>
+                        <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${v * 10}%; background: ${v >= 8 ? '#FF0050' : v >= 6 ? '#FFD700' : '#4CAF50'};"></div></div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
         }
 
-        function ViralScoreWheel(vs) {
-            const scores = [
+        function renderViralScoreWheel(container, vs) {
+            container.innerHTML = '';
+            if (!vs) return;
+            const scoresData = [
                 { k: "Virality", v: vs.virality, w: "25%" },
                 { k: "Emotion Impact", v: vs.emotionImpact, w: "20%" },
                 { k: "Trend", v: vs.trend, w: "15%" },
@@ -795,234 +1100,256 @@
             ];
             const final = vs.final || 0;
             const finalColor = final >= 80 ? "#FF0050" : final >= 60 ? "#CC00FF" : final >= 40 ? "#FFD700" : "#888";
-            return createEl('div', { className: 'viral-score-wheel' }, [
-                createEl('div', { className: 'viral-score-wheel-header' }, [
-                    createEl('span', { className: 'viral-score-wheel-label' }, ['🔥 Viral Score']),
-                    createEl('span', { className: 'viral-score-wheel-final', style: { color: finalColor } }, [`${final}`, createEl('small', {}, ['/100'])])
-                ]),
-                ...scores.map(s => createEl('div', { className: 'viral-score-item' }, [
-                    createEl('span', { className: 'viral-score-item-label' }, [s.k]),
-                    ScoreBar(s.v || 0, finalColor, 100),
-                    createEl('span', { className: 'viral-score-item-value' }, [s.v || 0]),
-                    createEl('span', { className: 'viral-score-item-weight' }, [s.w])
-                ]))
-            ]);
+
+            container.innerHTML = `
+                <div class="viral-score-wheel-container">
+                    <div class="viral-score-wheel-header">
+                        <span>🔥 Viral Score</span>
+                        <span style="color: ${finalColor};">${final}<span style="font-size: 11px; opacity: 0.5;">/100</span></span>
+                    </div>
+                    <div class="viral-score-components">
+                        ${scoresData.map(s => `
+                            <div class="viral-score-component-row">
+                                <span>${s.k}</span>
+                                <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${s.v || 0}%; background: ${finalColor};"></div></div>
+                                <span>${s.v || 0}</span>
+                                <span>${s.w}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
         }
 
-        function ResearchCard(rd, meta) {
-            if (!rd || !meta) return createEl('div');
+        function renderResearchCard(container, rd, meta) {
+            if (!rd || !meta) { container.innerHTML = ''; return; }
             const rarityColor = RARITY_COLOR[rd.rarity] || "#888";
             const compColor = COMP_COLOR[rd.competition] || "#888";
             const trendDirColor = TREND_DIR_COLOR[rd.trendDirection] || "#888";
             const oppColor = opportunityColor(rd.opportunityScore || 0);
+            const primaryKeywordBg = `${meta.color}12`;
+            const primaryKeywordBorder = `${meta.color}30`;
+            const primaryKeywordColor = meta.color;
 
-            const cardElement = createEl('div', {
-                className: 'card research',
-                style: {
-                    '--rank-color': meta.color,
-                    '--rank-glow': meta.glow,
-                    'border': `1px solid ${meta.color}38`,
-                    'boxShadow': `0 0 36px ${meta.glow}`
-                }
-            }, [
-                createEl('div', { className: 'card-header' }, [
-                    createEl('div', { className: 'card-header-left' }, [
-                        createEl('div', { className: 'rank-badge', style: { background: meta.color, boxShadow: `0 0 12px ${meta.glow}` } }, [`#${meta.rank}`]),
-                        createEl('div', { style: { flex: 1 } }, [
-                            createEl('div', { className: 'rank-label-small', style: { color: meta.color } }, [meta.label]),
-                            createEl('div', { className: 'research-clip-name' }, [rd.clipName])
-                        ])
-                    ]),
-                    createEl('div', { className: 'research-summary-badges' }, [
-                        createEl('span', { className: 'research-summary-badge', style: { borderColor: rarityColor + '40', color: rarityColor } }, [`💎 ${rd.rarity}`]),
-                        createEl('span', { className: 'research-summary-badge', style: { borderColor: compColor + '40', color: compColor } }, [`⚔️ ${rd.competition} Competition`]),
-                        createEl('span', { className: 'research-summary-badge', style: { borderColor: "rgba(240,240,245,0.5)40", color: "rgba(240,240,245,0.5)" } }, [`🔎 ${rd.difficulty || 'Medium'} Find`]),
-                        createEl('span', { className: 'research-summary-badge', style: { borderColor: trendDirColor + '40', color: trendDirColor } }, [`📈 ${rd.trendDirection || 'Stable'} Trend`]),
-                        createEl('span', { className: 'research-summary-badge', style: { borderColor: oppColor + '40', color: oppColor } }, [`🚀 Opportunity ${rd.opportunityScore ?? "–"}`]),
-                    ]),
-                    rd.alerts?.length > 0 ? createEl('div', { className: 'flex-row gap-7', style: { marginTop: "8px", flexWrap: "wrap" } }, [
-                        ...rd.alerts.map((a) => {
-                            const am = ALERT_META[a] || { icon: "⚡", color: "#888" };
-                            return createEl('span', { className: 'research-summary-badge', style: { background: `${am.color}14`, borderColor: `${am.color}40`, color: am.color } }, [`${am.icon} ${a}`]);
-                        })
-                    ]) : null
-                ]),
-                createEl('div', { className: 'card-body' }, [
-                    createEl('div', { className: 'research-primary-keyword' }, [
-                        createEl('div', { className: 'detail-label' }, ['🎯 Primary SEO Keyword']),
-                        createEl('div', { className: 'research-primary-keyword-value', style: { background: `${meta.color}12`, borderColor: `${meta.color}30`, color: meta.color } }, [rd.primaryKeyword])
-                    ]),
-                    createEl('div', { className: 'research-secondary-keywords' }, [
-                        createEl('div', { className: 'detail-label' }, ['🔑 Secondary Keywords']),
-                        createEl('div', { className: 'research-secondary-keywords-grid' }, [
-                            ...(rd.secondaryKeywords || []).map((k) => createEl('span', { className: 'research-secondary-keyword-chip' }, [k]))
-                        ])
-                    ]),
-                    createEl('div', { className: 'research-why-here' }, [
-                        createEl('div', { className: 'detail-label' }, ['📝 Why It Ranks Here']),
-                        createEl('div', { className: 'detail-value' }, [rd.whyHere])
-                    ]),
-                    createEl('div', { className: 'detail-grid mb-16' }, [
-                        createEl('div', { className: 'detail-item' }, [
-                            createEl('div', { className: 'detail-label' }, ['🪝 Hook Score']),
-                            createEl('div', { className: 'flex-row gap-8' }, [
-                                createEl('span', { className: 'emotion-score-value', style: { color: opportunityColor(rd.viralScore?.hook || 0) } }, [rd.viralScore?.hook ?? "–"]),
-                                ScoreBar(rd.viralScore?.hook || 0, opportunityColor(rd.viralScore?.hook || 0), 100)
-                            ])
-                        ]),
-                        createEl('div', { className: 'detail-item' }, [
-                            createEl('div', { className: 'detail-label' }, ['🪜 Escalation Score']),
-                            createEl('div', { className: 'flex-row gap-8' }, [
-                                createEl('span', { className: 'emotion-score-value', style: { color: opportunityColor(rd.escalationScore || 0) } }, [rd.escalationScore ?? "–"]),
-                                ScoreBar(rd.escalationScore || 0, opportunityColor(rd.escalationScore || 0), 100)
-                            ])
-                        ]),
-                    ]),
-                    createEl('div', { className: 'research-emotion-scores' }, [
-                        createEl('div', { className: 'detail-label' }, ['🎭 Emotion Scores']),
-                        EmotionGrid(rd.emotionScore)
-                    ]),
-                    createEl('div', { className: 'mb-14' }, [
-                        ViralScoreWheel(rd.viralScore || {})
-                    ]),
-
-                    // NEW FIELDS FOR HUMAN EDITOR GUIDANCE
-                    createEl('div', { className: 'research-why-here', style: { background: 'rgba(198,255,61,0.06)', borderColor: 'var(--acid-dim)', marginBottom: '16px' } }, [
-                        createEl('div', { className: 'detail-label', style: { color: 'var(--acid)' } }, ['Suggested Source Platform']),
-                        createEl('div', { className: 'detail-value' }, [rd.suggestedSourcePlatform || 'Any'])
-                    ]),
-                    rd.exampleSearchTermsForOriginalClip?.length > 0 ?
-                    createEl('div', { className: 'research-secondary-keywords' }, [
-                        createEl('div', { className: 'detail-label', style: { color: 'var(--acid)' } }, ['Exact Search Terms For Original Clip']),
-                        createEl('div', { className: 'research-secondary-keywords-grid' }, [
-                            ...(rd.exampleSearchTermsForOriginalClip || []).map((term) =>
-                                createEl('span', { className: 'research-secondary-keyword-chip', style: { background: 'rgba(198,255,61,0.08)', borderColor: 'var(--acid-dim)', color: 'var(--acid)' } }, [`"${term}"`])
-                            )
-                        ])
-                    ]) : null,
-
-                    SrcPanel(rd.sources)
-                ])
-            ]);
-            return cardElement;
+            container.innerHTML = `
+                <div class="card-base" style="border: 1px solid ${meta.color}38; box-shadow: 0 0 36px ${meta.glow};">
+                    <div class="card-header" style="background: linear-gradient(135deg,${meta.color}16,transparent); border-bottom: 1px solid ${meta.color}25;">
+                        <div class="rank-display">
+                            <div class="rank-circle" style="background: ${meta.color}; box-shadow: 0 0 12px ${meta.glow};">#${meta.rank}</div>
+                            <div class="rank-text">
+                                <div style="color: ${meta.color};">${meta.label}</div>
+                                <div style="font-size: 15px; font-weight: 800; line-height: 1.3;">${rd.clipName}</div>
+                            </div>
+                        </div>
+                        <div class="research-card-header-meta">
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${rarityColor}40; color: ${rarityColor};">💎 ${rd.rarity}</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${compColor}40; color: ${compColor};">⚔️ ${rd.competition} Competition</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(240,240,245,0.5)40; color: rgba(240,240,245,0.5);">🔎 ${rd.difficulty} Find</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${trendDirColor}40; color: ${trendDirColor};">📈 ${rd.trendDirection} Trend</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${oppColor}40; color: ${oppColor};">🚀 Opportunity ${rd.opportunityScore ?? '–'}</span>
+                        </div>
+                        ${rd.alerts?.length > 0 ? `
+                            <div class="research-card-alerts">
+                                ${rd.alerts.map(a => {
+                                    const am = ALERT_META[a] || { icon: "⚡", color: "#888" };
+                                    return `<span style="background: ${am.color}14; border: 1px solid ${am.color}40; color: ${am.color};">${am.icon} ${a}</span>`;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="card-body">
+                        <div class="primary-keyword-section">
+                            <div class="primary-keyword-section .tag-label">🎯 Primary SEO Keyword</div>
+                            <div class="primary-keyword-display" style="background: ${primaryKeywordBg}; border: 1px solid ${primaryKeywordBorder}; color: ${primaryKeywordColor};">${rd.primaryKeyword}</div>
+                        </div>
+                        <div class="secondary-keywords-section">
+                            <div class="secondary-keywords-section .tag-label">🔑 Secondary Keywords</div>
+                            <div class="secondary-keywords-display">
+                                ${(rd.secondaryKeywords || []).map(k => `
+                                    <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);">${k}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="why-it-ranks-box">
+                            <div style="color: rgba(240,240,245,0.27);">📝 Why It Ranks Here</div>
+                            <div style="color: rgba(240,240,245,0.72);">${rd.whyHere}</div>
+                        </div>
+                        <div class="hook-escalation-scores">
+                            <div class="score-display-item">
+                                <div style="color: rgba(240,240,245,0.25);">🪝 Hook Score</div>
+                                <div class="score-value-bar">
+                                    <span style="color: ${opportunityColor(rd.viralScore?.hook || 0)};">${rd.viralScore?.hook ?? '–'}</span>
+                                    <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${rd.viralScore?.hook || 0}%; background: ${opportunityColor(rd.viralScore?.hook || 0)};"></div></div>
+                                </div>
+                            </div>
+                            <div class="score-display-item">
+                                <div style="color: rgba(240,240,245,0.25);">🪜 Escalation Score</div>
+                                <div class="score-value-bar">
+                                    <span style="color: ${opportunityColor(rd.escalationScore || 0)};">${rd.escalationScore ?? '–'}</span>
+                                    <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${rd.escalationScore || 0}%; background: ${opportunityColor(rd.escalationScore || 0)};"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="emotion-scores-section">
+                            <div class="emotion-scores-section .tag-label">🎭 Emotion Scores</div>
+                            <div class="emotion-grid"></div> <!-- Render EmotionGrid here -->
+                        </div>
+                        <div class="viral-score-wheel-section"></div> <!-- Render ViralScoreWheel here -->
+                        <div class="src-panel-container"></div> <!-- Render SrcPanel here -->
+                    </div>
+                </div>
+            `;
+            renderEmotionGrid(container.querySelector('.emotion-grid'), rd.emotionScore);
+            renderViralScoreWheel(container.querySelector('.viral-score-wheel-section'), rd.viralScore);
+            renderSrcPanel(container.querySelector('.src-panel-container'), rd.sources);
         }
 
-        function AllSourcesView(ranks) {
+        function renderAllSourcesView(container, ranks) {
+            if (!ranks) { container.innerHTML = ''; return; }
             let currentPlatform = 'youtube'; // Default tab
-            // Find first platform with data
-            if (ranks && ranks.length > 0) {
-                const firstRank = ranks[0];
-                currentPlatform = Object.keys(PLATFORM_CFG).find(p => firstRank.sources?.[p] && (firstRank.sources[p]?.queries?.length > 0 || firstRank.sources[p]?.shorts?.length > 0 || firstRank.sources[p]?.hashtags?.length > 0 || firstRank.sources[p]?.subreddits?.length > 0)) || 'youtube';
-            }
 
-            const panel = createEl('div', {});
-            const platformSelector = createEl('div', { className: 'all-sources-platform-selector' });
-            const contentBox = createEl('div', { className: 'all-sources-content-box' });
-            const header = createEl('div', { className: 'all-sources-header' });
-            const rankListContainer = createEl('div', { className: 'all-sources-rank-list' });
+            const tabContainer = document.createElement('div');
+            tabContainer.className = 'all-sources-view-tabs';
+            ['youtube', 'tiktok', 'reddit'].forEach(p => {
+                const pc = PLATFORM_CFG[p];
+                const button = document.createElement('button');
+                button.textContent = `${pc.icon} ${pc.name}`;
+                button.onclick = () => {
+                    currentPlatform = p;
+                    updateAllSourcesContent();
+                    Array.from(tabContainer.children).forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    button.style.background = `${pc.color}14`;
+                    button.style.border = `1px solid ${pc.color}35`;
+                    button.style.color = pc.color;
+                };
+                tabContainer.appendChild(button);
+            });
+            container.appendChild(tabContainer);
 
-            const updateAllSourcesPanel = (platformKey) => {
-                currentPlatform = platformKey;
-                const newCfg = PLATFORM_CFG[currentPlatform];
-                contentBox.style.setProperty('--platform-color', newCfg.color);
-                clearChildren(platformSelector);
-                clearChildren(rankListContainer);
-                clearChildren(header);
+            const contentContainer = document.createElement('div');
+            contentContainer.className = 'all-sources-view-container';
+            container.appendChild(contentContainer);
 
+            function updateAllSourcesContent() {
+                const cfg = PLATFORM_CFG[currentPlatform];
+                contentContainer.innerHTML = `
+                    <div class="all-sources-view-header" style="background: ${cfg.color}0e; border-bottom: 1px solid ${cfg.color}20;">
+                        <span style="color: ${cfg.color};">${cfg.icon} ${cfg.name} — All Ranks</span>
+                    </div>
+                    <div class="all-sources-view-content"></div>
+                `;
+                const ranksContentDiv = contentContainer.querySelector('.all-sources-view-content');
 
-                ['youtube', 'tiktok', 'instagram', 'reddit'].forEach(p => {
-                    const pc = PLATFORM_CFG[p];
-                    if (!pc) return; // Skip if platform config is missing
-                    const active = currentPlatform === p;
-                    platformSelector.appendChild(createEl('button', {
-                        onClick: () => updateAllSourcesPanel(p),
-                        className: `all-sources-platform-btn ${active ? 'active' : ''}`,
-                        style: { '--platform-color': pc.color }
-                    }, [`${pc.icon} ${pc.name}`]));
+                ranks.forEach(r => {
+                    const rm = RANK_META.find(m => m.rank === r.rank);
+                    const src = r.sources?.[currentPlatform] || {};
+                    const queries = src.queries || [];
+                    const extras = src.shorts || src.hashtags || src.subreddits || [];
+
+                    const rankItem = document.createElement('div');
+                    rankItem.className = 'all-sources-rank-item';
+                    rankItem.innerHTML = `
+                        <div class="all-sources-rank-header">
+                            <span style="background: ${rm?.color};">#${r.rank}</span>
+                            <span>${rm?.label}</span>
+                            ${r.clipName ? `<span>— ${r.clipName}</span>` : ''}
+                        </div>
+                        <div class="all-sources-query-row"></div>
+                        <div class="all-sources-extra-row"></div>
+                    `;
+                    const queryRow = rankItem.querySelector('.all-sources-query-row');
+                    const extraRow = rankItem.querySelector('.all-sources-extra-row');
+
+                    queries.forEach(q => {
+                        const lbl = `"${q.length > 28 ? q.slice(0, 28) + "…" : q}"`;
+                        queryRow.appendChild(createPlatformBtn(currentPlatform, lbl, cfg.searchUrl(q), true));
+                    });
+
+                    extras.forEach(x => {
+                        let url, lbl;
+                        if (currentPlatform === "youtube") {
+                            url = PLATFORM_CFG.youtube.shortsUrl(x);
+                            lbl = `"${x}"`;
+                        } else if (currentPlatform === "tiktok") {
+                            url = PLATFORM_CFG.tiktok.tagUrl(x);
+                            lbl = `#${x}`;
+                        } else { // reddit
+                            url = PLATFORM_CFG.reddit.subUrl(x);
+                            lbl = `r/${x}`;
+                        }
+                        extraRow.appendChild(createPlatformBtn(currentPlatform, lbl, url, true));
+                    });
+                    ranksContentDiv.appendChild(rankItem);
                 });
 
-                header.appendChild(createEl('span', { className: 'all-sources-header-title', style: { color: newCfg.color } }, [`${newCfg.icon} ${newCfg.name} — All Ranks`]));
-
-                if (ranks && ranks.length > 0) {
-                    ranks.forEach(r => {
-                        const rm = RANK_META.find(m => m.rank === r.rank);
-                        const src = r.sources?.[currentPlatform] || {};
-                        const queries = src.queries || [];
-                        let extras = [];
-                        if (currentPlatform === "youtube") extras = (src.shorts || []);
-                        else if (currentPlatform === "tiktok") extras = (src.hashtags || []);
-                        else if (currentPlatform === "instagram") extras = (src.hashtags || []);
-                        else extras = (src.subreddits || []);
-
-                        const rankItem = createEl('div', { className: 'all-sources-rank-item' }, [
-                            createEl('div', { className: 'all-sources-rank-header' }, [
-                                createEl('span', { className: 'all-sources-rank-badge', style: { background: rm?.color } }, [`#${r.rank}`]),
-                                createEl('span', { className: 'all-sources-rank-label' }, [rm?.label]),
-                                r.clipName ? createEl('span', { className: 'all-sources-clip-name' }, [`— ${r.clipName}`]) : null
-                            ]),
-                            createEl('div', { className: 'all-sources-queries-grid' }, [
-                                ...queries.map((q) => PlatformBtn(currentPlatform, `"${q.length > 28 ? q.slice(0, 28) + "…" : q}"`, newCfg.searchUrl(q), true))
-                            ]),
-                            createEl('div', { className: 'all-sources-extras-grid' }, [
-                                ...extras.map((x) => {
-                                    let url, lbl;
-                                    if (currentPlatform === "youtube") {
-                                        url = newCfg.shortsUrl ? newCfg.shortsUrl(x) : '';
-                                        lbl = `"${x}"`;
-                                    } else if (currentPlatform === "tiktok") {
-                                        url = newCfg.tagUrl ? newCfg.tagUrl(x) : '';
-                                        lbl = `#${x}`;
-                                    } else if (currentPlatform === "instagram") {
-                                        url = newCfg.tagUrl ? newCfg.tagUrl(x) : '';
-                                        lbl = `#${x}`;
-                                    } else { // reddit
-                                        url = newCfg.subUrl ? newCfg.subUrl(x) : '';
-                                        lbl = `r/${x}`;
-                                    }
-                                    if (url) extrasGrid.appendChild(PlatformBtn(currentPlatform, lbl, url, true));
-                                })
-                            ])
-                        ]);
-                        rankListContainer.appendChild(rankItem);
-                    });
-                } else {
-                    rankListContainer.appendChild(createEl('div', { className: 'empty-panel' }, ['No sources available.']));
+                // Highlight active tab
+                Array.from(tabContainer.children).forEach(btn => btn.classList.remove('active'));
+                tabContainer.querySelector(`button:contains(${PLATFORM_CFG[currentPlatform].name})`).classList.add('active'); // Basic matching
+                const activeButton = Array.from(tabContainer.children).find(btn => btn.textContent.includes(PLATFORM_CFG[currentPlatform].name));
+                 if (activeButton) {
+                    activeButton.style.background = `${PLATFORM_CFG[currentPlatform].color}14`;
+                    activeButton.style.border = `1px solid ${PLATFORM_CFG[currentPlatform].color}35`;
+                    activeButton.style.color = PLATFORM_CFG[currentPlatform].color;
                 }
-            };
-
-            contentBox.appendChild(header);
-            contentBox.appendChild(rankListContainer);
-            panel.appendChild(platformSelector);
-            panel.appendChild(contentBox);
-
-            updateAllSourcesPanel(currentPlatform); // Initial render
-
-            return panel;
+            }
+            updateAllSourcesContent(); // Initial render
         }
 
 
         // --- Main App Logic (Vanilla JS) ---
+        const appState = {
+            topic: '',
+            mode: 'research', // Default to research as per user's request
+            dateFilter: '7 Days',
+            loading: false,
+            retryMsg: '',
+            scriptData: null,
+            researchData: null,
+            error: null,
+            activeRank: 6, // Default to rank 6 for display
+            activeView: 'ranks',
+            copied: false,
+            phaseIdx: 0,
+            intervalId: null, // For loading animation
+            referenceChannels: '',
+            styleInstructions: '',
+            activeProvider: 'google', // Default provider
+            availableModels: [],
+            selectedModel: 'gemini-flash-latest', // Default model for google
+        };
+
+        const phases = [
+            "Analyzing viral potential…", "Mapping emotional curve…", "Building escalation logic…",
+            "Scanning trend signals…", "Generating clip sources…", "Unlocking final payoff…",
+        ];
 
         const STORAGE_KEY = 'viralRadarState_v1_vanilla';
+
+        // Helper to update state and re-render
+        function updateState(newState) {
+            Object.assign(appState, newState);
+            renderApp();
+            persistState(); // Persist state on every update
+        }
 
         // Persist state to localStorage
         function persistState() {
             try {
                 const stateToSave = {
-                    topic: state.topic,
-                    mode: state.mode,
-                    dateFilter: state.dateFilter,
-                    scriptData: state.scriptData,
-                    researchData: state.researchData,
-                    activeRank: state.activeRank,
-                    activeView: state.activeView,
-                    referenceChannels: document.getElementById('referenceChannelsInput')?.value || '',
-                    styleInstructions: document.getElementById('styleInstructionsInput')?.value || '',
-                    activeProvider: state.activeProvider,
-                    selectedModel: state.selectedModel,
+                    topic: appState.topic,
+                    mode: appState.mode,
+                    dateFilter: appState.dateFilter,
+                    scriptData: appState.scriptData,
+                    researchData: appState.researchData,
+                    activeRank: appState.activeRank,
+                    activeView: appState.activeView,
+                    referenceChannels: appState.referenceChannels,
+                    styleInstructions: appState.styleInstructions,
+                    activeProvider: appState.activeProvider,
+                    selectedModel: appState.selectedModel,
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-                // console.log("State persisted:", stateToSave); // Debug log
             } catch (e) {
                 console.error("Failed to save state to localStorage:", e);
             }
@@ -1034,433 +1361,509 @@
                 const savedState = localStorage.getItem(STORAGE_KEY);
                 if (savedState) {
                     const parsedState = JSON.parse(savedState);
-                    Object.assign(state, parsedState);
+                    Object.assign(appState, parsedState);
                     if (parsedState.researchData || parsedState.scriptData) {
-                        state.restored = true;
+                        appState.restored = true;
                     }
-                    // console.log("State restored:", state); // Debug log
+                    console.log("State restored:", appState);
                 }
             } catch (e) {
                 console.error("Failed to restore state from localStorage:", e);
             }
         }
 
-        // Fetch available providers and models from worker
-        async function fetchProviderConfigFromWorker() {
+        // Fetch available providers and models (simulated or real from worker)
+        async function fetchProviderConfig() {
             try {
                 const response = await fetch(`${WORKER_BASE_URL}/`);
                 const data = await response.json();
-                // console.log("Worker provider config:", data); // Debug log
 
-                const newProvidersConfig = {}; // Temporarily build new providersConfig based on worker status
-                if (data.providers_configured.google) newProvidersConfig.google = providersConfig.google;
-                if (data.providers_configured.openrouter) newProvidersConfig.openrouter = providersConfig.openrouter;
-                if (data.providers_configured.cloudflare) newProvidersConfig.cloudflare = providersConfig.cloudflare;
-                if (data.providers_configured.github) newProvidersConfig.github = providersConfig.github;
-                if (data.providers_configured.huggingface) newProvidersConfig.huggingface = providersConfig.huggingface;
+                const providersConfig = {};
+                if (data.providers_configured.google) providersConfig.google = { name: "Google AI Studio", models: [{ id: "gemini-flash-latest", name: "Gemini Flash (Default)" }, { id: "gemini-pro-latest", name: "Gemini Pro (Latest)" }] };
+                if (data.providers_configured.openrouter) providersConfig.openrouter = { name: "OpenRouter", models: [{ id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" }, { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" }, { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }] };
+                // Add other providers if configured in worker
 
-                // Update the global providersConfig reference
-                Object.assign(providersConfig, newProvidersConfig);
-
-
-                // Set default provider/model based on availability and persisted state
-                let defaultProviderKey = state.activeProvider;
-                if (!providersConfig[defaultProviderKey]) { // If persisted provider is not available or was never set
-                    defaultProviderKey = Object.keys(providersConfig)[0] || ''; // Fallback to first available provider
-                }
-                
-                if (defaultProviderKey) {
-                    const defaultProvider = providersConfig[defaultProviderKey];
-                    state.activeProvider = defaultProviderKey;
-                    state.availableModels = defaultProvider.models;
-
-                    let defaultModelId = state.selectedModel;
-                    if (!defaultProvider.models.some(m => m.id === defaultModelId)) { // If persisted model is not available for this provider
-                        defaultModelId = defaultProvider.models[0]?.id || ''; // Fallback to first model of current provider
-                    }
-                    state.selectedModel = defaultModelId;
-                } else { // No providers configured at all
-                    state.activeProvider = '';
-                    state.availableModels = [];
-                    state.selectedModel = '';
+                // Default to first available provider
+                const firstProviderKey = Object.keys(providersConfig)[0];
+                if (firstProviderKey) {
+                    appState.activeProvider = firstProviderKey;
+                    appState.availableModels = providersConfig[firstProviderKey].models;
+                    appState.selectedModel = appState.availableModels[0]?.id || '';
                 }
 
             } catch (error) {
-                console.error("Failed to fetch provider config from worker:", error);
-                // Fallback to minimal hardcoded if worker fails
-                state.activeProvider = 'google';
-                state.availableModels = [{ id: "gemini-flash-latest", name: "Gemini Flash Latest" }];
-                state.selectedModel = "gemini-flash-latest";
+                console.error("Failed to fetch provider config:", error);
+                // Fallback to hardcoded if worker fails
+                appState.availableModels = [{ id: "gemini-flash-latest", name: "Gemini Flash (Default)" }];
+                appState.selectedModel = "gemini-flash-latest";
             }
         }
 
         async function initApp() {
-            await fetchProviderConfigFromWorker();
-            restoreState();
+            await fetchProviderConfig(); // Fetch provider config on load
+            restoreState(); // Restore state after fetching provider config
             renderApp();
             // Start loading animation if needed (e.g., if restored state indicates it)
-            if (state.loading) {
-                if (phaseInterval) clearInterval(phaseInterval);
-                phaseInterval = setInterval(() => updateState({ phaseIdx: (state.phaseIdx + 1) % phases.length }), 900);
+            if (appState.loading) {
+                appState.intervalId = setInterval(() => updateState({ phaseIdx: (appState.phaseIdx + 1) % phases.length }), 900);
             }
         }
 
         // Main rendering function
         function renderApp() {
-            const rootEl = document.getElementById('root');
-            clearChildren(rootEl); // Clear existing content
+            const root = document.getElementById('root');
+            root.innerHTML = ''; // Clear existing content
 
-            const shell = createEl('div', { className: 'shell' });
+            const shell = document.createElement('div');
+            shell.className = 'shell';
+            shell.id = 'app-shell'; // Give it an ID to attach event listeners
 
-            // Nav (unchanged)
-            const nav = createEl('div', { className: 'nav' }, [
-                createEl('div', { className: 'nav-brand' }, [
-                    createEl('span', { className: 'nav-mark' }, ['✦']),
-                    createEl('span', { className: 'nav-name' }, ['Viral Radar'])
-                ]),
-                createEl('span', { className: 'nav-badge' }, ['FREE · NO SIGNUP'])
-            ]);
+            // --- Nav ---
+            const nav = document.createElement('div');
+            nav.className = 'nav';
+            nav.innerHTML = `
+                <div class="nav-brand">
+                    <span class="nav-mark">✦</span>
+                    <span class="nav-name">Viral Radar</span>
+                </div>
+                <span class="nav-badge">FREE · NO SIGNUP</span>
+            `;
             shell.appendChild(nav);
 
-            // Hero Section (mostly unchanged)
-            const hero = createEl('div', { className: 'hero' }, [
-                createEl('div', { className: 'hero-tag' }, [createEl('span', { className: 'dot' }), ' 5 AI agents · real YouTube grounding']),
-                createEl('h1', {}, ['Stop guessing', createEl('br'), 'what goes ', createEl('span', {}, ['viral']), '.']),
-                createEl('p', {}, ['Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.'])
-            ]);
+            // --- Hero ---
+            const hero = document.createElement('div');
+            hero.className = 'hero';
+            hero.innerHTML = `
+                <div class="hero-tag"><span class="dot"></span> 5 AI agents · real YouTube grounding</div>
+                <h1>Stop guessing<br />what goes <span>viral</span>.</h1>
+                <p>Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.</p>
+            `;
             shell.appendChild(hero);
 
-            // Retention Curve
-            shell.appendChild(RetentionCurve());
+            // --- Console Input ---
+            const consoleDiv = document.createElement('div');
+            consoleDiv.className = 'console';
+            consoleDiv.innerHTML = `
+                <div class="console-head">
+                    <span class="cdot" style="background: #ff5f57;"></span>
+                    <span class="cdot" style="background: #febc2e;"></span>
+                    <span class="cdot" style="background: #28c840;"></span>
+                    <span style="margin-left: 6px;">research.sh</span>
+                </div>
+                <div class="console-body">
+                    <div class="console-prompt">
+                        <span class="caret">›</span>
+                        <input type="text" id="topic-input" placeholder="e.g. Worst Martial Arts Fails" ${appState.loading ? 'disabled' : ''}>
+                        ${!appState.topic && !appState.loading ? '<span class="console-cursor"></span>' : ''}
+                        <button type="button" class="surprise-btn" id="surprise-btn" ${appState.loading ? 'disabled' : ''} title="Suggest a niche">🎲</button>
+                    </div>
 
-            // Mode Selector
-            const modeSelector = createEl('div', { className: 'mode-selector' }, [
-                ['script', '🎬 Script Builder', '6-rank video script + sources'],
-                ['research', '📊 Research Engine', 'Viral scoring + SEO + trends']
-            ].map(([id, title, sub]) => {
-                const isActive = state.mode === id;
-                return createEl('button', {
-                    className: `mode-btn ${isActive ? 'active' : ''}`,
-                    onClick: () => updateState({ mode: id, activeRank: 6, error: null, scriptData: null, researchData: null }) // Default activeRank to 6
-                }, [
-                    createEl('div', { className: `mode-btn-title ${isActive ? 'active' : 'inactive'}` }, [title]),
-                    createEl('div', { className: 'mode-btn-subtitle' }, [sub])
-                ]);
-            }));
-            shell.appendChild(modeSelector);
+                    <div class="config-row">
+                        <div class="select-wrap">
+                            <select id="platform-select" ${appState.loading ? 'disabled' : ''}>
+                                <option value="youtube">YouTube</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="instagram">Instagram</option>
+                                <option value="twitter">Twitter</option>
+                                <option value="linkedin">LinkedIn</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <select id="provider-select" ${appState.loading ? 'disabled' : ''}>
+                                ${Object.keys(PLATFORM_CFG).map(key => `<option value="${key}" ${appState.activeProvider === key ? 'selected' : ''}>${PLATFORM_CFG[key].name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <select id="model-select" ${appState.loading || !appState.availableModels.length ? 'disabled' : ''}>
+                                ${appState.availableModels.map(m => `<option value="${m.id}" ${appState.selectedModel === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
 
-            // Input Section (Console)
-            const consoleDiv = createEl('div', { className: 'console' }, [
-                createEl('div', { className: 'console-head' }, [
-                    createEl('span', { className: 'cdot', style: { background: '#ff5f57' } }),
-                    createEl('span', { className: 'cdot', style: { background: '#febc2e' } }),
-                    createEl('span', { style: { background: '#28c840' } }),
-                    createEl('span', { style: { marginLeft: '6px' } }, ['research.sh'])
-                ]),
-                createEl('div', { className: 'console-body' }, [
-                    createEl('div', { className: 'console-prompt' }, [
-                        createEl('span', { className: 'caret' }, ['›']),
-                        createEl('input', {
-                            type: 'text',
-                            value: state.topic,
-                            onInput: (e) => updateState({ topic: e.target.value }),
-                            onKeyDown: (e) => e.key === "Enter" && !state.loading && handleResearch(),
-                            placeholder: "e.g. Worst Martial Arts Fails",
-                            disabled: state.loading,
-                            className: 'console-input'
-                        }),
-                        !state.topic && !state.loading ? createEl('span', { className: 'console-cursor' }) : null,
-                        createEl('button', { type: 'button', className: 'surprise-btn', onClick: handleSurpriseMe, disabled: state.loading, title: 'Suggest a niche' }, ['🎲'])
-                    ]),
+                    <div class="ref-channels-block">
+                        <div class="ref-channels-label">
+                            <span>◆ Creative brief <span class="ref-optional">(optional — describe the exact format you want)</span></span>
+                        </div>
+                        <textarea id="style-instructions-textarea" class="ref-channels-input" placeholder="e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank" ${appState.loading ? 'disabled' : ''} rows="2">${appState.styleInstructions}</textarea>
+                        <div class="ref-channels-hint">This is read as direct instructions, not just a search topic — it tells the AI what "good" looks like for your niche.</div>
+                    </div>
 
-                    createEl('div', { className: 'config-row' }, [
-                        createEl('div', { className: 'select-wrap' }, [
-                            createEl('select', { id: 'platformSelect', value: state.platform, onChange: (e) => updateState({ platform: e.target.value }), disabled: state.loading }, [
-                                createEl('option', { value: 'youtube' }, ['YouTube']),
-                                createEl('option', { value: 'tiktok' }, ['TikTok']),
-                                createEl('option', { value: 'instagram' }, ['Instagram']),
-                                createEl('option', { value: 'reddit' }, ['Reddit']),
-                                createEl('option', { value: 'twitter' }, ['Twitter']),
-                                createEl('option', { value: 'linkedin' }, ['LinkedIn']),
-                            ])
-                        ]),
-                        createEl('div', { className: 'select-wrap' }, [
-                            createEl('select', { id: 'providerSelect', value: state.activeProvider, onChange: handleProviderChange, disabled: state.loading || Object.keys(providersConfig).length === 0 }, [
-                                ...Object.keys(providersConfig).map((key) =>
-                                    createEl('option', { value: key }, [providersConfig[key].name])
-                                )
-                            ])
-                        ]),
-                        createEl('div', { className: 'select-wrap' }, [
-                            createEl('select', { id: 'modelSelect', value: state.selectedModel, onChange: handleModelChange, disabled: state.loading || !state.availableModels.length }, [
-                                ...state.availableModels.map((m) =>
-                                    createEl('option', { value: m.id }, [m.name])
-                                )
-                            ])
-                        ])
-                    ]),
+                    <div class="ref-channels-block">
+                        <div class="ref-channels-label">
+                            <span>◆ Reference channels <span class="ref-optional">(optional — teach the style you want)</span></span>
+                        </div>
+                        <textarea id="reference-channels-textarea" class="ref-channels-input" placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater" ${appState.loading ? 'disabled' : ''} rows="2">${appState.referenceChannels}</textarea>
+                        <div class="ref-channels-hint">Paste channel links whose ranked-moment style you want to match. The AI won't copy their videos — it uses them as a format/tone reference while still grounding results in fresh, real videos.</div>
+                    </div>
 
-                    createEl('div', { className: 'ref-channels-block' }, [
-                        createEl('div', { className: 'ref-channels-label' }, [
-                            '◆ Creative brief ',
-                            createEl('span', { className: 'ref-optional' }, ['(optional — describe the exact format you want)'])
-                        ]),
-                        createEl('textarea', {
-                            id: 'styleInstructionsInput',
-                            className: 'ref-channels-input',
-                            value: state.styleInstructions,
-                            onInput: (e) => updateState({ styleInstructions: e.target.value }),
-                            placeholder: "e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank",
-                            disabled: state.loading,
-                            rows: 2
-                        })
-                    ]),
-
-                    createEl('div', { className: 'ref-channels-block' }, [
-                        createEl('div', { className: 'ref-channels-label' }, [
-                            '◆ Reference channels ',
-                            createEl('span', { className: 'ref-optional' }, ['(optional — teach the style you want)'])
-                        ]),
-                        createEl('textarea', {
-                            id: 'referenceChannelsInput',
-                            className: 'ref-channels-input',
-                            value: state.referenceChannels,
-                            onInput: (e) => updateState({ referenceChannels: e.target.value }),
-                            placeholder: "youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater",
-                            disabled: state.loading,
-                            rows: 2
-                        })
-                    ]),
-
-                    createEl('button', { className: `run-btn ${state.loading ? 'loading' : ''}`, onClick: handleResearch, disabled: state.loading || !state.topic.trim() }, [
-                        state.loading ? createEl('span', { className: 'flex-row gap-8' }, [
-                            createEl('span', { style: { animation: 'spin 0.8s linear infinite' } }, ['⚡']),
-                            phases[state.phaseIdx]
-                        ]) : createEl('span', {}, ['Run Research →'])
-                    ])
-                ])
-            ]);
+                    <button class="run-btn" id="run-research-btn" ${appState.loading ? 'disabled' : ''}>
+                        ${appState.loading
+                            ? `<span style="animation: spin 0.8s linear infinite; display: inline-block;">⚡</span> ${phases[appState.phaseIdx]}`
+                            : `⚡ Run Research`
+                        }
+                    </button>
+                    ${appState.retryMsg ? `<div class="retry-message">${appState.retryMsg}</div>` : ''}
+                </div>
+            `;
             shell.appendChild(consoleDiv);
 
-            // Agent strip
-            const agentStrip = createEl('div', { className: 'agent-strip' }, [
-                createEl('span', { className: 'agent-chip' }, ['DiscoveryAgent']),
-                createEl('span', { className: 'agent-chip' }, ['RankingAgent']),
-                createEl('span', { className: 'agent-chip' }, ['SEOAgenT'])
-            ]);
+            // Agent Strip
+            const agentStrip = document.createElement('div');
+            agentStrip.className = 'agent-strip';
+            ['Discovery', 'Ranking', 'SEO'].forEach(a => {
+                const chip = document.createElement('span');
+                chip.className = 'agent-chip';
+                chip.textContent = `${a}Agent`;
+                agentStrip.appendChild(chip);
+            });
             shell.appendChild(agentStrip);
 
-
-            // Error box
-            if (state.error) {
-                shell.appendChild(createEl('div', { className: 'error-box' }, [`⚠️ ${state.error}`]));
+            if (appState.error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-box';
+                errorDiv.innerHTML = `⚠️ ${appState.error}`;
+                shell.appendChild(errorDiv);
             }
 
-            // Loading state (spinner and text)
-            if (state.loading) {
-                shell.appendChild(createEl('div', { className: 'loading-box' }, [
-                    createEl('div', { className: 'spinner', style: { margin: '0 auto' } }),
-                    createEl('p', {}, ['running LLM agents · up to 2 min on cold providers'])
-                ]));
+            // --- Loading Box ---
+            if (appState.loading) {
+                const loadingBox = document.createElement('div');
+                loadingBox.className = 'loading-box';
+                loadingBox.innerHTML = `
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <p>running 5 agents · up to 2 min on cold providers</p>
+                `;
+                shell.appendChild(loadingBox);
             }
 
-            // Results display
-            if (!state.loading && (state.scriptData || state.researchData)) {
-                const currentData = state.mode === 'script' ? state.scriptData : state.researchData;
-                const resultsDiv = createEl('div', { className: 'results', style: { animation: "fadeUp 0.4s ease" } });
+            // --- Results ---
+            if ((appState.scriptData || appState.researchData) && !appState.loading) {
+                const resultsDiv = document.createElement('div');
+                resultsDiv.className = 'results';
+                resultsDiv.style.animation = 'fadeUp 0.4s ease';
 
-                // Results Top Bar (restored tag, new search button)
-                const resultsTopbar = createEl('div', { className: 'results-topbar' }, [
-                    state.restored ? createEl('span', { className: 'restored-tag' }, ['↺ restored from your last visit']) : createEl('span', {}), // Empty span if not restored
-                    createEl('button', { className: 'new-search-btn', onClick: handleNewSearch }, ['New search'])
-                ]);
+                const currentData = appState.mode === 'script' ? appState.scriptData : appState.researchData;
+
+                const resultsTopbar = document.createElement('div');
+                resultsTopbar.className = 'results-topbar';
+                resultsTopbar.innerHTML = `
+                    ${appState.restored ? '<span class="restored-tag">↺ restored from your last visit</span>' : '<span></span>'}
+                    <button class="new-search-btn" id="new-search-btn">New search</button>
+                `;
                 resultsDiv.appendChild(resultsTopbar);
 
-                // Result Summary Box
-                const summaryBox = createEl('div', { className: 'result-summary-box' }, [
-                    createEl('div', {}, [
-                        createEl('div', { className: 'result-summary-title' }, [`${state.mode === 'script' ? 'Script' : 'Research'} — ${currentData?.dateFilter || ''}`]),
-                        createEl('div', { className: 'result-summary-topic' }, [currentData?.topic])
-                    ]),
-                    createEl('div', { className: 'result-summary-badges' }, [
-                        state.mode === 'research' && currentData?.metadata?.trendStatus ? createEl('span', { // Use metadata.trendStatus
-                            className: 'summary-badge trend',
-                            style: { borderColor: (TREND_COLOR[currentData.metadata.trendStatus] || "#888") + '40', color: TREND_COLOR[currentData.metadata.trendStatus] }
-                        }, [`📈 ${currentData.metadata.trendStatus}`]) : null,
-                        state.mode === 'research' && currentData?.overall_opportunity_reasoning ? createEl('span', { className: 'summary-badge opportunity' }, [`🚀 ${currentData.overall_opportunity_reasoning.split(' ')[0]} Opportunity`]) : null,
-                        state.mode === 'script' && currentData?.viralPotential ? createEl('span', { className: 'summary-badge viral-potential' }, [`🔥 ${currentData.viralPotential}`]) : null,
-                        createEl('button', { onClick: copyResult, className: `copy-result-btn ${state.copied ? 'copied' : ''}` }, [state.copied ? '✔ Copied' : '📋 Copy'])
-                    ])
-                ]);
-                resultsDiv.appendChild(summaryBox);
+                // --- Results Header ---
+                const resultsHeader = document.createElement('div');
+                resultsHeader.className = 'results-header';
+                resultsHeader.innerHTML = `
+                    <div>
+                        <div>${appState.mode === "script" ? "Script" : "Research"} — ${currentData?.dateFilter || ""}</div>
+                        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.02em;">${currentData?.topic}</div>
+                    </div>
+                    <div class="results-meta-tags">
+                        ${appState.mode === "research" && currentData?.trendStatus ? `
+                            <span class="trend-status" style="border: 1px solid ${TREND_COLOR[currentData.trendStatus] || '#888'}40; color: ${TREND_COLOR[currentData.trendStatus] || '#888'};">📈 ${currentData.trendStatus}</span>
+                        ` : ''}
+                        ${appState.mode === "research" && currentData?.overallOpportunity ? `
+                            <span class="opportunity-score">🚀 ${currentData.overallOpportunity} Opp</span>
+                        ` : ''}
+                        ${appState.mode === "script" && currentData?.viralPotential ? `
+                            <span class="viral-potential">🔥 ${currentData.viralPotential}</span>
+                        ` : ''}
+                        <button class="copy-button" id="copy-results-btn">${appState.copied ? '✔ Copied' : '📋 Copy'}</button>
+                    </div>
+                `;
+                resultsDiv.appendChild(resultsHeader);
 
-                // Editor Intelligence (Research Mode specific)
-                if (state.mode === 'research' && currentData?.overall_opportunity_reasoning) { // Use new field
-                    const editorIntelligenceBox = createEl('div', { className: 'editor-intelligence-box' }, [
-                        createEl('div', { className: 'editor-intelligence-label' }, ['📊 Overall Opportunity Reasoning']),
-                        createEl('p', { className: 'editor-note-value' }, [currentData.overall_opportunity_reasoning])
-                    ]);
-                    resultsDiv.appendChild(editorIntelligenceBox);
+
+                // --- Hook Section (Script Mode) ---
+                if (appState.mode === "script" && currentData?.openLoopHook) {
+                    const hookSection = document.createElement('div');
+                    hookSection.className = 'hook-section';
+                    hookSection.innerHTML = `
+                        <div>⚡ 0–2s Scroll Stop Hook</div>
+                        <div>"${currentData.openLoopHook}"</div>
+                    `;
+                    resultsDiv.appendChild(hookSection);
                 }
 
+                // --- Editor Intelligence (Research Mode) ---
+                if (appState.mode === "research" && currentData?.editorNotes) {
+                    const en = currentData.editorNotes;
+                    const editorIntelligence = document.createElement('div');
+                    editorIntelligence.className = 'editor-intelligence';
+                    editorIntelligence.innerHTML = `
+                        <div>📊 Editor Intelligence</div>
+                        <div class="editor-notes-grid">
+                            <div class="editor-note-item">
+                                <div>⚡ Find First</div>
+                                <div>${en.findFirst}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔍 Hardest to Find</div>
+                                <div>${en.hardestToFind}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔥 Most Viral</div>
+                                <div>${en.mostViralClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔎 Most Searchable</div>
+                                <div>${en.mostSearchableClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>💎 Most Unique</div>
+                                <div>${en.mostUniqueClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔄 Best Replay</div>
+                                <div>${en.bestReplayClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🪝 Opening Hook</div>
+                                <div>${en.openingHook}</div>
+                            </div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(editorIntelligence);
+                }
 
-                // View Mode Selector (Per Rank / All Sources)
-                const viewModeSelector = createEl('div', { className: 'view-mode-selector' }, [
-                    createEl('button', {
-                        onClick: () => updateState({ activeView: 'ranks' }),
-                        className: `view-mode-btn ${state.activeView === 'ranks' ? 'active' : ''}`
-                    }, ['🎯 Per Rank']),
-                    createEl('button', {
-                        onClick: () => updateState({ activeView: 'sources' }),
-                        className: `view-mode-btn ${state.activeView === 'sources' ? 'active' : ''}`
-                    }, ['🔗 All Sources'])
-                ]);
-                resultsDiv.appendChild(viewModeSelector);
+                // --- View Selector ---
+                const viewSelector = document.createElement('div');
+                viewSelector.className = 'view-selector';
+                [{ id: "ranks", icon: "🎯", label: "Per Rank" }, { id: "sources", icon: "🔗", label: "All Sources" }].forEach(v => {
+                    const button = document.createElement('button');
+                    button.textContent = `${v.icon} ${v.label}`;
+                    button.classList.toggle('active', appState.activeView === v.id);
+                    button.onclick = () => updateState({ activeView: v.id });
+                    viewSelector.appendChild(button);
+                });
+                resultsDiv.appendChild(viewSelector);
 
-                // Render Ranks or All Sources based on activeView
-                if (state.activeView === 'ranks') {
-                    const rankSelector = createEl('div', { className: 'rank-selector' }, [
-                        [...RANK_META].reverse().map(m => createEl('button', {
-                            key: m.rank,
-                            onClick: () => updateState({ activeRank: m.rank }),
-                            className: `rank-btn ${state.activeRank === m.rank ? 'active' : ''}`,
-                            style: state.activeRank === m.rank ? { background: m.color, boxShadow: `0 0 13px ${m.glow}` } : {}
-                        }, [`#${m.rank}`]))
-                    ]);
-                    resultsDiv.appendChild(rankSelector);
+                // --- Conditional Content (Ranks or All Sources) ---
+                if (appState.activeView === 'ranks') {
+                    const ranksContent = document.createElement('div');
+                    const rankSelector = document.createElement('div');
+                    rankSelector.className = 'rank-selector';
+                    [...RANK_META].reverse().forEach(m => {
+                        const button = document.createElement('button');
+                        button.textContent = `#${m.rank}`;
+                        button.classList.toggle('active', appState.activeRank === m.rank);
+                        if (appState.activeRank === m.rank) {
+                            button.style.background = m.color;
+                            button.style.boxShadow = `0 0 13px ${m.glow}`;
+                        }
+                        button.onclick = () => updateState({ activeRank: m.rank });
+                        rankSelector.appendChild(button);
+                    });
+                    ranksContent.appendChild(rankSelector);
 
-                    const activeMeta = RANK_META.find(m => m.rank === state.activeRank);
-                    const activeRankData = currentData?.ranks?.find(r => r.rank === state.activeRank);
-
-                    if (state.mode === 'script') {
-                        resultsDiv.appendChild(ScriptCard(activeRankData, activeMeta));
-                    } else { // Research mode - showing the enhanced card
-                        resultsDiv.appendChild(ResearchCard(activeRankData, activeMeta));
+                    const activeMeta = RANK_META.find(m => m.rank === appState.activeRank);
+                    const activeRankData = currentData?.ranks?.find(r => r.rank === appState.activeRank);
+                    const cardContainer = document.createElement('div'); // Temporary container for the card
+                    if (appState.mode === 'script') {
+                        renderScriptCard(cardContainer, activeRankData, activeMeta);
+                    } else {
+                        renderResearchCard(cardContainer, activeRankData, activeMeta);
                     }
-                } else if (state.activeView === 'sources') {
-                    resultsDiv.appendChild(AllSourcesView(currentData?.ranks));
+                    ranksContent.appendChild(cardContainer.firstChild); // Append the actual card element
+                    resultsDiv.appendChild(ranksContent);
+                } else if (appState.activeView === 'sources') {
+                    const allSourcesContainer = document.createElement('div');
+                    renderAllSourcesView(allSourcesContainer, currentData?.ranks);
+                    resultsDiv.appendChild(allSourcesContainer);
                 }
 
-                // Append overall result to shell
+                // --- Footer Sections (Clip DNA & Replay Hook) ---
+                const footerSections = document.createElement('div');
+                footerSections.style.display = 'flex';
+                footerSections.style.gap = '12px';
+                footerSections.style.flexWrap = 'wrap';
+                footerSections.style.marginTop = '16px';
+
+                if (appState.mode === "script" && currentData?.clipDNA) {
+                    const dnaSection = document.createElement('div');
+                    dnaSection.className = 'dna-section';
+                    dnaSection.style.flex = '1';
+                    dnaSection.style.minWidth = '220px';
+                    dnaSection.innerHTML = `
+                        <div>🧬 Clip DNA</div>
+                        <div class="dna-items">
+                            ${Object.entries(currentData.clipDNA).map(([k, v]) => `
+                                <div class="dna-item">
+                                    <div>${k}</div>
+                                    <div>${v}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    footerSections.appendChild(dnaSection);
+                }
+
+                if (appState.mode === "script" && currentData?.replayQuestion) {
+                    const replaySection = document.createElement('div');
+                    replaySection.className = 'replay-section';
+                    replaySection.style.flex = '1';
+                    replaySection.style.minWidth = '180px';
+                    replaySection.innerHTML = `
+                        <div>🔄 Replay Hook</div>
+                        <div>${currentData.replayQuestion}</div>
+                    `;
+                    footerSections.appendChild(replaySection);
+                }
+                if (footerSections.children.length > 0) {
+                    resultsDiv.appendChild(footerSections);
+                }
+
                 shell.appendChild(resultsDiv);
-            } else if (!state.loading) { // Only show empty state if not loading and no data
-                 shell.appendChild(createEl('div', { className: 'text-center', style: { padding: "55px 20px", color: "rgba(240,240,245,0.16)" } }, [
-                    createEl('div', { style: { fontSize: "42px", marginBottom: "9px" } }, [state.mode === 'script' ? '🎬' : '📊']),
-                    createEl('div', { style: { fontSize: "13px" } }, [state.mode === 'script' ? "Enter a topic to generate your viral script + clip sources" : "Enter a topic to run viral research + SEO analysis"])
-                ]));
+            } else if (!appState.hasResult && !appState.loading) {
+                const emptyState = document.createElement('div');
+                emptyState.style.textAlign = 'center';
+                emptyState.style.padding = '55px 20px';
+                emptyState.style.color = 'rgba(240,240,245,0.16)';
+                emptyState.innerHTML = `
+                    <div style="font-size: 42px; margin-bottom: 9px;">${appState.mode === "script" ? "🎬" : "📊"}</div>
+                    <div style="font-size: 13px;">${appState.mode === "script" ? "Enter a topic to generate your viral script + clip sources" : "Enter a topic to run viral research + SEO analysis"}</div>
+                `;
+                shell.appendChild(emptyState);
             }
 
-            rootEl.appendChild(shell);
+            root.appendChild(shell);
+
+            // --- Attach Event Listeners (after rendering) ---
+            document.getElementById('topic-input').value = appState.topic;
+            document.getElementById('topic-input').addEventListener('input', (e) => updateState({ topic: e.target.value }));
+            document.getElementById('topic-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !appState.loading) handleResearch();
+            });
+
+            document.getElementById('surprise-btn').addEventListener('click', handleSurpriseMe);
+
+            document.getElementById('platform-select').value = appState.platform;
+            document.getElementById('platform-select').addEventListener('change', (e) => updateState({ platform: e.target.value }));
+
+            document.getElementById('provider-select').value = appState.activeProvider;
+            document.getElementById('provider-select').addEventListener('change', (e) => {
+                const newProvider = e.target.value;
+                const config = PLATFORM_CFG[newProvider];
+                updateState({
+                    activeProvider: newProvider,
+                    availableModels: config.models || [],
+                    selectedModel: config.models[0]?.id || '',
+                });
+            });
+
+            document.getElementById('model-select').value = appState.selectedModel;
+            document.getElementById('model-select').addEventListener('change', (e) => updateState({ selectedModel: e.target.value }));
+
+
+            document.getElementById('style-instructions-textarea').addEventListener('input', (e) => updateState({ styleInstructions: e.target.value }));
+            document.getElementById('reference-channels-textarea').addEventListener('input', (e) => updateState({ referenceChannels: e.target.value }));
+
+            document.getElementById('run-research-btn').addEventListener('click', handleResearch);
+
+            if (document.getElementById('new-search-btn')) {
+                document.getElementById('new-search-btn').addEventListener('click', handleNewSearch);
+            }
+            if (document.getElementById('copy-results-btn')) {
+                document.getElementById('copy-results-btn').addEventListener('click', copyResults);
+            }
+
+            // Example topic buttons
+            const exampleTopicsContainer = document.querySelector('.example-topics');
+            if (exampleTopicsContainer) {
+                exampleTopicsContainer.innerHTML = ''; // Clear previous example buttons
+                EXAMPLE_TOPICS.forEach(t => {
+                    const button = document.createElement('button');
+                    button.textContent = t;
+                    button.classList.toggle('active', appState.topic === t);
+                    button.disabled = appState.loading;
+                    button.onclick = () => updateState({ topic: t });
+                    exampleTopicsContainer.appendChild(button);
+                });
+            }
+
+            // Date filter buttons
+            const dateFilterContainer = document.querySelector('.date-filter-buttons');
+            if (dateFilterContainer) {
+                dateFilterContainer.innerHTML = '';
+                DATE_FILTERS.forEach(d => {
+                    const button = document.createElement('button');
+                    button.textContent = d;
+                    button.classList.toggle('active', appState.dateFilter === d);
+                    button.disabled = appState.loading;
+                    button.onclick = () => updateState({ dateFilter: d });
+                    dateFilterContainer.appendChild(button);
+                });
+            }
+
+             // Mode selector buttons
+            const modeSelectorDiv = document.querySelector('.mode-selector');
+            if(modeSelectorDiv) {
+                modeSelectorDiv.innerHTML = '';
+                [
+                    { id: "script", icon: "🎬", label: "Script Builder", sub: "6-rank video script + sources" },
+                    { id: "research", icon: "📊", label: "Research Engine", sub: "Viral scoring + SEO + trends" },
+                ].forEach(m => {
+                    const button = document.createElement('button');
+                    button.innerHTML = `
+                        <div style="color: ${appState.mode === m.id ? '#FF0050' : 'rgba(240,240,245,0.45)'};">${m.icon} ${m.label}</div>
+                        <div style="font-size: 10px; color: rgba(240,240,245,0.28);">${m.sub}</div>
+                    `;
+                    button.classList.toggle('active', appState.mode === m.id);
+                    button.onclick = () => updateState({ mode: m.id, activeRank: null, error: null });
+                    modeSelectorDiv.appendChild(button);
+                });
+            }
+
+
+            // Render Retention Curve
+            const retentionCurveContainer = document.querySelector('.retention-curve');
+            if (retentionCurveContainer) {
+                renderRetentionCurve(retentionCurveContainer);
+            }
         }
 
         // --- Event Handlers ---
-        function handleProviderChange(e) {
-            const name = e.target.value;
-            const cfg = providersConfig[name];
-            const newModels = cfg?.models || [];
-            updateState({
-                activeProvider: name,
-                availableModels: newModels,
-                selectedModel: newModels[0]?.id || ''
-            });
-        }
-
-        function handleModelChange(e) {
-            const modelId = e.target.value;
-            updateState({ selectedModel: modelId });
-        }
-
         async function handleResearch() {
-            if (!state.topic.trim()) {
+            if (!appState.topic.trim()) {
                 updateState({ error: "Enter a topic first." });
                 return;
             }
-            updateState({ loading: true, error: null, retryMsg: '', scriptData: null, researchData: null, phaseIdx: 0, restored: false });
-
-            if (phaseInterval) clearInterval(phaseInterval);
-            phaseInterval = setInterval(() => {
-                updateState({ phaseIdx: (state.phaseIdx + 1) % phases.length });
-            }, 900);
+            updateState({ loading: true, error: null, scriptData: null, researchData: null, phaseIdx: 0, restored: false });
+            appState.intervalId = setInterval(() => updateState({ phaseIdx: (appState.phaseIdx + 1) % phases.length }), 900);
 
             try {
-                const options = {
-                    providerName: state.activeProvider,
-                    model: state.selectedModel,
-                    timeout: DEFAULT_TIMEOUT,
-                    dateFilter: state.dateFilter,
-                    referenceChannels: parseReferenceChannels(document.getElementById('referenceChannelsInput').value),
-                    styleInstructions: document.getElementById('styleInstructionsInput').value.trim()
+                const payload = {
+                    topic: appState.topic.trim(),
+                    dateFilter: appState.dateFilter,
+                    provider: appState.activeProvider,
+                    model: appState.selectedModel,
+                    referenceChannels: parseReferenceChannels(appState.referenceChannels),
+                    styleInstructions: appState.styleInstructions.trim(),
                 };
-                
-                let resultData;
-                if (state.mode === 'script') {
-                    // For script mode, we'll use a generic prompt to /api/complete
-                    // The script prompt logic is now handled in the client, then sent to /api/complete
-                    const scriptPrompt = `You are an elite viral short-form content strategist for YouTube Shorts, TikTok, and Reels.
-Create a 6-rank viral video script. The topic is "${state.topic.trim()}".
-Follow these rules:
-- Emotional curve: Shock→Curiosity→Interest→Escalation→Tension→Payoff→Replay
-- Ranks: #6=Scroll Stopper(85%) #5=Interest(65%) #4=Introduction(50%) #3=Escalation(75%) #2=False Winner(95%) #1=Final Payoff(100%)
-- All clips same category. Each rank escalates. #2 feels like winner. #1 exceeds everything.
 
-Output ONLY valid JSON for the script using this exact shape:
-{
-  "topic":"${state.topic.trim()}","emotionalCurve":"string","escalationLogic":"string",
-  "openLoopHook":"string","viralPotential":"High|Very High|Extreme",
-  "replayQuestion":"string",
-  "clipDNA":{"object":"string","environment":"string","emotion":"string","escalation":"string","ending":"string"},
-  "ranks":[{
-    "rank":6,"label":"SCROLL STOPPER","emotionalPurpose":"string",
-    "clipDescription":"vivid 2-3 sentences","whyStronger":"string",
-    "emotionalLevel":"string","expectationSet":"string",
-    "retentionScore":"85%","caption":"Max 4 words + emoji",
-    "transitionText":"But it gets worse...",
-    "sources":{
-      "youtube":{"queries":["q1","q2"],"shorts":["s1","s2"]},
-      "tiktok":{"queries":["q1","q2"],"hashtags":["h1","h2"]},
-      "reddit":{"queries":["q1","q2"],"subreddits":["r1","r2"]}
-    }
-  }]
-}
-Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
-                    
-                    const llmResponse = await fetchWorker('/api/complete', { prompt: scriptPrompt, topic: state.topic }, options); // Pass topic for worker's logging
-                    resultData = JSON.parse(cleanJsonResponse(llmResponse.text));
-                    updateState({ scriptData: resultData });
+                // This calls the unified /api/generate endpoint in the Cloudflare Worker
+                const result = await callWorkerAPI('/api/generate', payload);
+
+                if (appState.mode === 'script') {
+                    // Script data comes directly from LLM response structure for SCRIPT_PROMPT
+                    updateState({ scriptData: result });
                 } else {
-                    // Research mode uses the /api/generate endpoint directly,
-                    // where the prompt is constructed in the Worker based on web search results.
-                    const llmResponse = await fetchWorker('/api/generate', { topic: state.topic }, options);
-                    resultData = llmResponse;
-                    updateState({ researchData: resultData });
+                    // Research data comes directly from LLM response structure for RESEARCH_PROMPT (new worker prompt)
+                    updateState({ researchData: result });
                 }
-
-                clearInterval(phaseInterval);
-                updateState({ loading: false, phaseIdx: 0, activeRank: 6, activeView: 'ranks', restored: false }); // Reset restored flag after a new search
-
             } catch (err) {
-                clearInterval(phaseInterval);
-                updateState({ loading: false, error: err.message, phaseIdx: 0 });
+                console.error("Research failed:", err);
+                updateState({ error: err.message });
+            } finally {
+                clearInterval(appState.intervalId);
+                updateState({ loading: false, intervalId: null, activeRank: 6, activeView: 'ranks' });
             }
         }
 
-        function copyResult() {
-            const currentData = state.mode === "script" ? state.scriptData : state.researchData;
-            if (!currentData) return;
-            const t = state.mode === "script"
-                ? `🎬 ${currentData.topic}\n\nHook: "${currentData.openLoopHook}"\n\n` +
-                (currentData.ranks || []).map(r => `#${r.rank} ${r.label}\n${r.clipDescription}\nCaption: ${r.caption}\n${r.transitionText ? `→ ${r.transitionText}` : ""}`).join("\n\n")
-                : `📊 RESEARCH: ${currentData.topic}\nDate: ${currentData.dateFilter}\nOverall Opportunity: ${currentData.overall_opportunity_reasoning || 'N/A'}\nTrend: ${currentData.metadata?.trendStatus || 'N/A'}\n\n` + // Use new fields
-                (currentData.ranks || []).map(r => `#${r.rank} ${r.clipName}\nSEO: ${r.primaryKeyword}\nViral: ${r.viralScore?.final}/100 | Hook: ${r.viralScore?.hook ?? "–"} | Opportunity: ${r.opportunityScore ?? "–"} | Rarity: ${r.rarity}\nSuggested Platform: ${r.suggestedSourcePlatform || 'Any'}\nSearch Terms: ${r.exampleSearchTermsForOriginalClip?.join(', ') || 'N/A'}`).join("\n\n");
-
-            navigator.clipboard.writeText(t).then(() => {
-                updateState({ copied: true });
-                setTimeout(() => updateState({ copied: false }), 2000);
-            });
-        }
-
         function handleNewSearch() {
-            clearInterval(phaseInterval);
+            clearInterval(appState.intervalId);
             updateState({
                 topic: '',
                 mode: 'research',
@@ -1470,10 +1873,13 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                 scriptData: null,
                 researchData: null,
                 error: null,
-                activeRank: 6, // Reset to default active rank
+                activeRank: 6,
                 activeView: 'ranks',
                 copied: false,
                 phaseIdx: 0,
+                intervalId: null,
+                referenceChannels: '',
+                styleInstructions: '',
                 restored: false
             });
             try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
@@ -1497,9 +1903,25 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
             .slice(0, 5);
         }
 
+        function copyResults() {
+            const currentData = appState.mode === "script" ? appState.scriptData : appState.researchData;
+            if (!currentData) return;
+
+            const t = appState.mode === "script"
+                ? `🎬 ${currentData.topic}\n\nHook: "${currentData.openLoopHook}"\n\n` +
+                (currentData.ranks || []).map(r => `#${r.rank} ${r.label}\n${r.clipDescription}\nCaption: ${r.caption}\n${r.transitionText ? `→ ${r.transitionText}` : ""}`).join("\n\n")
+                : `📊 RESEARCH: ${currentData.topic}\nDate: ${currentData.dateFilter}\nOpportunity: ${currentData.overallOpportunity}\nTrend: ${currentData.trendStatus}\n\n` +
+                (currentData.ranks || []).map(r => `#${r.rank} ${r.clipName}\nSEO: ${r.primaryKeyword}\nViral: ${r.viralScore?.final}/100 | Hook: ${r.viralScore?.hook ?? "–"} | Opportunity: ${r.opportunityScore ?? "–"} | Rarity: ${r.rarity}`).join("\n");
+
+            navigator.clipboard.writeText(t).then(() => {
+                updateState({ copied: true });
+                setTimeout(() => updateState({ copied: false }), 2000);
+            });
+        }
+
         // Initialize the app
         document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
-```_
+```*_
