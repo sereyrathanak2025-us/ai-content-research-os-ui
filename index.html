@@ -374,7 +374,7 @@
             },
 
             async generateWithYouTube(topic, options = {}) {
-                const { providerName, model, dateFilter, searchQuery, referenceChannels } = options;
+                const { providerName, model, dateFilter, searchQuery, referenceChannels, styleInstructions } = options;
                 const workerUrl = `${WORKER_BASE_URL}/api/generate`;
 
                 const controller = new AbortController();
@@ -394,7 +394,8 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       topic: searchQuery || topic, dateFilter: dateFilter || "7 Days", provider: providerName || null,
-                      referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined
+                      referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined,
+                      styleInstructions: styleInstructions || undefined
                     }),
                     signal: signal
                   });
@@ -433,7 +434,7 @@
             listProviders() { return providersConfig; }
         };
 
-        async function runDiscovery({ task, platform, providerName, model, timeout, referenceChannels }) {
+        async function runDiscovery({ task, platform, providerName, model, timeout, referenceChannels, styleInstructions }) {
           const agentStartTime = Date.now();
           let agentOutput = {
             agent: "DiscoveryAgent", version: "1.0.0",
@@ -462,7 +463,7 @@
 
           try {
             const llmResponse = await AIProvider.generateWithYouTube(task, {
-              providerName, model, timeout, dateFilter, searchQuery, referenceChannels
+              providerName, model, timeout, dateFilter, searchQuery, referenceChannels, styleInstructions
             });
 
             if (llmResponse.success) {
@@ -1221,6 +1222,7 @@ REQUIRED JSON FORMAT:
           const [topic, setTopic] = useState('');
           const [platform, setPlatform] = useState('YouTube');
           const [referenceChannels, setReferenceChannels] = useState('');
+          const [styleInstructions, setStyleInstructions] = useState('');
           const [loading, setLoading] = useState(false);
           const [error, setError] = useState(null);
           const [results, setResults] = useState(null);
@@ -1244,6 +1246,7 @@ REQUIRED JSON FORMAT:
                 if (parsed.topic) setTopic(parsed.topic);
                 if (parsed.platform) setPlatform(parsed.platform);
                 if (parsed.referenceChannels) setReferenceChannels(parsed.referenceChannels);
+                if (parsed.styleInstructions) setStyleInstructions(parsed.styleInstructions);
                 if (parsed.provider && config[parsed.provider]) {
                   cur = parsed.provider;
                   AIProvider.setProvider(cur);
@@ -1300,13 +1303,13 @@ REQUIRED JSON FORMAT:
               const allAgentResults = {};
 
               const refChannels = parseReferenceChannels(referenceChannels);
-              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', { ...options, referenceChannels: refChannels });
+              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', { ...options, referenceChannels: refChannels, styleInstructions: styleInstructions.trim() });
 
               for (const key of ['ranking', 'seo']) {
                 allAgentResults[key] = await AgentRouter.routeTask(topic, key, options);
               }
               setResults(allAgentResults);
-              persist({ topic, platform, provider: activeProvider, model: selectedModel, referenceChannels, results: allAgentResults });
+              persist({ topic, platform, provider: activeProvider, model: selectedModel, referenceChannels, styleInstructions, results: allAgentResults });
             } catch (err) {
               setError(err.message || "Something went wrong during research.");
             } finally {
@@ -1380,6 +1383,21 @@ REQUIRED JSON FORMAT:
                           {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                         </select>
                       </div>
+                    </div>
+
+                    <div className="ref-channels-block">
+                      <div className="ref-channels-label">
+                        <span>◆ Creative brief <span className="ref-optional">(optional — describe the exact format you want)</span></span>
+                      </div>
+                      <textarea
+                        className="ref-channels-input"
+                        value={styleInstructions}
+                        onChange={(e) => setStyleInstructions(e.target.value)}
+                        placeholder={"e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank"}
+                        disabled={loading}
+                        rows={2}
+                      />
+                      <div className="ref-channels-hint">This is read as direct instructions, not just a search topic — it tells the AI what "good" looks like for your niche.</div>
                     </div>
 
                     <div className="ref-channels-block">
