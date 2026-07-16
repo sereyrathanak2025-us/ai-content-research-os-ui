@@ -178,71 +178,543 @@
         .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
         .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
 
-        /* Scoring bars */
-        .score-hero { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
-        .score-hero .num { font-family: var(--font-display); font-size: 44px; color: var(--acid); line-height: 1; }
-        .score-hero .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
-        .score-bars { display: grid; gap: 10px; }
-        .score-row { display: grid; grid-template-columns: 88px 1fr 34px; align-items: center; gap: 10px; padding: 3px 4px; border-radius: 6px; transition: background 0.15s ease; }
-        .score-row:hover { background: rgba(198,255,61,0.04); }
-        .score-row .name { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
-        .score-track { height: 7px; background: var(--bg-card); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
-        .score-fill { height: 100%; background: linear-gradient(90deg, var(--acid-dim), var(--acid)); border-radius: 4px; transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1); }
-        .score-row .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: right; }
-        .reasoning-box { margin-top: 16px; font-size: 13.5px; color: var(--text-dim); line-height: 1.6; background: var(--bg-card); border: 1px solid var(--border); border-left: 2px solid var(--acid); padding: 12px 14px; border-radius: 0 8px 8px 0; }
-
-        /* Ranking timeline */
-        .timeline { position: relative; padding-left: 34px; }
-        .timeline::before { content: ''; position: absolute; left: 13px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--acid), var(--coral)); opacity: 0.4; }
-        .tl-item { position: relative; padding-bottom: 20px; }
-        .tl-item:last-child { padding-bottom: 0; }
-        .tl-dot { position: absolute; left: -34px; top: 2px; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-card); border: 1.5px solid var(--acid-dim); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--acid); }
-        .tl-seg { font-family: var(--font-mono); font-size: 10.5px; color: var(--coral); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-        .tl-content { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; }
-        .retention-box { margin-top: 18px; background: rgba(198,255,61,0.05); border: 1px solid var(--acid-dim); border-radius: 10px; padding: 13px 15px; font-size: 13px; color: var(--text); line-height: 1.55; }
-        .retention-box .tag-label { color: var(--acid-dim); margin-bottom: 5px; }
-
-        /* AI Suggestion labeling — always visually distinct from evidence */
-        .sugg-badge { display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: #ffcf5c; background: rgba(255,207,92,0.1); border: 1px solid #b8933f; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
-        .sugg-badge.inline { margin-left: 8px; vertical-align: middle; }
-        .suggestion-box { margin-top: 8px; padding: 9px 11px; background: rgba(255,207,92,0.04); border: 1px dashed #6b5a30; border-radius: 7px; display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
-        .sugg-text { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; flex: 1; min-width: 160px; }
-
-        .pattern-list { display: grid; gap: 8px; margin-top: 8px; }
-        .pattern-row { display: flex; gap: 12px; align-items: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; }
-        .pattern-coverage { font-family: var(--font-mono); font-size: 11px; color: var(--acid); background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 3px 8px; flex-shrink: 0; white-space: nowrap; }
-        .pattern-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
-        .pattern-note { font-size: 12px; color: var(--text-faint); line-height: 1.45; }
-
-        .gap-box { margin-top: 20px; background: rgba(255,90,54,0.04); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 13px 15px; }
-        .gap-row { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-top: 4px; }
-        .gap-row b { color: var(--text); font-weight: 600; }
-
-        /* SEO */
-        .seo-preview { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
-        .seo-title { color: #8ab4ff; font-size: 15px; margin-bottom: 4px; }
-        .seo-desc { font-size: 12.5px; color: var(--text-faint); line-height: 1.5; }
-        .copy-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: all 0.12s ease; }
-        .copy-chip:hover { border-color: var(--acid-dim); color: var(--acid); }
-        .copy-chip.copied { border-color: var(--acid); color: var(--acid); background: rgba(198,255,61,0.08); }
-
-        /* Competitor */
-        .comp-grid { display: grid; gap: 10px; margin-bottom: 18px; }
-        .comp-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
-        .comp-name { font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
-        .comp-strategy { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 6px; }
-        .comp-formats { font-family: var(--font-mono); font-size: 10.5px; color: var(--coral); }
-        .gap-list { list-style: none; }
-        .gap-list li { font-size: 13px; color: var(--text-dim); padding: 6px 0 6px 18px; position: relative; border-bottom: 1px solid var(--border); }
-        .gap-list li:last-child { border-bottom: none; }
-        .gap-list li::before { content: '◆'; position: absolute; left: 0; color: var(--coral); font-size: 8px; top: 10px; }
-
-        @media (max-width: 560px) {
-            .config-row { grid-template-columns: 1fr; }
-            .video-thumb { width: 76px; height: 48px; }
-            .score-row { grid-template-columns: 70px 1fr 30px; }
+        /* Styling for the new 'viral engine' UI components */
+        /* --- General Styling for Viral Engine --- */
+        .viral-engine-container {
+            min-height: 100vh; background: #09090E; color: #F0F0F5; font-family: "'Inter',-apple-system,sans-serif"; overflow-x: hidden;
+            position: relative; z-index: 1; /* Ensure it's above the body::after grid */
         }
-    </style>
+        .viral-engine-container::before {
+            content: ''; position: fixed; inset: 0; background-image: "radial-gradient(ellipse 80% 50% at 50% -15%,rgba(255,0,80,0.10) 0%,transparent 60%)"; pointer-events: "none"; z-index: 0;
+        }
+
+        .viral-engine-shell {
+            max-width: 940px; margin: 0 auto; padding: 0 16px 80px; position: relative; z-index: 1;
+        }
+
+        /* --- Header --- */
+        .viral-engine-header {
+            text-align: center; padding-top: 46px; padding-bottom: 32px;
+        }
+        .viral-engine-tag {
+            display: inline-block; background: rgba(255,0,80,0.10); border: 1px solid rgba(255,0,80,0.26); border-radius: 7px; padding: 3px 12px;
+            font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: #FF0050; margin-bottom: 16px; text-transform: uppercase;
+        }
+        .viral-engine-header h1 {
+            font-size: clamp(24px,5vw,46px); font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 9px;
+        }
+        .viral-engine-header h1 span {
+            background: linear-gradient(90deg,#FF0050,#CC00FF,#FF6B35); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .viral-engine-header p {
+            color: rgba(240,240,245,0.38); font-size: 13px; margin: 0;
+        }
+
+        /* --- Retention Curve --- */
+        .retention-curve {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
+            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
+        }
+        .retention-curve-label {
+            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
+            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
+        }
+        .retention-rank-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .retention-rank-item span:first-of-type {
+            font-size: 8px; font-weight: 700;
+        }
+        .retention-bar {
+            width: 100%; border-radius: 3px 3px 0 0;
+        }
+        .retention-rank-item span:last-of-type {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
+        }
+
+        /* --- Mode Selector --- */
+        .mode-selector {
+            display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07);
+        }
+        .mode-selector button {
+            flex: 1; border: transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left;
+        }
+        .mode-selector button.active {
+            background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35);
+        }
+        .mode-selector button:not(.active) {
+            background: transparent;
+        }
+        .mode-selector button div:first-child {
+            font-size: 13px; font-weight: 800; margin-bottom: 2px;
+        }
+        .mode-selector button.active div:first-child { color: #FF0050; }
+        .mode-selector button:not(.active) div:first-child { color: rgba(240,240,245,0.45); }
+        .mode-selector button div:last-child {
+            font-size: 10px; color: rgba(240,240,245,0.28);
+        }
+
+        /* --- Input Section --- */
+        .input-section {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; margin-bottom: 20px;
+        }
+        .input-section label {
+            display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: rgba(240,240,245,0.3); text-transform: uppercase; margin-bottom: 9px;
+        }
+        .input-section input[type="text"] {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; padding: 12px 14px;
+            font-size: 14px; color: #F0F0F5; outline: none; box-sizing: border-box; margin-bottom: 12px;
+        }
+        .input-section input[type="text"]:focus {
+            border-color: rgba(255,0,80,0.4)!important; box-shadow: 0 0 0 3px rgba(255,0,80,0.08);
+        }
+        .input-section input[type="text"]::placeholder {
+            color: rgba(240,240,245,0.16);
+        }
+        .example-topics button {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 10px;
+            font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 600;
+        }
+        .example-topics button.active {
+            background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050;
+        }
+        .date-filter-section {
+            margin-bottom: 14px;
+        }
+        .date-filter-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px;
+        }
+        .date-filter-buttons button {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 11px;
+            font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 700;
+        }
+        .date-filter-buttons button.active {
+            background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF;
+        }
+
+        /* --- Run Button --- */
+        .generate-button {
+            width: 100%; background: linear-gradient(135deg,#FF0050,#CC00FF); border: none; border-radius: 10px; padding: 14px 20px;
+            font-size: 13px; font-weight: 800; color: #fff; cursor: pointer; letter-spacing: 0.04em;
+            box-shadow: 0 4px 20px rgba(255,0,80,0.28); opacity: 1; transition: all 0.18s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .generate-button:hover:not(:disabled) {
+            filter: brightness(1.08);
+        }
+        .generate-button:disabled {
+            background: rgba(255,0,80,0.22); cursor: not-allowed; box-shadow: none; opacity: 0.35;
+        }
+        .generate-button.loading {
+            background: rgba(255,0,80,0.22); cursor: not-allowed; box-shadow: none; opacity: 1;
+        }
+
+        /* --- Retry Message --- */
+        .retry-message {
+            margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px;
+            font-size: 11px; color: #FFA500; text-align: center;
+        }
+
+        /* --- Error Message --- */
+        .error-display {
+            background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.25); border-radius: 10px; padding: 12px 16px;
+            color: #FF6666; font-size: 12px; margin-bottom: 18px;
+        }
+
+        /* --- Results Panel --- */
+        .results-panel {
+            animation: fadeUp 0.4s ease;
+        }
+        .results-header {
+            background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px;
+            margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px;
+        }
+        .results-header div:first-child div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px;
+        }
+        .results-header div:first-child div:last-child {
+            font-size: 16px; font-weight: 800; letter-spacing: -0.02em;
+        }
+        .results-meta-tags {
+            display: flex; gap: 7px; flex-wrap: wrap; align-items: center;
+        }
+        .results-meta-tags span {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px;
+            font-size: 10px; font-weight: 700;
+        }
+        .results-meta-tags .trend-status { color: #4CAF50; } /* Example, adjust based on TREND_COLOR */
+        .results-meta-tags .opportunity-score { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .results-meta-tags .viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .copy-button {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px;
+            font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer;
+        }
+        .copy-button.copied {
+            background: rgba(0,200,100,0.12); border: 1px solid rgba(0,200,100,0.26); color: #00C864;
+        }
+
+        /* --- Hook Section (Script Mode) --- */
+        .hook-section {
+            background: rgba(255,107,53,0.07); border: 1px solid rgba(255,107,53,0.18); border-radius: 10px; padding: 13px 17px; margin-bottom: 16px;
+        }
+        .hook-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF6B35; text-transform: uppercase; margin-bottom: 4px;
+        }
+        .hook-section div:last-child {
+            font-size: 15px; font-weight: 700; font-style: italic;
+        }
+
+        /* --- Editor Intelligence (Research Mode) --- */
+        .editor-intelligence {
+            background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+        }
+        .editor-intelligence div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px;
+        }
+        .editor-notes-grid {
+            display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px;
+        }
+        .editor-note-item {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px;
+        }
+        .editor-note-item div:first-child {
+            font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;
+        }
+        .editor-note-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4;
+        }
+
+        /* --- View Selector --- */
+        .view-selector {
+            display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .view-selector button {
+            flex: 1; border: transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+        }
+        .view-selector button.active {
+            background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050;
+        }
+        .view-selector button:not(.active) {
+            background: transparent; color: rgba(240,240,245,0.36);
+        }
+
+        /* --- Rank Selector --- */
+        .rank-selector {
+            display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .rank-selector button {
+            flex: 1; border: transparent; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.16s;
+        }
+        .rank-selector button.active {
+            color: #fff;
+        }
+        .rank-selector button:not(.active) {
+            background: transparent; color: rgba(240,240,245,0.28);
+        }
+        /* Dynamic rank button backgrounds and shadows will be handled by JS */
+
+        /* --- Card Styles (ScriptCard & ResearchCard) --- */
+        .card-base {
+            background: rgba(255,255,255,0.03); border-radius: 16px; overflow: hidden; animation: fadeUp 0.25s ease;
+        }
+        .card-header {
+            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px;
+        }
+        .rank-display {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .rank-circle {
+            border-radius: 9px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+            font-size: 17px; font-weight: 900; color: #fff;
+        }
+        .rank-text div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; margin-bottom: 2px;
+        }
+        .rank-text div:last-child {
+            font-size: 13px; font-weight: 700;
+        }
+        .card-tags {
+            display: flex; gap: 7px; flex-wrap: wrap;
+        }
+        .card-tag {
+            border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 800;
+        }
+        .card-body {
+            padding: 18px 20px;
+        }
+        .clip-description {
+            font-size: 13px; line-height: 1.65; color: rgba(240,240,245,0.85); margin-bottom: 16px;
+        }
+        .info-grid {
+            display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .info-item {
+            flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px;
+        }
+        .info-item div:first-child {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 4px;
+        }
+        .info-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.65); line-height: 1.45;
+        }
+        .src-panel-container {
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; margin-top: 14px;
+        }
+        .src-panel-tabs {
+            display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2);
+        }
+        .src-panel-tabs button {
+            flex: 1; padding: 9px 4px; font-size: 11px; font-weight: 700; border: none; cursor: pointer;
+        }
+        .src-panel-tabs button.active {
+            border-bottom: 2px solid;
+        }
+        .src-panel-tabs button:not(.active) {
+            color: rgba(240,240,245,0.28); background: transparent; border-bottom: 2px solid transparent;
+        }
+        .src-panel-content {
+            padding: 14px 16px;
+        }
+        .src-query-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; opacity: 0.8;
+        }
+        .src-query-item {
+            display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+        }
+        .src-query-item span:first-child {
+            font-size: 11px; color: rgba(240,240,245,0.65); flex: 1; line-height: 1.4;
+        }
+        .src-extra-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin: 12px 0 8px; opacity: 0.8;
+        }
+        .platform-btn {
+            display: inline-flex; alignItems: "center", gap: 5;
+            borderRadius: 7px; cursor: pointer; whiteSpace: "nowrap";
+        }
+        .platform-btn.small {
+            padding: 4px 9px; font-size: 10px;
+        }
+        .platform-btn.normal {
+            padding: 5px 11px; font-size: 11px;
+        }
+        .platform-btn span:first-child {
+            font-size: 9px;
+        }
+        .platform-btn span:last-child {
+            font-size: 8px; opacity: 0.55;
+        }
+
+        .transition-text {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 9px; padding: 10px 14px;
+            display: flex; align-items: center; gap: 9px; margin-top: 14px;
+        }
+        .transition-text span:first-child {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; flex-shrink: 0;
+        }
+        .transition-text span:last-child {
+            font-size: 12px; font-weight: 700; font-style: italic; color: rgba(240,240,245,0.68);
+        }
+
+        /* --- Research Card Specific --- */
+        .research-card-header-meta {
+            display: flex; flex-wrap: wrap; gap: 7px;
+        }
+        .research-card-header-meta span {
+            border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 700;
+        }
+        .research-card-alerts {
+            display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px;
+        }
+        .research-card-alerts span {
+            border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 800;
+        }
+        .primary-keyword-section {
+            margin-bottom: 14px;
+        }
+        .primary-keyword-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 7px;
+        }
+        .primary-keyword-display {
+            border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 800;
+        }
+        .secondary-keywords-section {
+            margin-bottom: 16px;
+        }
+        .secondary-keywords-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 7px;
+        }
+        .secondary-keywords-display {
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .secondary-keywords-display span {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 3px 10px;
+            font-size: 11px; color: rgba(240,240,245,0.65); font-weight: 600;
+        }
+        .why-it-ranks-box {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 11px 14px; margin-bottom: 16px;
+        }
+        .why-it-ranks-box div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.27); text-transform: uppercase; margin-bottom: 5px;
+        }
+        .why-it-ranks-box div:last-child {
+            font-size: 12px; color: rgba(240,240,245,0.72); line-height: 1.5;
+        }
+        .hook-escalation-scores {
+            display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px;
+        }
+        .score-display-item {
+            flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px;
+        }
+        .score-display-item div:first-child {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 6px;
+        }
+        .score-value-bar {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .score-value-bar span:first-child {
+            font-size: 15px; font-weight: 800;
+        }
+        .score-bar-fill {
+            height: 5px; background: "rgba(255,255,255,0.07)"; borderRadius: 3px; overflow: "hidden"; flex: 1;
+        }
+        .score-bar-inner {
+            height: "100%"; borderRadius: 3px; transition: "width 0.6s ease";
+        }
+        .emotion-scores-section {
+            margin-bottom: 14px;
+        }
+        .emotion-scores-section .tag-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px;
+        }
+        .emotion-grid {
+            display: grid; grid-template-columns: repeat(3,1fr); gap: 7px;
+        }
+        .emotion-grid-item {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px;
+        }
+        .emotion-grid-item div:first-child {
+            font-size: 9px; font-weight: 700; color: rgba(240,240,245,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px;
+        }
+        .emotion-grid-item div:last-child {
+            display: flex; align-items: center; gap: 7px;
+        }
+        .emotion-grid-item div:last-child span:first-child {
+            font-size: 13px; font-weight: 800;
+        }
+        .viral-score-wheel-section {
+            margin-bottom: 14px;
+        }
+        .viral-score-wheel-container {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px 16px;
+        }
+        .viral-score-wheel-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+        }
+        .viral-score-wheel-header span:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.3); text-transform: uppercase;
+        }
+        .viral-score-wheel-header span:last-child {
+            font-size: 22px; font-weight: 900;
+        }
+        .viral-score-wheel-header span:last-child span {
+            font-size: 11px; opacity: 0.5;
+        }
+        .viral-score-component-row {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+        }
+        .viral-score-component-row span:first-child {
+            font-size: 10px; color: rgba(240,240,245,0.45); width: 110px; flex-shrink: 0;
+        }
+        .viral-score-component-row span:nth-child(3) {
+            font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); width: 26px; text-align: right;
+        }
+        .viral-score-component-row span:last-child {
+            font-size: 9px; color: rgba(240,240,245,0.2); width: 28px;
+        }
+
+        /* --- All Sources View --- */
+        .all-sources-view-tabs {
+            display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .all-sources-view-tabs button {
+            flex: 1; border-radius: 9px; padding: 9px 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+        }
+        .all-sources-view-tabs button.active {
+            background: transparent;
+        }
+        .all-sources-view-container {
+            border-radius: 14px; overflow: hidden;
+        }
+        .all-sources-view-header {
+            padding: 12px 18px;
+        }
+        .all-sources-view-header span {
+            font-size: 13px; font-weight: 800;
+        }
+        .all-sources-view-content {
+            padding: 14px 18px;
+        }
+        .all-sources-rank-item {
+            border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 14px; margin-bottom: 14px;
+        }
+        .all-sources-rank-item:last-child {
+            border-bottom: none;
+        }
+        .all-sources-rank-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+        }
+        .all-sources-rank-header span:first-child {
+            border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; color: #fff;
+        }
+        .all-sources-rank-header span:nth-child(2) {
+            font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.5);
+        }
+        .all-sources-rank-header span:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.35);
+        }
+        .all-sources-query-row {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px;
+        }
+        .all-sources-extra-row {
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+
+        /* --- Footer --- */
+        .dna-section, .replay-section {
+            border-radius: 13px; padding: 14px 18px;
+        }
+        .dna-section {
+            background: rgba(204,0,255,0.05); border: 1px solid rgba(204,0,255,0.16);
+        }
+        .dna-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 10px;
+        }
+        .dna-items {
+            display: flex; flex-wrap: wrap; gap: 7px;
+        }
+        .dna-item {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(204,0,255,0.12); border-radius: 6px; padding: 5px 10px;
+        }
+        .dna-item div:first-child {
+            font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 2px;
+        }
+        .dna-item div:last-child {
+            font-size: 11px; color: rgba(240,240,245,0.75); font-weight: 600;
+        }
+        .replay-section {
+            background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2);
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .replay-section div:first-child {
+            font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF0050; text-transform: uppercase; margin-bottom: 7px;
+        }
+        .replay-section div:last-child {
+            font-size: 15px; font-weight: 800;
+        }
+
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
 </head>
 <body>
     <div id="root">
@@ -252,27 +724,93 @@
         </div>
     </div>
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+    <script>
+        // --- Constants (Global) ---
+        const RANK_META = [
+            { rank: 6, label: "SCROLL STOPPER", retention: "85%", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
+            { rank: 5, label: "INTEREST", retention: "65%", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
+            { rank: 4, label: "INTRODUCTION", retention: "50%", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
+            { rank: 3, label: "ESCALATION", retention: "75%", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
+            { rank: 2, label: "FALSE WINNER", retention: "95%", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
+            { rank: 1, label: "FINAL PAYOFF", retention: "100%", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
+        ];
 
-    <script type="text/babel">
-        const DEFAULT_TIMEOUT = 120000;
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
-        const MAX_RETRIES = 2;
-        const RETRY_DELAY = 1000;
+        const EXAMPLE_TOPICS = [
+            "Worst Martial Arts Fails", "Dumbest MMA Moments",
+            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
+            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
+            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
+        ];
 
-        const providersConfig = {
-            openrouter: { name: "OpenRouter", models: [
-                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-            ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-pro", name: "Gemini Pro" }]},
-            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]}
+        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
+
+        const PLATFORM_CFG = {
+            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
+                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+                shortsUrl: (q) => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}` },
+            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
+                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
+                tagUrl: (t) => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}` },
+            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
+                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
+                subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
+            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
+                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ""))/}`,
+                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g,""))}` },
         };
 
-        let currentProviderName = "openrouter";
+        const RARITY_COLOR = { Common: "#888", Uncommon: "#4CAF50", Rare: "#2196F3", "Very Rare": "#CC00FF", Legendary: "#FF0050" };
+        const COMP_COLOR = { Low: "#4CAF50", Medium: "#FFD700", High: "#FF4444" };
+        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
+        const TREND_DIR_COLOR = { Rising: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444" };
+        const ALERT_META = {
+            "Hidden Gem": { icon: "💎", color: "#CC00FF" },
+            "Emerging Trend": { icon: "📈", color: "#4CAF50" },
+            "Viral Potential": { icon: "🔥", color: "#FF0050" },
+            "Early Opportunity": { icon: "🚀", color: "#FFD700" },
+        };
+
+        function opportunityColor(score) { return score >= 75 ? "#FF0050" : score >= 50 ? "#CC00FF" : score >= 25 ? "#FFD700" : "#888"; }
+
+        const SCRIPT_PROMPT_TEMPLATE = (topic) => `You are an elite viral short-form content strategist for YouTube Shorts, TikTok, and Reels.
+
+Create a 6-rank viral video script. STRICT rules:
+
+EMOTIONAL CURVE: Shock→Curiosity→Interest→Escalation→Tension→Payoff→Replay
+
+RANKS: #6=Scroll Stopper(85%) #5=Interest(65%) #4=Introduction(50%) #3=Escalation(75%) #2=False Winner(95%) #1=Final Payoff(100%)
+
+RULES: All clips same category. Each rank escalates. #2 feels like winner. #1 exceeds everything.
+
+Per rank generate:
+- 2 YouTube search queries + 2 Shorts queries
+- 2 TikTok search queries + 2 hashtags (no # symbol)
+- 2 Reddit search queries + 2 subreddit names (no r/ prefix)
+
+Output ONLY valid JSON:
+{
+  "topic":"${topic}","emotionalCurve":"string","escalationLogic":"string",
+  "openLoopHook":"string","viralPotential":"High|Very High|Extreme",
+  "replayQuestion":"string",
+  "clipDNA":{"object":"string","environment":"string","emotion":"string","escalation":"string","ending":"string"},
+  "ranks":[{
+    "rank":6,"label":"SCROLL STOPPER","emotionalPurpose":"string",
+    "clipDescription":"vivid 2-3 sentences","whyStronger":"string",
+    "emotionalLevel":"string","expectationSet":"string",
+    "retentionScore":"85%","caption":"Max 4 words + emoji",
+    "transitionText":"But it gets worse...",
+    "sources":{
+      "youtube":{"queries":["q1","q2"],"shorts":["s1","s2"]},
+      "tiktok":{"queries":["q1","q2"],"hashtags":["h1","h2"]},
+      "reddit":{"queries":["q1","q2"],"subreddits":["r1","r2"]}
+    }
+  }]
+}
+Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
+
+
+        // --- API Helper (Worker Interaction) ---
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; // <<-- Make sure this is YOUR Worker URL
 
         function cleanJsonResponse(text) {
             if (!text || typeof text !== 'string') return '';
@@ -293,917 +831,1063 @@
             return text;
         }
 
-        async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
-            let lastError;
-            for (let i = 0; i <= maxRetries; i++) {
-                try {
-                    const resp = await fetch(url, options);
-                    const data = await resp.json();
-                    if (!resp.ok && (resp.status === 503 || resp.status === 502)) {
-                        if (i < maxRetries) {
-                            const delay = RETRY_DELAY * Math.pow(2, i);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                            continue;
-                        }
-                    }
-                    return { ok: resp.ok, status: resp.status, data };
-                } catch (err) {
-                    lastError = err;
-                    if (i < maxRetries) {
-                        const delay = RETRY_DELAY * Math.pow(2, i);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue;
-                    }
-                }
-            }
-            throw lastError || new Error('Max retries exceeded');
-        }
-
-        const AIProvider = {
-            async analyze(prompt, options = {}) {
-                const { providerName, outputSchema, model } = options;
-                const workerUrl = `${WORKER_BASE_URL}/api/complete`;
-
-                const controller = new AbortController();
-                const signal = controller.signal;
-                const timeout = options.timeout || DEFAULT_TIMEOUT;
-                const timer = setTimeout(() => controller.abort(), timeout);
-                const startTime = Date.now();
-
-                let errorMessage = null;
-                let rawData = null;
-                let success = false;
-                let usedProvider = providerName;
-
-                try {
-                  const { ok, status, data } = await fetchWithRetry(workerUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ prompt, provider: providerName || null, model: model || null }),
-                    signal: signal
-                  });
-                  rawData = data;
-                  clearTimeout(timer);
-
-                  if (!ok) {
-                    errorMessage = rawData.error || `Worker request failed with status ${status}`;
-                  } else {
-                    success = true;
-                    usedProvider = rawData.provider_used || providerName;
-                  }
-
-                } catch (err) {
-                  clearTimeout(timer);
-                  errorMessage = err.name === 'AbortError' ? `Request timed out after ${timeout}ms.` : err.message;
-                }
-
-                const latency = Date.now() - startTime;
-                const timestamp = new Date().toISOString();
-
-                if (!success) {
-                  return { success: false, error: errorMessage, provider: usedProvider, model: model, metadata: { latency, timestamp } };
-                }
-
-                try {
-                  const cleaned = cleanJsonResponse(rawData.text);
-                  const parsed = outputSchema ? JSON.parse(cleaned) : rawData.text;
-                  return { success: true, data: parsed, provider: usedProvider, model: model, metadata: { latency, timestamp } };
-                } catch (e) {
-                  return { success: false, error: `Invalid JSON from LLM: ${e.message}. Raw: ${(rawData.text || '').slice(0, 100)}...`, provider: usedProvider, model: model, metadata: { latency, timestamp } };
-                }
-            },
-
-            async generateWithYouTube(topic, options = {}) {
-                const { providerName, model, dateFilter, searchQuery, referenceChannels, styleInstructions } = options;
-                const workerUrl = `${WORKER_BASE_URL}/api/generate`;
-
-                const controller = new AbortController();
-                const signal = controller.signal;
-                const timeout = options.timeout || DEFAULT_TIMEOUT;
-                const timer = setTimeout(() => controller.abort(), timeout);
-                const startTime = Date.now();
-
-                let errorMessage = null;
-                let rawData = null;
-                let success = false;
-                let usedProvider = providerName;
-
-                try {
-                  const { ok, status, data } = await fetchWithRetry(workerUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      topic: searchQuery || topic, dateFilter: dateFilter || "7 Days", provider: providerName || null,
-                      referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined,
-                      styleInstructions: styleInstructions || undefined
-                    }),
-                    signal: signal
-                  });
-                  rawData = data;
-                  clearTimeout(timer);
-
-                  if (!ok) {
-                    errorMessage = rawData.error || `Worker request failed with status ${status}`;
-                  } else {
-                    success = true;
-                    usedProvider = rawData.provider_used || providerName;
-                  }
-
-                } catch (err) {
-                  clearTimeout(timer);
-                  errorMessage = err.name === 'AbortError' ? `Request timed out after ${timeout}ms.` : err.message;
-                }
-
-                const latency = Date.now() - startTime;
-                const timestamp = new Date().toISOString();
-
-                if (!success) {
-                  return { success: false, error: errorMessage, provider: usedProvider, model: model, metadata: { latency, timestamp } };
-                }
-
-                return { success: true, data: rawData, provider: usedProvider, model: model, metadata: { latency, timestamp } };
-            },
-
-            setProvider(name) {
-                if (providersConfig[name]) { currentProviderName = name; return true; }
-                console.warn(`Provider "${name}" not found in client config.`);
-                return false;
-            },
-
-            getCurrentProviderName() { return currentProviderName; },
-            listProviders() { return providersConfig; }
-        };
-
-        async function runDiscovery({ task, platform, providerName, model, timeout, referenceChannels, styleInstructions }) {
-          const agentStartTime = Date.now();
-          let agentOutput = {
-            agent: "DiscoveryAgent", version: "1.0.0",
-            capability: ["viral discovery", "trend analysis", "keyword extraction", "youtube grounding"],
-            result: { videoCandidates: [], youtubeLinks: [], viewCounts: [], channels: [], trendSignals: [], keywords: [], realVideos: [] },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          // Vary repeat searches of the same topic — rotate the date window and nudge the
-          // query so the same request isn't sent twice in a row. This is a client-side
-          // mitigation only: the actual grounded search runs inside the Cloudflare Worker
-          // (/api/generate), whose source we don't control, so it can't fully guarantee
-          // fresh results if the Worker itself caches by exact query text.
-          const DATE_FILTERS = ["7 Days", "30 Days", "This Month", "This Year"];
-          const VARIATION_HINTS = ["", " (surface different channels than typical top results)", " (include more recent uploads)", " (prioritize less mainstream creators)"];
-          let dateFilter = DATE_FILTERS[0], searchQuery = task;
-          try {
-            const seenKey = 'viralRadarSeen_' + task.trim().toLowerCase().replace(/\s+/g, '_').slice(0, 60);
-            const seenCount = parseInt(localStorage.getItem(seenKey) || '0', 10);
-            dateFilter = DATE_FILTERS[seenCount % DATE_FILTERS.length];
-            const hint = VARIATION_HINTS[seenCount % VARIATION_HINTS.length];
-            searchQuery = task + hint;
-            localStorage.setItem(seenKey, String(seenCount + 1));
-          } catch (e) { /* localStorage unavailable — proceed without variation */ }
-
-          try {
-            const llmResponse = await AIProvider.generateWithYouTube(task, {
-              providerName, model, timeout, dateFilter, searchQuery, referenceChannels, styleInstructions
-            });
-
-            if (llmResponse.success) {
-              const llmData = llmResponse.data;
-
-              const realVideos = Array.isArray(llmData.real_videos) ? llmData.real_videos : [];
-              agentOutput.result.realVideos = realVideos;
-              agentOutput.result.videoCandidates = realVideos.map(v => v.title || "");
-              agentOutput.result.youtubeLinks = realVideos.map(v => v.url || "");
-              agentOutput.result.viewCounts = realVideos.map(v => v.viewCount || 0);
-              agentOutput.result.channels = realVideos.map(v => v.channel || "");
-
-              agentOutput.result.trendSignals = Array.isArray(llmData.trendSignals) ? llmData.trendSignals : (llmData.why_trending ? [llmData.why_trending] : []);
-              agentOutput.result.keywords = (llmData.seo_keywords || "").split(",").map(k => k.trim()).filter(Boolean);
-
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Discovery Agent`;
-            }
-          } catch (err) {
-            agentOutput.error = `Discovery Agent execution error: ${err.message}`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        async function runScoring({ contentDescription, platform, providerName, model, timeout }) {
-          const agentStartTime = Date.now();
-          const scoringWeights = { viral: 0.25, emotion: 0.20, trend: 0.15, hook: 0.15, replay: 0.10, rarity: 0.10, competition: 0.05 };
-
-          let agentOutput = {
-            agent: "ScoringAgent", version: "1.0.0",
-            capability: ["viral scoring", "content evaluation", "retention analysis"],
-            result: { viralScore: 0, emotionScore: 0, trendScore: 0, hookScore: 0, replayScore: 0, rarityScore: 0, competitionScore: 0, finalScore: 0, reasoning: "Scores not calculated." },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          try {
-            const prompt = `Analyze "${contentDescription}" for platform "${platform || 'general'}". Provide ONLY JSON with individual scores (0-100) for: viralScore, emotionScore, trendScore, hookScore, replayScore, rarityScore, competitionScore, and reasoning. NO prose.
-
-            REQUIRED JSON FORMAT:
-            { "viralScore": 0, "emotionScore": 0, "trendScore": 0, "hookScore": 0, "replayScore": 0, "rarityScore": 0, "competitionScore": 0, "reasoning": "..." }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  viralScore: { type: "integer", minimum: 0, maximum: 100 },
-                  emotionScore: { type: "integer", minimum: 0, maximum: 100 },
-                  trendScore: { type: "integer", minimum: 0, maximum: 100 },
-                  hookScore: { type: "integer", minimum: 0, maximum: 100 },
-                  replayScore: { type: "integer", minimum: 0, maximum: 100 },
-                  rarityScore: { type: "integer", minimum: 0, maximum: 100 },
-                  competitionScore: { type: "integer", minimum: 0, maximum: 100 },
-                  reasoning: { type: "string" }
-                },
-                required: ["viralScore", "emotionScore", "trendScore", "hookScore", "replayScore", "rarityScore", "competitionScore", "reasoning"]
-              }
-            });
-
-            if (llmResponse.success && llmResponse.data) {
-              const llmData = llmResponse.data;
-              const getValidScore = (score) => Math.min(100, Math.max(0, parseInt(score, 10) || 0));
-
-              agentOutput.result.viralScore = getValidScore(llmData.viralScore);
-              agentOutput.result.emotionScore = getValidScore(llmData.emotionScore);
-              agentOutput.result.trendScore = getValidScore(llmData.trendScore);
-              agentOutput.result.hookScore = getValidScore(llmData.hookScore);
-              agentOutput.result.replayScore = getValidScore(llmData.replayScore);
-              agentOutput.result.rarityScore = getValidScore(llmData.rarityScore);
-              agentOutput.result.competitionScore = getValidScore(llmData.competitionScore);
-              agentOutput.result.reasoning = llmData.reasoning || "No reasoning provided.";
-
-              agentOutput.result.finalScore = Math.round(
-                (agentOutput.result.viralScore * scoringWeights.viral) +
-                (agentOutput.result.emotionScore * scoringWeights.emotion) +
-                (agentOutput.result.trendScore * scoringWeights.trend) +
-                (agentOutput.result.hookScore * scoringWeights.hook) +
-                (agentOutput.result.replayScore * scoringWeights.replay) +
-                (agentOutput.result.rarityScore * scoringWeights.rarity) +
-                (agentOutput.result.competitionScore * scoringWeights.competition)
-              );
-
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Scoring Agent`;
-            }
-          } catch (err) {
-            agentOutput.error = `Scoring Agent execution error: ${err.message}`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        async function runRanking({ contentDescription, platform, providerName, model, timeout }) {
-          const agentStartTime = Date.now();
-          let agentOutput = {
-            agent: "RankingAgent", version: "1.0.0",
-            capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization"],
-            result: { rankOrder: [], retentionPrediction: "No ranking performed." },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          try {
-            const prompt = `Create a 6-rank narrative structure for: "${contentDescription}" (${platform || 'general'} platform). Use exactly these ranks with segment names:
-            6=Hook, 5=Interest, 4=Context, 3=Escalation, 2=False Winner, 1=Payoff
-
-            Provide ONLY valid JSON with rankOrder array (6 items exactly) and retentionPrediction. NO prose, NO markdown.
-
-            REQUIRED JSON FORMAT:
-            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "..."}, ...], "retentionPrediction": "..." }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  rankOrder: {
-                    type: "array",
-                    items: { type: "object", properties: { rank: { type: "string" }, segment: { type: "string" }, content: { type: "string" } }, required: ["rank", "segment", "content"] },
-                    minItems: 6, maxItems: 6
-                  },
-                  retentionPrediction: { type: "string" }
-                },
-                required: ["rankOrder", "retentionPrediction"]
-              }
-            });
-
-            if (llmResponse.success && llmResponse.data) {
-              const llmData = llmResponse.data;
-              let validatedRankOrder = [];
-              if (Array.isArray(llmData.rankOrder) && llmData.rankOrder.length === 6) {
-                const parsedRanks = llmData.rankOrder.map((rankItem, idx) => {
-                  const rawRank = rankItem.rank;
-                  let rankNum = 0;
-                  if (typeof rawRank === 'number') { rankNum = rawRank; }
-                  else if (typeof rawRank === 'string') { rankNum = parseInt(rawRank.replace('#', '').trim(), 10) || 0; }
-                  if (!rankNum && llmData.rankOrder.length === 6) { rankNum = 6 - idx; }
-                  return { ...rankItem, rank: rankItem.rank ? String(rankItem.rank) : `#${rankNum}`, rankNum: Number.isInteger(rankNum) ? rankNum : 0 };
-                }).filter(item => item.rankNum >= 1 && item.rankNum <= 6);
-
-                parsedRanks.sort((a, b) => b.rankNum - a.rankNum);
-                const uniqueRanks = new Set();
-                validatedRankOrder = parsedRanks.filter(item => {
-                  if (!uniqueRanks.has(item.rankNum)) { uniqueRanks.add(item.rankNum); return true; }
-                  return false;
-                }).map(({ rankNum, ...rest }) => rest);
-
-                if (validatedRankOrder.length !== 6) {
-                  agentOutput.error = "LLM did not return a valid 6-rank structure.";
-                  validatedRankOrder = [];
-                }
-              } else {
-                agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length.";
-              }
-
-              agentOutput.result.rankOrder = validatedRankOrder;
-              agentOutput.result.retentionPrediction = llmData.retentionPrediction || "Retention prediction unavailable.";
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Ranking Agent`;
-            }
-          } catch (err) {
-            agentOutput.error = `Ranking Agent execution error: ${err.message}`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        async function runIntelligence({ contentDescription, platform, videoTitles, providerName, model, timeout }) {
-          const agentStartTime = Date.now();
-          let agentOutput = {
-            agent: "IntelligenceAgent", version: "1.0.0",
-            capability: ["cross-video pattern synthesis", "opportunity gap analysis"],
-            result: { crossVideoPatterns: [], opportunityGap: null },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          const titles = Array.isArray(videoTitles) ? videoTitles.filter(Boolean).slice(0, 10) : [];
-
-          if (titles.length < 2) {
-            agentOutput.error = "Not enough discovered videos to synthesize cross-video patterns yet.";
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-            return agentOutput;
-          }
-
-          try {
-            const titleList = titles.map((t, i) => `${i + 1}. ${t}`).join("\n");
-            const prompt = `You are analyzing ONLY the titles/metadata of these ${titles.length} real top-performing videos for the topic "${contentDescription}" (${platform || 'general'}). You have NOT watched the videos — do not invent timestamps, scenes, or frame-level detail.
-
-Titles:
-${titleList}
-
-Task 1 — Cross-video patterns: Identify 3-5 structural/format patterns that repeat across multiple titles (e.g. "countdown format", "shock reveal in title", "comparison framing"). For each, estimate how many of the ${titles.length} titles fit it (as "x/${titles.length}").
-
-Task 2 — Opportunity gap: Based on what the existing videos emphasize, identify ONE underused angle a new creator could differentiate with, for the idea "${contentDescription}".
-
-Provide ONLY JSON. NO prose, NO markdown, NO exact-timestamp or scene-level claims.
-
-REQUIRED JSON FORMAT:
-{ "crossVideoPatterns": [{"pattern": "...", "coverage": "x/${titles.length}", "note": "..."}], "opportunityGap": {"existingFocus": "...", "underusedAngle": "...", "differentiation": "..."} }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  crossVideoPatterns: {
-                    type: "array",
-                    items: { type: "object", properties: { pattern: { type: "string" }, coverage: { type: "string" }, note: { type: "string" } }, required: ["pattern", "coverage"] }
-                  },
-                  opportunityGap: {
-                    type: "object",
-                    properties: { existingFocus: { type: "string" }, underusedAngle: { type: "string" }, differentiation: { type: "string" } }
-                  }
-                },
-                required: ["crossVideoPatterns", "opportunityGap"]
-              }
-            });
-
-            if (llmResponse.success && llmResponse.data) {
-              const llmData = llmResponse.data;
-              // Everything from this agent is synthesis/inference over titles only — mark explicitly as AI_SUGGESTION.
-              agentOutput.result.crossVideoPatterns = (Array.isArray(llmData.crossVideoPatterns) ? llmData.crossVideoPatterns : []).map(p => ({
-                type: "AI_SUGGESTION", pattern: p.pattern, coverage: p.coverage || '', note: p.note || '', requires_human_review: true
-              }));
-              agentOutput.result.opportunityGap = llmData.opportunityGap ? {
-                type: "AI_SUGGESTION", ...llmData.opportunityGap, requires_human_review: true
-              } : null;
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Intelligence Agent`;
-            }
-          } catch (err) {
-            agentOutput.error = `Intelligence Agent execution error: ${err.message}`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        async function runSeo({ contentDescription, platform, language = 'en', providerName, model, timeout }) {
-          const agentStartTime = Date.now();
-          let agentOutput = {
-            agent: "SEOAgent", version: "1.0.0",
-            capability: ["seo generation", "keyword optimization", "content discoverability"],
-            result: { title: "Optimized Content Title", description: "Optimized content description for discoverability.", keywords: [], hashtags: [], generated: false, source: "fallback" },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          try {
-            const prompt = `Generate SEO for: "${contentDescription}" (${platform || 'general'}, ${language}). Provide ONLY JSON with: title (max 60 chars), description (max 160 chars), keywords array (5-10), hashtags array (3-5). NO prose.
-
-            REQUIRED JSON FORMAT:
-            { "title": "...", "description": "...", "keywords": ["..."], "hashtags": ["#..."] }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  title: { type: "string", maxLength: 60 },
-                  description: { type: "string", maxLength: 160 },
-                  keywords: { type: "array", items: { type: "string" }, minItems: 5, maxItems: 10 },
-                  hashtags: { type: "array", items: { type: "string", pattern: "^#.*" }, minItems: 3, maxItems: 5 }
-                },
-                required: ["title", "description", "keywords", "hashtags"]
-              }
-            });
-
-            if (llmResponse.success && llmResponse.data) {
-              const llmData = llmResponse.data;
-              agentOutput.result.title = llmData.title ? llmData.title.substring(0, 60) : agentOutput.result.title;
-              agentOutput.result.description = llmData.description ? llmData.description.substring(0, 160) : agentOutput.result.description;
-              agentOutput.result.keywords = Array.isArray(llmData.keywords) ? llmData.keywords.slice(0, 10) : agentOutput.result.keywords;
-              agentOutput.result.hashtags = Array.isArray(llmData.hashtags) ? llmData.hashtags.filter(tag => tag.startsWith('#')).slice(0, 5) : agentOutput.result.hashtags;
-              agentOutput.result.generated = true;
-              agentOutput.result.source = "llm";
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for SEO Agent. Using fallback content.`;
-            }
-          } catch (err) {
-            agentOutput.error = `SEO Agent execution error: ${err.message}. Using fallback content.`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        async function runCompetitorAnalysis({ topic, platform, providerName, model, timeout }) {
-          const agentStartTime = Date.now();
-          let agentOutput = {
-            agent: "CompetitorAgent", version: "1.0.0",
-            capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"],
-            result: { competitorPatterns: [], contentGaps: [], winningFormatsSummary: [] },
-            metadata: { provider: "N/A", model: "N/A", latency: 0, timestamp: new Date().toISOString() },
-            error: null
-          };
-
-          try {
-            const prompt = `Analyze competitors for: "${topic}" on ${platform || 'general'}. Identify 3+ competitor patterns with name, strategy, winningFormats. Also list contentGaps and winningFormatsSummary. Provide ONLY JSON. NO prose, NO markdown, NO safety warnings.
-
-            REQUIRED JSON FORMAT:
-            { "competitorPatterns": [{"name": "...", "strategy": "...", "winningFormats": "...", "keywords": ["..."]}], "contentGaps": ["..."], "winningFormatsSummary": ["..."] }`;
-
-            const llmResponse = await AIProvider.analyze(prompt, {
-              providerName, model, timeout,
-              outputSchema: {
-                type: "object",
-                properties: {
-                  competitorPatterns: {
-                    type: "array",
-                    items: { type: "object", properties: { name: { type: "string" }, strategy: { type: "string" }, winningFormats: { type: "string" }, keywords: { type: "array", items: { type: "string" } } }, required: ["name", "strategy", "winningFormats"] },
-                    minItems: 3
-                  },
-                  contentGaps: { type: "array", items: { type: "string" } },
-                  winningFormatsSummary: { type: "array", items: { type: "string" } }
-                },
-                required: ["competitorPatterns", "contentGaps", "winningFormatsSummary"]
-              }
-            });
-
-            if (llmResponse.success && llmResponse.data) {
-              const llmData = llmResponse.data;
-              agentOutput.result.competitorPatterns = Array.isArray(llmData.competitorPatterns) ? llmData.competitorPatterns : [];
-              agentOutput.result.contentGaps = Array.isArray(llmData.contentGaps) ? llmData.contentGaps : [];
-              agentOutput.result.winningFormatsSummary = Array.isArray(llmData.winningFormatsSummary) ? llmData.winningFormatsSummary : [];
-              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
-              agentOutput.metadata.model = llmResponse.model || "Unknown";
-              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
-              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
-            } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Competitor Agent`;
-            }
-          } catch (err) {
-            agentOutput.error = `Competitor Agent execution error: ${err.message}`;
-          } finally {
-            agentOutput.metadata.latency = Date.now() - agentStartTime;
-          }
-          return agentOutput;
-        }
-
-        const AgentRegistry = {
-          discovery: { agentFunction: runDiscovery, version: "1.0.0", capability: ["viral discovery", "trend analysis", "keyword extraction", "youtube grounding"] },
-          scoring: { agentFunction: runScoring, version: "1.0.0", capability: ["viral scoring", "content evaluation", "retention analysis"] },
-          ranking: { agentFunction: runRanking, version: "1.1.0", capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization", "moment suggestion (AI_SUGGESTION)"] },
-          seo: { agentFunction: runSeo, version: "1.0.0", capability: ["seo generation", "keyword optimization", "content discoverability"] },
-          competitor: { agentFunction: runCompetitorAnalysis, version: "1.0.0", capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"] },
-          intelligence: { agentFunction: runIntelligence, version: "1.0.0", capability: ["cross-video pattern synthesis (AI_SUGGESTION)", "opportunity gap analysis (AI_SUGGESTION)"] }
-        };
-
-        const AgentRouter = {
-          async routeTask(task, agentType, options = {}) {
-            const startTime = Date.now();
-            const agentConfig = AgentRegistry[agentType.toLowerCase()];
-
-            let agentResult = {
-              agent: agentType, version: agentConfig?.version || "N/A", capability: agentConfig?.capability || [],
-              task: task, result: null, error: null,
-              metadata: { totalLatency: 0, success: false, timestamp: new Date().toISOString() }
-            };
-
-            if (!agentConfig || typeof agentConfig.agentFunction !== 'function') {
-              agentResult.error = `Agent type "${agentType}" not found or not properly configured in AgentRegistry.`;
-              return agentResult;
-            }
+        async function callWorkerAPI(endpoint, payload) {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            const timeout = 120000; // 2 minutes timeout
+            const timer = setTimeout(() => controller.abort(), timeout);
 
             try {
-              const individualAgentOutput = await agentConfig.agentFunction({
-                contentDescription: task, task, ...options
-              });
+                const response = await fetch(`${WORKER_BASE_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: signal
+                });
+                clearTimeout(timer);
 
-              agentResult.result = individualAgentOutput.result;
-              agentResult.error = individualAgentOutput.error;
-              agentResult.metadata = { ...agentResult.metadata, ...individualAgentOutput.metadata, success: !individualAgentOutput.error };
-              agentResult.agent = individualAgentOutput.agent;
-              agentResult.version = individualAgentOutput.version;
-              agentResult.capability = individualAgentOutput.capability;
+                const data = await response.json();
 
-            } catch (err) {
-              agentResult.error = err.message;
-              agentResult.metadata.success = false;
-            } finally {
-              agentResult.metadata.totalLatency = Date.now() - startTime;
+                if (!response.ok) {
+                    const errorMsg = data.error || `Worker request failed with status ${response.status}`;
+                    throw new Error(errorMsg);
+                }
+
+                return data;
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    throw new Error(`Request timed out after ${timeout / 1000}s.`);
+                }
+                throw error;
             }
-
-            return agentResult;
-          },
-
-          listAgentTypes() {
-            return Object.keys(AgentRegistry).map(key => ({
-              type: key,
-              version: AgentRegistry[key].version,
-              capability: AgentRegistry[key].capability
-            }));
-          }
-        };
-
-        const { useState, useEffect } = React;
-
-        // ---------- UI HELPERS ----------
-
-        function extractYouTubeId(url) {
-          if (!url) return null;
-          const m = url.match(/(?:youtu\.be\/|v=|shorts\/)([a-zA-Z0-9_-]{6,})/);
-          return m ? m[1] : null;
         }
 
-        function formatViews(n) {
-          if (!n) return null;
-          if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-          if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-          return String(n);
+        // --- UI Rendering Functions (Vanilla JS) ---
+
+        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
+
+        function createPlatformBtn(platform, label, url, small) {
+            const c = PLATFORM_CFG[platform];
+            const button = document.createElement('button');
+            button.className = `platform-btn ${small ? 'small' : 'normal'}`;
+            button.onclick = () => openLink(url);
+            button.style.background = c.bg;
+            button.style.border = `1px solid ${c.border}`;
+            button.style.color = c.color;
+
+            const iconSpan = document.createElement('span');
+            iconSpan.textContent = c.icon;
+            iconSpan.style.fontSize = small ? '9px' : '10px';
+            button.appendChild(iconSpan);
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = label;
+            button.appendChild(labelSpan);
+
+            const arrowSpan = document.createElement('span');
+            arrowSpan.textContent = '↗';
+            button.appendChild(arrowSpan);
+
+            return button;
         }
 
-        function AgentHeader({ index, title, meta }) {
-          return (
-            <div className="agent-head">
-              <div className="agent-title-row">
-                <span className="agent-index">{index}</span>
-                <span className="agent-title">{title}</span>
-              </div>
-              {meta && (
-                <span className="agent-meta">
-                  <b>{meta.provider}</b> · {meta.latency}ms
-                </span>
-              )}
-            </div>
-          );
+        function createScoreBar(value, color, max = 100) {
+            const container = document.createElement('div');
+            container.className = 'score-bar-fill';
+            const innerBar = document.createElement('div');
+            innerBar.className = 'score-bar-inner';
+            innerBar.style.width = `${(value / max) * 100}%`;
+            innerBar.style.background = color;
+            container.appendChild(innerBar);
+            return container;
         }
 
-        function CopyChip({ text }) {
-          const [copied, setCopied] = useState(false);
-          const handleCopy = () => {
-            navigator.clipboard?.writeText(text).then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1400);
+        function renderRetentionCurve(container) {
+            container.innerHTML = ''; // Clear previous content
+            const label = document.createElement('div');
+            label.className = 'retention-curve-label';
+            label.textContent = 'Retention';
+            container.appendChild(label);
+
+            [...RANK_META].reverse().forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'retention-rank-item';
+
+                const retentionSpan = document.createElement('span');
+                retentionSpan.textContent = m.retention;
+                retentionSpan.style.color = m.color;
+                item.appendChild(retentionSpan);
+
+                const barDiv = document.createElement('div');
+                barDiv.className = 'retention-bar';
+                barDiv.style.height = `${m.bar * 0.5}px`;
+                barDiv.style.background = `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`;
+                barDiv.style.boxShadow = `0 -3px 10px ${m.glow}`;
+                item.appendChild(barDiv);
+
+                const rankSpan = document.createElement('span');
+                rankSpan.textContent = `#${m.rank}`;
+                item.appendChild(rankSpan);
+                container.appendChild(item);
             });
-          };
-          return (
-            <span className={`copy-chip ${copied ? 'copied' : ''}`} onClick={handleCopy}>
-              {copied ? '✓ copied' : text}
-            </span>
-          );
         }
 
-        function CountUp({ value, duration = 700 }) {
-          const [display, setDisplay] = useState(0);
-          useEffect(() => {
-            let raf;
-            const start = performance.now();
-            const from = 0;
-            const to = Number(value) || 0;
-            const tick = (now) => {
-              const progress = Math.min(1, (now - start) / duration);
-              const eased = 1 - Math.pow(1 - progress, 3);
-              setDisplay(Math.round(from + (to - from) * eased));
-              if (progress < 1) raf = requestAnimationFrame(tick);
-            };
-            raf = requestAnimationFrame(tick);
-            return () => cancelAnimationFrame(raf);
-          }, [value]);
-          return display;
-        }
+        function renderSrcPanel(container, sources) {
+            container.innerHTML = ''; // Clear previous content
+            let currentTab = 'youtube'; // Default tab
 
-        function DiscoveryPanel({ result }) {
-          const videos = (result.youtubeLinks || []).map((link, idx) => ({
-            url: link,
-            title: result.videoCandidates?.[idx] || 'Untitled',
-            views: result.viewCounts?.[idx] || 0,
-            channel: result.channels?.[idx] || '',
-          })).filter(v => v.url);
+            const tabHeader = document.createElement('div');
+            tabHeader.className = 'src-panel-tabs';
+            ['youtube', 'tiktok', 'reddit'].forEach(p => {
+                const pc = PLATFORM_CFG[p];
+                const button = document.createElement('button');
+                button.textContent = `${pc.icon} ${pc.name}`;
+                button.onclick = () => {
+                    currentTab = p;
+                    updateSrcPanelContent();
+                    Array.from(tabHeader.children).forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    button.style.borderBottom = `2px solid ${pc.color}`;
+                    button.style.color = pc.color;
+                    button.style.background = `${pc.color}10`;
+                };
+                tabHeader.appendChild(button);
+            });
+            container.appendChild(tabHeader);
 
-          // Evidence-based featured pick: highest verified view count (not an AI opinion).
-          let featured = null, rest = videos;
-          if (videos.length > 1) {
-            const maxViews = Math.max(...videos.map(v => v.views));
-            if (maxViews > 0) {
-              const idx = videos.findIndex(v => v.views === maxViews);
-              featured = videos[idx];
-              rest = videos.filter((_, i) => i !== idx);
+            const contentArea = document.createElement('div');
+            contentArea.className = 'src-panel-content';
+            container.appendChild(contentArea);
+
+            function updateSrcPanelContent() {
+                contentArea.innerHTML = '';
+                const cfg = PLATFORM_CFG[currentTab];
+                const src = sources?.[currentTab] || {};
+                const queries = src.queries || [];
+                const extras = src.shorts || src.hashtags || src.subreddits || [];
+
+                // Queries
+                const queryLabel = document.createElement('div');
+                queryLabel.className = 'src-query-label';
+                queryLabel.textContent = '🔍 Search Queries';
+                queryLabel.style.color = cfg.color;
+                contentArea.appendChild(queryLabel);
+
+                queries.forEach(q => {
+                    const item = document.createElement('div');
+                    item.className = 'src-query-item';
+                    const qSpan = document.createElement('span');
+                    qSpan.textContent = `"${q}"`;
+                    item.appendChild(qSpan);
+                    item.appendChild(createPlatformBtn(currentTab, 'Search', PLATFORM_CFG[currentTab].searchUrl(q), true));
+                    contentArea.appendChild(item);
+                });
+
+                // Extras (Shorts/Hashtags/Subreddits)
+                const extraLabel = document.createElement('div');
+                extraLabel.className = 'src-extra-label';
+                extraLabel.style.color = cfg.color;
+                extraLabel.textContent = currentTab === "youtube" ? "📱 Shorts" : currentTab === "tiktok" ? "#️⃣ Hashtags" : "🏠 Subreddits";
+                contentArea.appendChild(extraLabel);
+
+                const extraContainer = document.createElement('div');
+                extraContainer.style.display = 'flex';
+                extraContainer.style.flexWrap = 'wrap';
+                extraContainer.style.gap = '6px';
+
+                extras.forEach(x => {
+                    let url, lbl;
+                    if (currentTab === "youtube") {
+                        url = PLATFORM_CFG.youtube.shortsUrl(x);
+                        lbl = `"${x}"`;
+                    } else if (currentTab === "tiktok") {
+                        url = PLATFORM_CFG.tiktok.tagUrl(x);
+                        lbl = `#${x}`;
+                    } else { // reddit
+                        url = PLATFORM_CFG.reddit.subUrl(x);
+                        lbl = `r/${x}`;
+                    }
+                    extraContainer.appendChild(createPlatformBtn(currentTab, lbl, url, true));
+                });
+                contentArea.appendChild(extraContainer);
+
+                // Highlight active tab
+                Array.from(tabHeader.children).forEach(btn => btn.classList.remove('active'));
+                tabHeader.children[0].classList.add('active'); // Default to YouTube active initially
+                tabHeader.children[0].style.borderBottom = `2px solid ${PLATFORM_CFG.youtube.color}`;
+                tabHeader.children[0].style.color = PLATFORM_CFG.youtube.color;
+                tabHeader.children[0].style.background = `${PLATFORM_CFG.youtube.color}10`;
             }
-          }
 
-          const renderThumb = (v) => {
-            const ytId = extractYouTubeId(v.url);
-            return ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
-          };
+            updateSrcPanelContent(); // Initial render
+        }
 
-          return (
-            <div>
-              {videos.length > 0 ? (
-                <div>
-                  {featured && (
-                    <a href={featured.url} target="_blank" rel="noopener noreferrer" className="video-card featured">
-                      <span className="featured-tag">◆ HIGHEST REACH · EVIDENCE</span>
-                      <div className="featured-body">
-                        {renderThumb(featured)
-                          ? <img className="video-thumb featured-thumb" src={renderThumb(featured)} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
-                          : <div className="video-thumb featured-thumb"></div>}
-                        <div className="video-info">
-                          <div className="video-title featured-title">{featured.title}</div>
-                          <div className="video-sub">
-                            {featured.views > 0 && <span className="views">{formatViews(featured.views)} views</span>}
-                            {featured.views > 0 && featured.channel && ' · '}
-                            {featured.channel}
-                          </div>
-                        </div>
-                      </div>
-                    </a>
-                  )}
-                  <div className="video-grid">
-                    {rest.map((v, idx) => {
-                      const thumb = renderThumb(v);
-                      return (
-                        <a key={idx} href={v.url} target="_blank" rel="noopener noreferrer" className="video-card">
-                          {thumb
-                            ? <img className="video-thumb" src={thumb} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
-                            : <div className="video-thumb"></div>}
-                          <div className="video-info">
-                            <div className="video-title">{v.title}</div>
-                            <div className="video-sub">
-                              {v.views > 0 && <span className="views">{formatViews(v.views)} views</span>}
-                              {v.views > 0 && v.channel && ' · '}
-                              {v.channel}
+        function renderScriptCard(container, rd, meta) {
+            if (!rd || !meta) { container.innerHTML = ''; return; }
+            container.innerHTML = `
+                <div class="card-base" style="border: 1px solid ${meta.color}38; box-shadow: 0 0 36px ${meta.glow};">
+                    <div class="card-header" style="background: linear-gradient(135deg,${meta.color}16,transparent); border-bottom: 1px solid ${meta.color}25;">
+                        <div class="rank-display">
+                            <div class="rank-circle" style="background: ${meta.color}; box-shadow: 0 0 12px ${meta.glow};">#${meta.rank}</div>
+                            <div class="rank-text">
+                                <div style="color: ${meta.color};">${meta.label}</div>
+                                <div>${rd.emotionalPurpose}</div>
                             </div>
-                          </div>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-panel">No grounded YouTube videos returned for this topic yet.</div>
-              )}
-
-              {result.keywords?.length > 0 && (
-                <div>
-                  <div className="tag-label" style={{ marginTop: 18 }}>Keywords</div>
-                  <div className="tag-row">
-                    {result.keywords.map((k, i) => <span key={i} className="kw-chip">{k}</span>)}
-                  </div>
-                </div>
-              )}
-
-              {result.trendSignals?.length > 0 && (
-                <div>
-                  <div className="tag-label" style={{ marginTop: 18 }}>Why it's trending</div>
-                  <ul className="trend-list">
-                    {result.trendSignals.map((s, i) => <li key={i}>{s}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        function ScoringPanel({ result }) {
-          const bars = [
-            ['Viral', result.viralScore], ['Emotion', result.emotionScore], ['Trend', result.trendScore],
-            ['Hook', result.hookScore], ['Replay', result.replayScore], ['Rarity', result.rarityScore],
-            ['Competition', result.competitionScore],
-          ];
-          return (
-            <div>
-              <div className="score-hero">
-                <span className="num"><CountUp value={result.finalScore} /></span>
-                <span className="lbl">/ 100 final score</span>
-              </div>
-              <div className="score-bars">
-                {bars.map(([label, val]) => (
-                  <div className="score-row" key={label}>
-                    <span className="name">{label}</span>
-                    <div className="score-track"><div className="score-fill" style={{ width: `${val}%` }}></div></div>
-                    <span className="val"><CountUp value={val} duration={500} /></span>
-                  </div>
-                ))}
-              </div>
-              {result.reasoning && <div className="reasoning-box">{result.reasoning}</div>}
-            </div>
-          );
-        }
-
-
-        function RankingPanel({ result }) {
-          return (
-            <div>
-              {result.rankOrder?.length > 0 ? (
-                <div className="timeline">
-                  {result.rankOrder.map((item, idx) => (
-                    <div className="tl-item" key={idx}>
-                      <span className="tl-dot">{item.rank?.replace('#', '')}</span>
-                      <div className="tl-seg">{item.segment}</div>
-                      <div className="tl-content">{item.content}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-panel">No ranked structure generated.</div>
-              )}
-              {result.retentionPrediction && (
-                <div className="retention-box">
-                  <div className="tag-label">Retention prediction</div>
-                  {result.retentionPrediction}
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        function IntelligencePanel({ result }) {
-          const patterns = result.crossVideoPatterns || [];
-          const gap = result.opportunityGap;
-          return (
-            <div>
-              {patterns.length > 0 ? (
-                <div>
-                  <div className="tag-label">Cross-video patterns <span className="sugg-badge inline">AI SUGGESTION</span></div>
-                  <div className="pattern-list">
-                    {patterns.map((p, i) => (
-                      <div className="pattern-row" key={i}>
-                        <span className="pattern-coverage">{p.coverage}</span>
-                        <div>
-                          <div className="pattern-name">{p.pattern}</div>
-                          {p.note && <div className="pattern-note">{p.note}</div>}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-panel">Not enough discovered videos yet to synthesize patterns.</div>
-              )}
-
-              {gap && (
-                <div className="gap-box">
-                  <div className="tag-label">Opportunity gap <span className="sugg-badge inline">AI SUGGESTION</span></div>
-                  {gap.existingFocus && <div className="gap-row"><b>Existing videos focus on:</b> {gap.existingFocus}</div>}
-                  {gap.underusedAngle && <div className="gap-row"><b>Underused angle:</b> {gap.underusedAngle}</div>}
-                  {gap.differentiation && <div className="gap-row"><b>Try:</b> {gap.differentiation}</div>}
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        function SeoPanel({ result }) {
-          return (
-            <div>
-              <div className="seo-preview">
-                <div className="seo-title">{result.title}</div>
-                <div className="seo-desc">{result.description}</div>
-              </div>
-              {result.keywords?.length > 0 && (
-                <div>
-                  <div className="tag-label">Keywords</div>
-                  <div className="tag-row">
-                    {result.keywords.map((k, i) => <CopyChip key={i} text={k} />)}
-                  </div>
-                </div>
-              )}
-              {result.hashtags?.length > 0 && (
-                <div>
-                  <div className="tag-label" style={{ marginTop: 16 }}>Hashtags</div>
-                  <div className="tag-row">
-                    {result.hashtags.map((h, i) => <CopyChip key={i} text={h} />)}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        function CompetitorPanel({ result }) {
-          return (
-            <div>
-              {result.competitorPatterns?.length > 0 && (
-                <div className="comp-grid">
-                  {result.competitorPatterns.map((c, i) => (
-                    <div className="comp-card" key={i}>
-                      <div className="comp-name">{c.name}</div>
-                      <div className="comp-strategy">{c.strategy}</div>
-                      <div className="comp-formats">▸ {c.winningFormats}</div>
+                        <div class="card-tags">
+                            <span class="card-tag" style="background: ${meta.color}16; border: 1px solid ${meta.color}30; color: ${meta.color};">${rd.retentionScore}</span>
+                            <span class="card-tag" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); color: rgba(240,240,245,0.7); font-weight: 700;">${rd.caption}</span>
+                        </div>
                     </div>
-                  ))}
+                    <div class="card-body">
+                        <div class="clip-description">${rd.clipDescription}</div>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">📈 Why Stronger</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.whyStronger}</div>
+                            </div>
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">⚡ Emotional Level</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.emotionalLevel}</div>
+                            </div>
+                            <div class="info-item">
+                                <div style="color: rgba(240,240,245,0.25);">🎯 Next Expectation</div>
+                                <div style="color: rgba(240,240,245,0.65);">${rd.expectationSet}</div>
+                            </div>
+                        </div>
+                        <div class="src-panel-container"></div>
+                        ${rd.transitionText ? `
+                            <div class="transition-text">
+                                <span>Transition →</span>
+                                <span>${rd.transitionText}</span>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
-              )}
-              {result.contentGaps?.length > 0 && (
-                <div>
-                  <div className="tag-label">Content gaps you can exploit</div>
-                  <ul className="gap-list">
-                    {result.contentGaps.map((g, i) => <li key={i}>{g}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-          );
+            `;
+            renderSrcPanel(container.querySelector('.src-panel-container'), rd.sources);
         }
 
-        const AGENT_DISPLAY = {
-          discovery: { title: 'Discovery', Panel: DiscoveryPanel },
-          ranking: { title: 'Ranking', Panel: RankingPanel },
-          seo: { title: 'SEO', Panel: SeoPanel },
+        function renderEmotionGrid(container, scores) {
+            container.innerHTML = '';
+            if (!scores) return;
+            Object.entries(scores).forEach(([k, v]) => {
+                const item = document.createElement('div');
+                item.className = 'emotion-grid-item';
+                item.innerHTML = `
+                    <div style="color: rgba(240,240,245,0.35);">${k}</div>
+                    <div>
+                        <span style="color: ${v >= 8 ? '#FF0050' : v >= 6 ? '#FFD700' : '#888'};">${v}</span>
+                        <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${v * 10}%; background: ${v >= 8 ? '#FF0050' : v >= 6 ? '#FFD700' : '#4CAF50'};"></div></div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderViralScoreWheel(container, vs) {
+            container.innerHTML = '';
+            if (!vs) return;
+            const scoresData = [
+                { k: "Virality", v: vs.virality, w: "25%" },
+                { k: "Emotion Impact", v: vs.emotionImpact, w: "20%" },
+                { k: "Trend", v: vs.trend, w: "15%" },
+                { k: "Hook", v: vs.hook, w: "15%" },
+                { k: "Replay", v: vs.replay, w: "10%" },
+                { k: "Rarity", v: vs.rarity, w: "10%" },
+                { k: "Competition Edge", v: vs.competition, w: "5%" },
+            ];
+            const final = vs.final || 0;
+            const finalColor = final >= 80 ? "#FF0050" : final >= 60 ? "#CC00FF" : final >= 40 ? "#FFD700" : "#888";
+
+            container.innerHTML = `
+                <div class="viral-score-wheel-container">
+                    <div class="viral-score-wheel-header">
+                        <span>🔥 Viral Score</span>
+                        <span style="color: ${finalColor};">${final}<span style="font-size: 11px; opacity: 0.5;">/100</span></span>
+                    </div>
+                    <div class="viral-score-components">
+                        ${scoresData.map(s => `
+                            <div class="viral-score-component-row">
+                                <span>${s.k}</span>
+                                <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${s.v || 0}%; background: ${finalColor};"></div></div>
+                                <span>${s.v || 0}</span>
+                                <span>${s.w}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResearchCard(container, rd, meta) {
+            if (!rd || !meta) { container.innerHTML = ''; return; }
+            const rarityColor = RARITY_COLOR[rd.rarity] || "#888";
+            const compColor = COMP_COLOR[rd.competition] || "#888";
+            const trendDirColor = TREND_DIR_COLOR[rd.trendDirection] || "#888";
+            const oppColor = opportunityColor(rd.opportunityScore || 0);
+            const primaryKeywordBg = `${meta.color}12`;
+            const primaryKeywordBorder = `${meta.color}30`;
+            const primaryKeywordColor = meta.color;
+
+            container.innerHTML = `
+                <div class="card-base" style="border: 1px solid ${meta.color}38; box-shadow: 0 0 36px ${meta.glow};">
+                    <div class="card-header" style="background: linear-gradient(135deg,${meta.color}16,transparent); border-bottom: 1px solid ${meta.color}25;">
+                        <div class="rank-display">
+                            <div class="rank-circle" style="background: ${meta.color}; box-shadow: 0 0 12px ${meta.glow};">#${meta.rank}</div>
+                            <div class="rank-text">
+                                <div style="color: ${meta.color};">${meta.label}</div>
+                                <div style="font-size: 15px; font-weight: 800; line-height: 1.3;">${rd.clipName}</div>
+                            </div>
+                        </div>
+                        <div class="research-card-header-meta">
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${rarityColor}40; color: ${rarityColor};">💎 ${rd.rarity}</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${compColor}40; color: ${compColor};">⚔️ ${rd.competition} Competition</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(240,240,245,0.5)40; color: rgba(240,240,245,0.5);">🔎 ${rd.difficulty} Find</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${trendDirColor}40; color: ${trendDirColor};">📈 ${rd.trendDirection} Trend</span>
+                            <span style="background: rgba(255,255,255,0.06); border: 1px solid ${oppColor}40; color: ${oppColor};">🚀 Opportunity ${rd.opportunityScore ?? '–'}</span>
+                        </div>
+                        ${rd.alerts?.length > 0 ? `
+                            <div class="research-card-alerts">
+                                ${rd.alerts.map(a => {
+                                    const am = ALERT_META[a] || { icon: "⚡", color: "#888" };
+                                    return `<span style="background: ${am.color}14; border: 1px solid ${am.color}40; color: ${am.color};">${am.icon} ${a}</span>`;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="card-body">
+                        <div class="primary-keyword-section">
+                            <div class="primary-keyword-section .tag-label">🎯 Primary SEO Keyword</div>
+                            <div class="primary-keyword-display" style="background: ${primaryKeywordBg}; border: 1px solid ${primaryKeywordBorder}; color: ${primaryKeywordColor};">${rd.primaryKeyword}</div>
+                        </div>
+                        <div class="secondary-keywords-section">
+                            <div class="secondary-keywords-section .tag-label">🔑 Secondary Keywords</div>
+                            <div class="secondary-keywords-display">
+                                ${(rd.secondaryKeywords || []).map(k => `
+                                    <span style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);">${k}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="why-it-ranks-box">
+                            <div style="color: rgba(240,240,245,0.27);">📝 Why It Ranks Here</div>
+                            <div style="color: rgba(240,240,245,0.72);">${rd.whyHere}</div>
+                        </div>
+                        <div class="hook-escalation-scores">
+                            <div class="score-display-item">
+                                <div style="color: rgba(240,240,245,0.25);">🪝 Hook Score</div>
+                                <div class="score-value-bar">
+                                    <span style="color: ${opportunityColor(rd.viralScore?.hook || 0)};">${rd.viralScore?.hook ?? '–'}</span>
+                                    <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${rd.viralScore?.hook || 0}%; background: ${opportunityColor(rd.viralScore?.hook || 0)};"></div></div>
+                                </div>
+                            </div>
+                            <div class="score-display-item">
+                                <div style="color: rgba(240,240,245,0.25);">🪜 Escalation Score</div>
+                                <div class="score-value-bar">
+                                    <span style="color: ${opportunityColor(rd.escalationScore || 0)};">${rd.escalationScore ?? '–'}</span>
+                                    <div class="score-bar-fill"><div class="score-bar-inner" style="width: ${rd.escalationScore || 0}%; background: ${opportunityColor(rd.escalationScore || 0)};"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="emotion-scores-section">
+                            <div class="emotion-scores-section .tag-label">🎭 Emotion Scores</div>
+                            <div class="emotion-grid"></div> <!-- Render EmotionGrid here -->
+                        </div>
+                        <div class="viral-score-wheel-section"></div> <!-- Render ViralScoreWheel here -->
+                        <div class="src-panel-container"></div> <!-- Render SrcPanel here -->
+                    </div>
+                </div>
+            `;
+            renderEmotionGrid(container.querySelector('.emotion-grid'), rd.emotionScore);
+            renderViralScoreWheel(container.querySelector('.viral-score-wheel-section'), rd.viralScore);
+            renderSrcPanel(container.querySelector('.src-panel-container'), rd.sources);
+        }
+
+        function renderAllSourcesView(container, ranks) {
+            if (!ranks) { container.innerHTML = ''; return; }
+            let currentPlatform = 'youtube'; // Default tab
+
+            const tabContainer = document.createElement('div');
+            tabContainer.className = 'all-sources-view-tabs';
+            ['youtube', 'tiktok', 'reddit'].forEach(p => {
+                const pc = PLATFORM_CFG[p];
+                const button = document.createElement('button');
+                button.textContent = `${pc.icon} ${pc.name}`;
+                button.onclick = () => {
+                    currentPlatform = p;
+                    updateAllSourcesContent();
+                    Array.from(tabContainer.children).forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    button.style.background = `${pc.color}14`;
+                    button.style.border = `1px solid ${pc.color}35`;
+                    button.style.color = pc.color;
+                };
+                tabContainer.appendChild(button);
+            });
+            container.appendChild(tabContainer);
+
+            const contentContainer = document.createElement('div');
+            contentContainer.className = 'all-sources-view-container';
+            container.appendChild(contentContainer);
+
+            function updateAllSourcesContent() {
+                const cfg = PLATFORM_CFG[currentPlatform];
+                contentContainer.innerHTML = `
+                    <div class="all-sources-view-header" style="background: ${cfg.color}0e; border-bottom: 1px solid ${cfg.color}20;">
+                        <span style="color: ${cfg.color};">${cfg.icon} ${cfg.name} — All Ranks</span>
+                    </div>
+                    <div class="all-sources-view-content"></div>
+                `;
+                const ranksContentDiv = contentContainer.querySelector('.all-sources-view-content');
+
+                ranks.forEach(r => {
+                    const rm = RANK_META.find(m => m.rank === r.rank);
+                    const src = r.sources?.[currentPlatform] || {};
+                    const queries = src.queries || [];
+                    const extras = src.shorts || src.hashtags || src.subreddits || [];
+
+                    const rankItem = document.createElement('div');
+                    rankItem.className = 'all-sources-rank-item';
+                    rankItem.innerHTML = `
+                        <div class="all-sources-rank-header">
+                            <span style="background: ${rm?.color};">#${r.rank}</span>
+                            <span>${rm?.label}</span>
+                            ${r.clipName ? `<span>— ${r.clipName}</span>` : ''}
+                        </div>
+                        <div class="all-sources-query-row"></div>
+                        <div class="all-sources-extra-row"></div>
+                    `;
+                    const queryRow = rankItem.querySelector('.all-sources-query-row');
+                    const extraRow = rankItem.querySelector('.all-sources-extra-row');
+
+                    queries.forEach(q => {
+                        const lbl = `"${q.length > 28 ? q.slice(0, 28) + "…" : q}"`;
+                        queryRow.appendChild(createPlatformBtn(currentPlatform, lbl, cfg.searchUrl(q), true));
+                    });
+
+                    extras.forEach(x => {
+                        let url, lbl;
+                        if (currentPlatform === "youtube") {
+                            url = PLATFORM_CFG.youtube.shortsUrl(x);
+                            lbl = `"${x}"`;
+                        } else if (currentPlatform === "tiktok") {
+                            url = PLATFORM_CFG.tiktok.tagUrl(x);
+                            lbl = `#${x}`;
+                        } else { // reddit
+                            url = PLATFORM_CFG.reddit.subUrl(x);
+                            lbl = `r/${x}`;
+                        }
+                        extraRow.appendChild(createPlatformBtn(currentPlatform, lbl, url, true));
+                    });
+                    ranksContentDiv.appendChild(rankItem);
+                });
+
+                // Highlight active tab
+                Array.from(tabContainer.children).forEach(btn => btn.classList.remove('active'));
+                tabContainer.querySelector(`button:contains(${PLATFORM_CFG[currentPlatform].name})`).classList.add('active'); // Basic matching
+                const activeButton = Array.from(tabContainer.children).find(btn => btn.textContent.includes(PLATFORM_CFG[currentPlatform].name));
+                 if (activeButton) {
+                    activeButton.style.background = `${PLATFORM_CFG[currentPlatform].color}14`;
+                    activeButton.style.border = `1px solid ${PLATFORM_CFG[currentPlatform].color}35`;
+                    activeButton.style.color = PLATFORM_CFG[currentPlatform].color;
+                }
+            }
+            updateAllSourcesContent(); // Initial render
+        }
+
+
+        // --- Main App Logic (Vanilla JS) ---
+        const appState = {
+            topic: '',
+            mode: 'research', // Default to research as per user's request
+            dateFilter: '7 Days',
+            loading: false,
+            retryMsg: '',
+            scriptData: null,
+            researchData: null,
+            error: null,
+            activeRank: 6, // Default to rank 6 for display
+            activeView: 'ranks',
+            copied: false,
+            phaseIdx: 0,
+            intervalId: null, // For loading animation
+            referenceChannels: '',
+            styleInstructions: '',
+            activeProvider: 'google', // Default provider
+            availableModels: [],
+            selectedModel: 'gemini-flash-latest', // Default model for google
         };
 
-        const SURPRISE_NICHES = [
-          "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
-          "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
-          "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
-          "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
-          "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
-          "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
-          "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
+        const phases = [
+            "Analyzing viral potential…", "Mapping emotional curve…", "Building escalation logic…",
+            "Scanning trend signals…", "Generating clip sources…", "Unlocking final payoff…",
         ];
 
-        const STORAGE_KEY = 'viralRadarState_v1';
+        const STORAGE_KEY = 'viralRadarState_v1_vanilla';
+
+        // Helper to update state and re-render
+        function updateState(newState) {
+            Object.assign(appState, newState);
+            renderApp();
+            persistState(); // Persist state on every update
+        }
+
+        // Persist state to localStorage
+        function persistState() {
+            try {
+                const stateToSave = {
+                    topic: appState.topic,
+                    mode: appState.mode,
+                    dateFilter: appState.dateFilter,
+                    scriptData: appState.scriptData,
+                    researchData: appState.researchData,
+                    activeRank: appState.activeRank,
+                    activeView: appState.activeView,
+                    referenceChannels: appState.referenceChannels,
+                    styleInstructions: appState.styleInstructions,
+                    activeProvider: appState.activeProvider,
+                    selectedModel: appState.selectedModel,
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+            } catch (e) {
+                console.error("Failed to save state to localStorage:", e);
+            }
+        }
+
+        // Restore state from localStorage
+        function restoreState() {
+            try {
+                const savedState = localStorage.getItem(STORAGE_KEY);
+                if (savedState) {
+                    const parsedState = JSON.parse(savedState);
+                    Object.assign(appState, parsedState);
+                    if (parsedState.researchData || parsedState.scriptData) {
+                        appState.restored = true;
+                    }
+                    console.log("State restored:", appState);
+                }
+            } catch (e) {
+                console.error("Failed to restore state from localStorage:", e);
+            }
+        }
+
+        // Fetch available providers and models (simulated or real from worker)
+        async function fetchProviderConfig() {
+            try {
+                const response = await fetch(`${WORKER_BASE_URL}/`);
+                const data = await response.json();
+
+                const providersConfig = {};
+                if (data.providers_configured.google) providersConfig.google = { name: "Google AI Studio", models: [{ id: "gemini-flash-latest", name: "Gemini Flash (Default)" }, { id: "gemini-pro-latest", name: "Gemini Pro (Latest)" }] };
+                if (data.providers_configured.openrouter) providersConfig.openrouter = { name: "OpenRouter", models: [{ id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" }, { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" }, { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }] };
+                // Add other providers if configured in worker
+
+                // Default to first available provider
+                const firstProviderKey = Object.keys(providersConfig)[0];
+                if (firstProviderKey) {
+                    appState.activeProvider = firstProviderKey;
+                    appState.availableModels = providersConfig[firstProviderKey].models;
+                    appState.selectedModel = appState.availableModels[0]?.id || '';
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch provider config:", error);
+                // Fallback to hardcoded if worker fails
+                appState.availableModels = [{ id: "gemini-flash-latest", name: "Gemini Flash (Default)" }];
+                appState.selectedModel = "gemini-flash-latest";
+            }
+        }
+
+        async function initApp() {
+            await fetchProviderConfig(); // Fetch provider config on load
+            restoreState(); // Restore state after fetching provider config
+            renderApp();
+            // Start loading animation if needed (e.g., if restored state indicates it)
+            if (appState.loading) {
+                appState.intervalId = setInterval(() => updateState({ phaseIdx: (appState.phaseIdx + 1) % phases.length }), 900);
+            }
+        }
+
+        // Main rendering function
+        function renderApp() {
+            const root = document.getElementById('root');
+            root.innerHTML = ''; // Clear existing content
+
+            const shell = document.createElement('div');
+            shell.className = 'shell';
+            shell.id = 'app-shell'; // Give it an ID to attach event listeners
+
+            // --- Nav ---
+            const nav = document.createElement('div');
+            nav.className = 'nav';
+            nav.innerHTML = `
+                <div class="nav-brand">
+                    <span class="nav-mark">✦</span>
+                    <span class="nav-name">Viral Radar</span>
+                </div>
+                <span class="nav-badge">FREE · NO SIGNUP</span>
+            `;
+            shell.appendChild(nav);
+
+            // --- Hero ---
+            const hero = document.createElement('div');
+            hero.className = 'hero';
+            hero.innerHTML = `
+                <div class="hero-tag"><span class="dot"></span> 5 AI agents · real YouTube grounding</div>
+                <h1>Stop guessing<br />what goes <span>viral</span>.</h1>
+                <p>Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.</p>
+            `;
+            shell.appendChild(hero);
+
+            // --- Console Input ---
+            const consoleDiv = document.createElement('div');
+            consoleDiv.className = 'console';
+            consoleDiv.innerHTML = `
+                <div class="console-head">
+                    <span class="cdot" style="background: #ff5f57;"></span>
+                    <span class="cdot" style="background: #febc2e;"></span>
+                    <span class="cdot" style="background: #28c840;"></span>
+                    <span style="margin-left: 6px;">research.sh</span>
+                </div>
+                <div class="console-body">
+                    <div class="console-prompt">
+                        <span class="caret">›</span>
+                        <input type="text" id="topic-input" placeholder="e.g. Worst Martial Arts Fails" ${appState.loading ? 'disabled' : ''}>
+                        ${!appState.topic && !appState.loading ? '<span class="console-cursor"></span>' : ''}
+                        <button type="button" class="surprise-btn" id="surprise-btn" ${appState.loading ? 'disabled' : ''} title="Suggest a niche">🎲</button>
+                    </div>
+
+                    <div class="config-row">
+                        <div class="select-wrap">
+                            <select id="platform-select" ${appState.loading ? 'disabled' : ''}>
+                                <option value="youtube">YouTube</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="instagram">Instagram</option>
+                                <option value="twitter">Twitter</option>
+                                <option value="linkedin">LinkedIn</option>
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <select id="provider-select" ${appState.loading ? 'disabled' : ''}>
+                                ${Object.keys(PLATFORM_CFG).map(key => `<option value="${key}" ${appState.activeProvider === key ? 'selected' : ''}>${PLATFORM_CFG[key].name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="select-wrap">
+                            <select id="model-select" ${appState.loading || !appState.availableModels.length ? 'disabled' : ''}>
+                                ${appState.availableModels.map(m => `<option value="${m.id}" ${appState.selectedModel === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="ref-channels-block">
+                        <div class="ref-channels-label">
+                            <span>◆ Creative brief <span class="ref-optional">(optional — describe the exact format you want)</span></span>
+                        </div>
+                        <textarea id="style-instructions-textarea" class="ref-channels-input" placeholder="e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank" ${appState.loading ? 'disabled' : ''} rows="2">${appState.styleInstructions}</textarea>
+                        <div class="ref-channels-hint">This is read as direct instructions, not just a search topic — it tells the AI what "good" looks like for your niche.</div>
+                    </div>
+
+                    <div class="ref-channels-block">
+                        <div class="ref-channels-label">
+                            <span>◆ Reference channels <span class="ref-optional">(optional — teach the style you want)</span></span>
+                        </div>
+                        <textarea id="reference-channels-textarea" class="ref-channels-input" placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater" ${appState.loading ? 'disabled' : ''} rows="2">${appState.referenceChannels}</textarea>
+                        <div class="ref-channels-hint">Paste channel links whose ranked-moment style you want to match. The AI won't copy their videos — it uses them as a format/tone reference while still grounding results in fresh, real videos.</div>
+                    </div>
+
+                    <button class="run-btn" id="run-research-btn" ${appState.loading ? 'disabled' : ''}>
+                        ${appState.loading
+                            ? `<span style="animation: spin 0.8s linear infinite; display: inline-block;">⚡</span> ${phases[appState.phaseIdx]}`
+                            : `⚡ Run Research`
+                        }
+                    </button>
+                    ${appState.retryMsg ? `<div class="retry-message">${appState.retryMsg}</div>` : ''}
+                </div>
+            `;
+            shell.appendChild(consoleDiv);
+
+            // Agent Strip
+            const agentStrip = document.createElement('div');
+            agentStrip.className = 'agent-strip';
+            ['Discovery', 'Ranking', 'SEO'].forEach(a => {
+                const chip = document.createElement('span');
+                chip.className = 'agent-chip';
+                chip.textContent = `${a}Agent`;
+                agentStrip.appendChild(chip);
+            });
+            shell.appendChild(agentStrip);
+
+            if (appState.error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-box';
+                errorDiv.innerHTML = `⚠️ ${appState.error}`;
+                shell.appendChild(errorDiv);
+            }
+
+            // --- Loading Box ---
+            if (appState.loading) {
+                const loadingBox = document.createElement('div');
+                loadingBox.className = 'loading-box';
+                loadingBox.innerHTML = `
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <p>running 5 agents · up to 2 min on cold providers</p>
+                `;
+                shell.appendChild(loadingBox);
+            }
+
+            // --- Results ---
+            if ((appState.scriptData || appState.researchData) && !appState.loading) {
+                const resultsDiv = document.createElement('div');
+                resultsDiv.className = 'results';
+                resultsDiv.style.animation = 'fadeUp 0.4s ease';
+
+                const currentData = appState.mode === 'script' ? appState.scriptData : appState.researchData;
+
+                const resultsTopbar = document.createElement('div');
+                resultsTopbar.className = 'results-topbar';
+                resultsTopbar.innerHTML = `
+                    ${appState.restored ? '<span class="restored-tag">↺ restored from your last visit</span>' : '<span></span>'}
+                    <button class="new-search-btn" id="new-search-btn">New search</button>
+                `;
+                resultsDiv.appendChild(resultsTopbar);
+
+                // --- Results Header ---
+                const resultsHeader = document.createElement('div');
+                resultsHeader.className = 'results-header';
+                resultsHeader.innerHTML = `
+                    <div>
+                        <div>${appState.mode === "script" ? "Script" : "Research"} — ${currentData?.dateFilter || ""}</div>
+                        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.02em;">${currentData?.topic}</div>
+                    </div>
+                    <div class="results-meta-tags">
+                        ${appState.mode === "research" && currentData?.trendStatus ? `
+                            <span class="trend-status" style="border: 1px solid ${TREND_COLOR[currentData.trendStatus] || '#888'}40; color: ${TREND_COLOR[currentData.trendStatus] || '#888'};">📈 ${currentData.trendStatus}</span>
+                        ` : ''}
+                        ${appState.mode === "research" && currentData?.overallOpportunity ? `
+                            <span class="opportunity-score">🚀 ${currentData.overallOpportunity} Opp</span>
+                        ` : ''}
+                        ${appState.mode === "script" && currentData?.viralPotential ? `
+                            <span class="viral-potential">🔥 ${currentData.viralPotential}</span>
+                        ` : ''}
+                        <button class="copy-button" id="copy-results-btn">${appState.copied ? '✔ Copied' : '📋 Copy'}</button>
+                    </div>
+                `;
+                resultsDiv.appendChild(resultsHeader);
+
+
+                // --- Hook Section (Script Mode) ---
+                if (appState.mode === "script" && currentData?.openLoopHook) {
+                    const hookSection = document.createElement('div');
+                    hookSection.className = 'hook-section';
+                    hookSection.innerHTML = `
+                        <div>⚡ 0–2s Scroll Stop Hook</div>
+                        <div>"${currentData.openLoopHook}"</div>
+                    `;
+                    resultsDiv.appendChild(hookSection);
+                }
+
+                // --- Editor Intelligence (Research Mode) ---
+                if (appState.mode === "research" && currentData?.editorNotes) {
+                    const en = currentData.editorNotes;
+                    const editorIntelligence = document.createElement('div');
+                    editorIntelligence.className = 'editor-intelligence';
+                    editorIntelligence.innerHTML = `
+                        <div>📊 Editor Intelligence</div>
+                        <div class="editor-notes-grid">
+                            <div class="editor-note-item">
+                                <div>⚡ Find First</div>
+                                <div>${en.findFirst}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔍 Hardest to Find</div>
+                                <div>${en.hardestToFind}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔥 Most Viral</div>
+                                <div>${en.mostViralClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔎 Most Searchable</div>
+                                <div>${en.mostSearchableClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>💎 Most Unique</div>
+                                <div>${en.mostUniqueClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🔄 Best Replay</div>
+                                <div>${en.bestReplayClip}</div>
+                            </div>
+                            <div class="editor-note-item">
+                                <div>🪝 Opening Hook</div>
+                                <div>${en.openingHook}</div>
+                            </div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(editorIntelligence);
+                }
+
+                // --- View Selector ---
+                const viewSelector = document.createElement('div');
+                viewSelector.className = 'view-selector';
+                [{ id: "ranks", icon: "🎯", label: "Per Rank" }, { id: "sources", icon: "🔗", label: "All Sources" }].forEach(v => {
+                    const button = document.createElement('button');
+                    button.textContent = `${v.icon} ${v.label}`;
+                    button.classList.toggle('active', appState.activeView === v.id);
+                    button.onclick = () => updateState({ activeView: v.id });
+                    viewSelector.appendChild(button);
+                });
+                resultsDiv.appendChild(viewSelector);
+
+                // --- Conditional Content (Ranks or All Sources) ---
+                if (appState.activeView === 'ranks') {
+                    const ranksContent = document.createElement('div');
+                    const rankSelector = document.createElement('div');
+                    rankSelector.className = 'rank-selector';
+                    [...RANK_META].reverse().forEach(m => {
+                        const button = document.createElement('button');
+                        button.textContent = `#${m.rank}`;
+                        button.classList.toggle('active', appState.activeRank === m.rank);
+                        if (appState.activeRank === m.rank) {
+                            button.style.background = m.color;
+                            button.style.boxShadow = `0 0 13px ${m.glow}`;
+                        }
+                        button.onclick = () => updateState({ activeRank: m.rank });
+                        rankSelector.appendChild(button);
+                    });
+                    ranksContent.appendChild(rankSelector);
+
+                    const activeMeta = RANK_META.find(m => m.rank === appState.activeRank);
+                    const activeRankData = currentData?.ranks?.find(r => r.rank === appState.activeRank);
+                    const cardContainer = document.createElement('div'); // Temporary container for the card
+                    if (appState.mode === 'script') {
+                        renderScriptCard(cardContainer, activeRankData, activeMeta);
+                    } else {
+                        renderResearchCard(cardContainer, activeRankData, activeMeta);
+                    }
+                    ranksContent.appendChild(cardContainer.firstChild); // Append the actual card element
+                    resultsDiv.appendChild(ranksContent);
+                } else if (appState.activeView === 'sources') {
+                    const allSourcesContainer = document.createElement('div');
+                    renderAllSourcesView(allSourcesContainer, currentData?.ranks);
+                    resultsDiv.appendChild(allSourcesContainer);
+                }
+
+                // --- Footer Sections (Clip DNA & Replay Hook) ---
+                const footerSections = document.createElement('div');
+                footerSections.style.display = 'flex';
+                footerSections.style.gap = '12px';
+                footerSections.style.flexWrap = 'wrap';
+                footerSections.style.marginTop = '16px';
+
+                if (appState.mode === "script" && currentData?.clipDNA) {
+                    const dnaSection = document.createElement('div');
+                    dnaSection.className = 'dna-section';
+                    dnaSection.style.flex = '1';
+                    dnaSection.style.minWidth = '220px';
+                    dnaSection.innerHTML = `
+                        <div>🧬 Clip DNA</div>
+                        <div class="dna-items">
+                            ${Object.entries(currentData.clipDNA).map(([k, v]) => `
+                                <div class="dna-item">
+                                    <div>${k}</div>
+                                    <div>${v}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    footerSections.appendChild(dnaSection);
+                }
+
+                if (appState.mode === "script" && currentData?.replayQuestion) {
+                    const replaySection = document.createElement('div');
+                    replaySection.className = 'replay-section';
+                    replaySection.style.flex = '1';
+                    replaySection.style.minWidth = '180px';
+                    replaySection.innerHTML = `
+                        <div>🔄 Replay Hook</div>
+                        <div>${currentData.replayQuestion}</div>
+                    `;
+                    footerSections.appendChild(replaySection);
+                }
+                if (footerSections.children.length > 0) {
+                    resultsDiv.appendChild(footerSections);
+                }
+
+                shell.appendChild(resultsDiv);
+            } else if (!appState.hasResult && !appState.loading) {
+                const emptyState = document.createElement('div');
+                emptyState.style.textAlign = 'center';
+                emptyState.style.padding = '55px 20px';
+                emptyState.style.color = 'rgba(240,240,245,0.16)';
+                emptyState.innerHTML = `
+                    <div style="font-size: 42px; margin-bottom: 9px;">${appState.mode === "script" ? "🎬" : "📊"}</div>
+                    <div style="font-size: 13px;">${appState.mode === "script" ? "Enter a topic to generate your viral script + clip sources" : "Enter a topic to run viral research + SEO analysis"}</div>
+                `;
+                shell.appendChild(emptyState);
+            }
+
+            root.appendChild(shell);
+
+            // --- Attach Event Listeners (after rendering) ---
+            document.getElementById('topic-input').value = appState.topic;
+            document.getElementById('topic-input').addEventListener('input', (e) => updateState({ topic: e.target.value }));
+            document.getElementById('topic-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !appState.loading) handleResearch();
+            });
+
+            document.getElementById('surprise-btn').addEventListener('click', handleSurpriseMe);
+
+            document.getElementById('platform-select').value = appState.platform;
+            document.getElementById('platform-select').addEventListener('change', (e) => updateState({ platform: e.target.value }));
+
+            document.getElementById('provider-select').value = appState.activeProvider;
+            document.getElementById('provider-select').addEventListener('change', (e) => {
+                const newProvider = e.target.value;
+                const config = PLATFORM_CFG[newProvider];
+                updateState({
+                    activeProvider: newProvider,
+                    availableModels: config.models || [],
+                    selectedModel: config.models[0]?.id || '',
+                });
+            });
+
+            document.getElementById('model-select').value = appState.selectedModel;
+            document.getElementById('model-select').addEventListener('change', (e) => updateState({ selectedModel: e.target.value }));
+
+
+            document.getElementById('style-instructions-textarea').addEventListener('input', (e) => updateState({ styleInstructions: e.target.value }));
+            document.getElementById('reference-channels-textarea').addEventListener('input', (e) => updateState({ referenceChannels: e.target.value }));
+
+            document.getElementById('run-research-btn').addEventListener('click', handleResearch);
+
+            if (document.getElementById('new-search-btn')) {
+                document.getElementById('new-search-btn').addEventListener('click', handleNewSearch);
+            }
+            if (document.getElementById('copy-results-btn')) {
+                document.getElementById('copy-results-btn').addEventListener('click', copyResults);
+            }
+
+            // Example topic buttons
+            const exampleTopicsContainer = document.querySelector('.example-topics');
+            if (exampleTopicsContainer) {
+                exampleTopicsContainer.innerHTML = ''; // Clear previous example buttons
+                EXAMPLE_TOPICS.forEach(t => {
+                    const button = document.createElement('button');
+                    button.textContent = t;
+                    button.classList.toggle('active', appState.topic === t);
+                    button.disabled = appState.loading;
+                    button.onclick = () => updateState({ topic: t });
+                    exampleTopicsContainer.appendChild(button);
+                });
+            }
+
+            // Date filter buttons
+            const dateFilterContainer = document.querySelector('.date-filter-buttons');
+            if (dateFilterContainer) {
+                dateFilterContainer.innerHTML = '';
+                DATE_FILTERS.forEach(d => {
+                    const button = document.createElement('button');
+                    button.textContent = d;
+                    button.classList.toggle('active', appState.dateFilter === d);
+                    button.disabled = appState.loading;
+                    button.onclick = () => updateState({ dateFilter: d });
+                    dateFilterContainer.appendChild(button);
+                });
+            }
+
+             // Mode selector buttons
+            const modeSelectorDiv = document.querySelector('.mode-selector');
+            if(modeSelectorDiv) {
+                modeSelectorDiv.innerHTML = '';
+                [
+                    { id: "script", icon: "🎬", label: "Script Builder", sub: "6-rank video script + sources" },
+                    { id: "research", icon: "📊", label: "Research Engine", sub: "Viral scoring + SEO + trends" },
+                ].forEach(m => {
+                    const button = document.createElement('button');
+                    button.innerHTML = `
+                        <div style="color: ${appState.mode === m.id ? '#FF0050' : 'rgba(240,240,245,0.45)'};">${m.icon} ${m.label}</div>
+                        <div style="font-size: 10px; color: rgba(240,240,245,0.28);">${m.sub}</div>
+                    `;
+                    button.classList.toggle('active', appState.mode === m.id);
+                    button.onclick = () => updateState({ mode: m.id, activeRank: null, error: null });
+                    modeSelectorDiv.appendChild(button);
+                });
+            }
+
+
+            // Render Retention Curve
+            const retentionCurveContainer = document.querySelector('.retention-curve');
+            if (retentionCurveContainer) {
+                renderRetentionCurve(retentionCurveContainer);
+            }
+        }
+
+        // --- Event Handlers ---
+        async function handleResearch() {
+            if (!appState.topic.trim()) {
+                updateState({ error: "Enter a topic first." });
+                return;
+            }
+            updateState({ loading: true, error: null, scriptData: null, researchData: null, phaseIdx: 0, restored: false });
+            appState.intervalId = setInterval(() => updateState({ phaseIdx: (appState.phaseIdx + 1) % phases.length }), 900);
+
+            try {
+                const payload = {
+                    topic: appState.topic.trim(),
+                    dateFilter: appState.dateFilter,
+                    provider: appState.activeProvider,
+                    model: appState.selectedModel,
+                    referenceChannels: parseReferenceChannels(appState.referenceChannels),
+                    styleInstructions: appState.styleInstructions.trim(),
+                };
+
+                // This calls the unified /api/generate endpoint in the Cloudflare Worker
+                const result = await callWorkerAPI('/api/generate', payload);
+
+                if (appState.mode === 'script') {
+                    // Script data comes directly from LLM response structure for SCRIPT_PROMPT
+                    updateState({ scriptData: result });
+                } else {
+                    // Research data comes directly from LLM response structure for RESEARCH_PROMPT (new worker prompt)
+                    updateState({ researchData: result });
+                }
+            } catch (err) {
+                console.error("Research failed:", err);
+                updateState({ error: err.message });
+            } finally {
+                clearInterval(appState.intervalId);
+                updateState({ loading: false, intervalId: null, activeRank: 6, activeView: 'ranks' });
+            }
+        }
+
+        function handleNewSearch() {
+            clearInterval(appState.intervalId);
+            updateState({
+                topic: '',
+                mode: 'research',
+                dateFilter: '7 Days',
+                loading: false,
+                retryMsg: '',
+                scriptData: null,
+                researchData: null,
+                error: null,
+                activeRank: 6,
+                activeView: 'ranks',
+                copied: false,
+                phaseIdx: 0,
+                intervalId: null,
+                referenceChannels: '',
+                styleInstructions: '',
+                restored: false
+            });
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+        }
+
+        function handleSurpriseMe() {
+            const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+            updateState({ topic: pick });
+        }
 
         function parseReferenceChannels(raw) {
           if (!raw || !raw.trim()) return [];
@@ -1218,255 +1902,25 @@ REQUIRED JSON FORMAT:
             .slice(0, 5);
         }
 
-        function App() {
-          const [topic, setTopic] = useState('');
-          const [platform, setPlatform] = useState('YouTube');
-          const [referenceChannels, setReferenceChannels] = useState('');
-          const [styleInstructions, setStyleInstructions] = useState('');
-          const [loading, setLoading] = useState(false);
-          const [error, setError] = useState(null);
-          const [results, setResults] = useState(null);
-          const [activeProvider, setActiveProvider] = useState(AIProvider.getCurrentProviderName());
-          const [availableModels, setAvailableModels] = useState([]);
-          const [selectedModel, setSelectedModel] = useState('');
-          const [restored, setRestored] = useState(false);
+        function copyResults() {
+            const currentData = appState.mode === "script" ? appState.scriptData : appState.researchData;
+            if (!currentData) return;
 
-          useEffect(() => {
-            const config = AIProvider.listProviders();
-            let cur = AIProvider.getCurrentProviderName();
-            let provider = config[cur];
+            const t = appState.mode === "script"
+                ? `🎬 ${currentData.topic}\n\nHook: "${currentData.openLoopHook}"\n\n` +
+                (currentData.ranks || []).map(r => `#${r.rank} ${r.label}\n${r.clipDescription}\nCaption: ${r.caption}\n${r.transitionText ? `→ ${r.transitionText}` : ""}`).join("\n\n")
+                : `📊 RESEARCH: ${currentData.topic}\nDate: ${currentData.dateFilter}\nOpportunity: ${currentData.overallOpportunity}\nTrend: ${currentData.trendStatus}\n\n` +
+                (currentData.ranks || []).map(r => `#${r.rank} ${r.clipName}\nSEO: ${r.primaryKeyword}\nViral: ${r.viralScore?.final}/100 | Hook: ${r.viralScore?.hook ?? "–"} | Opportunity: ${r.opportunityScore ?? "–"} | Rarity: ${r.rarity}`).join("\n");
 
-            // Restore last session (topic, platform, reference channels, provider/model, results) so
-            // switching apps or reopening the tab does not lose prior research. Only an explicit
-            // "New search" click or clearing site data resets this.
-            try {
-              const saved = localStorage.getItem(STORAGE_KEY);
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed.topic) setTopic(parsed.topic);
-                if (parsed.platform) setPlatform(parsed.platform);
-                if (parsed.referenceChannels) setReferenceChannels(parsed.referenceChannels);
-                if (parsed.styleInstructions) setStyleInstructions(parsed.styleInstructions);
-                if (parsed.provider && config[parsed.provider]) {
-                  cur = parsed.provider;
-                  AIProvider.setProvider(cur);
-                  provider = config[cur];
-                }
-                if (parsed.results) setResults(parsed.results);
-                setRestored(!!parsed.results);
-              }
-            } catch (e) { /* localStorage unavailable (private mode) — ignore, app still works */ }
-
-            if (provider) {
-              setActiveProvider(cur);
-              setAvailableModels(provider.models || []);
-              const savedModel = (() => {
-                try {
-                  const saved = localStorage.getItem(STORAGE_KEY);
-                  return saved ? JSON.parse(saved).model : null;
-                } catch (e) { return null; }
-              })();
-              setSelectedModel((savedModel && provider.models?.some(m => m.id === savedModel)) ? savedModel : (provider.models?.[0]?.id || ''));
-            }
-          }, []);
-
-          const persist = (data) => {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) { /* ignore quota/private mode errors */ }
-          };
-
-          const handleProviderChange = (e) => {
-            const name = e.target.value;
-            AIProvider.setProvider(name);
-            const cfg = AIProvider.listProviders()[name];
-            setActiveProvider(name);
-            setAvailableModels(cfg?.models || []);
-            setSelectedModel(cfg?.models?.[0]?.id || '');
-          };
-
-          const handleNewSearch = () => {
-            setResults(null);
-            setError(null);
-            setTopic('');
-            setRestored(false);
-            try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-          };
-
-          const handleResearch = async () => {
-            if (!topic.trim()) { setError("Enter a topic first."); return; }
-            setLoading(true);
-            setError(null);
-            setResults(null);
-            setRestored(false);
-
-            try {
-              const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 120000 };
-              const allAgentResults = {};
-
-              const refChannels = parseReferenceChannels(referenceChannels);
-              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', { ...options, referenceChannels: refChannels, styleInstructions: styleInstructions.trim() });
-
-              for (const key of ['ranking', 'seo']) {
-                allAgentResults[key] = await AgentRouter.routeTask(topic, key, options);
-              }
-              setResults(allAgentResults);
-              persist({ topic, platform, provider: activeProvider, model: selectedModel, referenceChannels, styleInstructions, results: allAgentResults });
-            } catch (err) {
-              setError(err.message || "Something went wrong during research.");
-            } finally {
-              setLoading(false);
-            }
-          };
-
-          const handleKeyDown = (e) => { if (e.key === 'Enter' && !loading) handleResearch(); };
-
-          const handleSurpriseMe = () => {
-            const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
-            setTopic(pick);
-          };
-
-          return (
-            <div className="shell">
-              <div className="nav">
-                <div className="nav-brand">
-                  <span className="nav-mark">✦</span>
-                  <span className="nav-name">Viral Radar</span>
-                </div>
-                <span className="nav-badge">FREE · NO SIGNUP</span>
-              </div>
-
-              <div className="hero">
-                <div className="hero-tag"><span className="dot"></span> 5 AI agents · real YouTube grounding</div>
-                <h1>Stop guessing<br />what goes <span>viral</span>.</h1>
-                <p>Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.</p>
-
-                <div className="console">
-                  <div className="console-head">
-                    <span className="cdot" style={{ background: '#ff5f57' }}></span>
-                    <span className="cdot" style={{ background: '#febc2e' }}></span>
-                    <span className="cdot" style={{ background: '#28c840' }}></span>
-                    <span style={{ marginLeft: 6 }}>research.sh</span>
-                  </div>
-                  <div className="console-body">
-                    <div className="console-prompt">
-                      <span className="caret">›</span>
-                      <input
-                        type="text"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="how to grow a youtube channel fast"
-                        disabled={loading}
-                      />
-                      {!topic && !loading && <span className="console-cursor"></span>}
-                      <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
-                    </div>
-
-                    <div className="config-row">
-                      <div className="select-wrap">
-                        <select value={platform} onChange={(e) => setPlatform(e.target.value)} disabled={loading}>
-                          <option>YouTube</option>
-                          <option>TikTok</option>
-                          <option>Instagram</option>
-                          <option>Twitter</option>
-                          <option>LinkedIn</option>
-                        </select>
-                      </div>
-                      <div className="select-wrap">
-                        <select value={activeProvider} onChange={handleProviderChange} disabled={loading}>
-                          {Object.entries(AIProvider.listProviders()).map(([key, p]) => (
-                            <option key={key} value={key}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="select-wrap">
-                        <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
-                          {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="ref-channels-block">
-                      <div className="ref-channels-label">
-                        <span>◆ Creative brief <span className="ref-optional">(optional — describe the exact format you want)</span></span>
-                      </div>
-                      <textarea
-                        className="ref-channels-input"
-                        value={styleInstructions}
-                        onChange={(e) => setStyleInstructions(e.target.value)}
-                        placeholder={"e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank"}
-                        disabled={loading}
-                        rows={2}
-                      />
-                      <div className="ref-channels-hint">This is read as direct instructions, not just a search topic — it tells the AI what "good" looks like for your niche.</div>
-                    </div>
-
-                    <div className="ref-channels-block">
-                      <div className="ref-channels-label">
-                        <span>◆ Reference channels <span className="ref-optional">(optional — teach the style you want)</span></span>
-                      </div>
-                      <textarea
-                        className="ref-channels-input"
-                        value={referenceChannels}
-                        onChange={(e) => setReferenceChannels(e.target.value)}
-                        placeholder={"youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"}
-                        disabled={loading}
-                        rows={2}
-                      />
-                      <div className="ref-channels-hint">Paste channel links whose ranked-moment style you want to match. The AI won't copy their videos — it uses them as a format/tone reference while still grounding results in fresh, real videos.</div>
-                    </div>
-
-                    <button className="run-btn" onClick={handleResearch} disabled={loading}>
-                      {loading ? 'Scanning…' : <>Run Research →</>}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="agent-strip">
-                  {['Discovery', 'Ranking', 'SEO'].map((a) => (
-                    <span className="agent-chip" key={a}>{a}Agent</span>
-                  ))}
-                </div>
-
-                {error && <div className="error-box">⚠ {error}</div>}
-              </div>
-
-              {loading && (
-                <div className="loading-box">
-                  <div className="spinner" style={{ margin: '0 auto' }}></div>
-                  <p>running 5 agents · up to 2 min on cold providers</p>
-                </div>
-              )}
-
-              {results && !loading && (
-                <div className="results">
-                  <div className="results-topbar">
-                    {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
-                    <button className="new-search-btn" onClick={handleNewSearch}>New search</button>
-                  </div>
-                  {Object.entries(results).map(([key, agentResult], idx) => {
-                    const display = AGENT_DISPLAY[key] || { title: key, Panel: null };
-                    const Panel = display.Panel;
-                    return (
-                      <div className="agent-block" key={key} style={{ animationDelay: `${idx * 0.06}s` }}>
-                        <AgentHeader index={idx + 1} title={display.title} meta={!agentResult.error ? agentResult.metadata : null} />
-                        {agentResult.error ? (
-                          <div className="err-panel">⚠ {agentResult.error}</div>
-                        ) : agentResult.result && Panel ? (
-                          <Panel result={agentResult.result} />
-                        ) : (
-                          <div className="empty-panel">No results generated.</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
+            navigator.clipboard.writeText(t).then(() => {
+                updateState({ copied: true });
+                setTimeout(() => updateState({ copied: false }), 2000);
+            });
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
+```*_
