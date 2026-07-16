@@ -100,6 +100,13 @@
         .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
 
         .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
+        .ref-channels-block { padding: 10px 4px 14px; border-top: 1px dashed var(--border); margin-top: 2px; }
+        .ref-channels-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); margin-bottom: 7px; letter-spacing: 0.02em; }
+        .ref-optional { color: var(--text-faint); font-weight: 400; }
+        .ref-channels-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 9px 11px; border-radius: 8px; resize: vertical; line-height: 1.5; }
+        .ref-channels-input::placeholder { color: var(--text-faint); }
+        .ref-channels-input:focus { outline: none; border-color: var(--acid-dim); }
+        .ref-channels-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
         .select-wrap { position: relative; }
         .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
         .select-wrap select {
@@ -367,7 +374,7 @@
             },
 
             async generateWithYouTube(topic, options = {}) {
-                const { providerName, model, dateFilter, searchQuery } = options;
+                const { providerName, model, dateFilter, searchQuery, referenceChannels } = options;
                 const workerUrl = `${WORKER_BASE_URL}/api/generate`;
 
                 const controller = new AbortController();
@@ -385,7 +392,10 @@
                   const { ok, status, data } = await fetchWithRetry(workerUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ topic: searchQuery || topic, dateFilter: dateFilter || "7 Days", provider: providerName || null }),
+                    body: JSON.stringify({
+                      topic: searchQuery || topic, dateFilter: dateFilter || "7 Days", provider: providerName || null,
+                      referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined
+                    }),
                     signal: signal
                   });
                   rawData = data;
@@ -423,7 +433,7 @@
             listProviders() { return providersConfig; }
         };
 
-        async function runDiscovery({ task, platform, providerName, model, timeout }) {
+        async function runDiscovery({ task, platform, providerName, model, timeout, referenceChannels }) {
           const agentStartTime = Date.now();
           let agentOutput = {
             agent: "DiscoveryAgent", version: "1.0.0",
@@ -452,7 +462,7 @@
 
           try {
             const llmResponse = await AIProvider.generateWithYouTube(task, {
-              providerName, model, timeout, dateFilter, searchQuery
+              providerName, model, timeout, dateFilter, searchQuery, referenceChannels
             });
 
             if (llmResponse.success) {
@@ -571,13 +581,10 @@
             const prompt = `Create a 6-rank narrative structure for: "${contentDescription}" (${platform || 'general'} platform). Use exactly these ranks with segment names:
             6=Hook, 5=Interest, 4=Context, 3=Escalation, 2=False Winner, 1=Payoff
 
-            For EACH rank item, also include a "momentSuggestion" object with editorial guidance (a suggestion, not a verified fact — you have not watched any video frame-by-frame):
-            { "suggestion": "short editorial idea for this beat, e.g. 'lead with a fast zoom on the reaction'", "confidence": 0.0-1.0 }
-
             Provide ONLY valid JSON with rankOrder array (6 items exactly) and retentionPrediction. NO prose, NO markdown.
 
             REQUIRED JSON FORMAT:
-            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "...", "momentSuggestion": {"suggestion": "...", "confidence": 0.7}}, ...], "retentionPrediction": "..." }`;
+            { "rankOrder": [{"rank": "#6", "segment": "Hook", "content": "..."}, ...], "retentionPrediction": "..." }`;
 
             const llmResponse = await AIProvider.analyze(prompt, {
               providerName, model, timeout,
@@ -586,10 +593,7 @@
                 properties: {
                   rankOrder: {
                     type: "array",
-                    items: { type: "object", properties: {
-                      rank: { type: "string" }, segment: { type: "string" }, content: { type: "string" },
-                      momentSuggestion: { type: "object", properties: { suggestion: { type: "string" }, confidence: { type: "number", minimum: 0, maximum: 1 } } }
-                    }, required: ["rank", "segment", "content"] },
+                    items: { type: "object", properties: { rank: { type: "string" }, segment: { type: "string" }, content: { type: "string" } }, required: ["rank", "segment", "content"] },
                     minItems: 6, maxItems: 6
                   },
                   retentionPrediction: { type: "string" }
@@ -608,16 +612,7 @@
                   if (typeof rawRank === 'number') { rankNum = rawRank; }
                   else if (typeof rawRank === 'string') { rankNum = parseInt(rawRank.replace('#', '').trim(), 10) || 0; }
                   if (!rankNum && llmData.rankOrder.length === 6) { rankNum = 6 - idx; }
-                  // Label editorial guidance explicitly as AI_SUGGESTION per JSON_CONTRACT.md v0.2 —
-                  // never presented as verified evidence, always requires human review.
-                  const rawSuggestion = rankItem.momentSuggestion;
-                  const momentSuggestion = rawSuggestion && rawSuggestion.suggestion ? {
-                    type: "AI_SUGGESTION",
-                    suggestion: String(rawSuggestion.suggestion),
-                    confidence: typeof rawSuggestion.confidence === 'number' ? Math.min(1, Math.max(0, rawSuggestion.confidence)) : 0.5,
-                    requires_human_review: true
-                  } : null;
-                  return { ...rankItem, rank: rankItem.rank ? String(rankItem.rank) : `#${rankNum}`, rankNum: Number.isInteger(rankNum) ? rankNum : 0, momentSuggestion };
+                  return { ...rankItem, rank: rankItem.rank ? String(rankItem.rank) : `#${rankNum}`, rankNum: Number.isInteger(rankNum) ? rankNum : 0 };
                 }).filter(item => item.rankNum >= 1 && item.rankNum <= 6);
 
                 parsedRanks.sort((a, b) => b.rankNum - a.rankNum);
@@ -1086,12 +1081,6 @@ REQUIRED JSON FORMAT:
                       <span className="tl-dot">{item.rank?.replace('#', '')}</span>
                       <div className="tl-seg">{item.segment}</div>
                       <div className="tl-content">{item.content}</div>
-                      {item.momentSuggestion?.suggestion && (
-                        <div className="suggestion-box">
-                          <span className="sugg-badge">AI SUGGESTION · {Math.round((item.momentSuggestion.confidence || 0) * 100)}%</span>
-                          <span className="sugg-text">{item.momentSuggestion.suggestion}</span>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1199,11 +1188,8 @@ REQUIRED JSON FORMAT:
 
         const AGENT_DISPLAY = {
           discovery: { title: 'Discovery', Panel: DiscoveryPanel },
-          scoring: { title: 'Scoring', Panel: ScoringPanel },
           ranking: { title: 'Ranking', Panel: RankingPanel },
-          intelligence: { title: 'Intelligence', Panel: IntelligencePanel },
           seo: { title: 'SEO', Panel: SeoPanel },
-          competitor: { title: 'Competitor', Panel: CompetitorPanel },
         };
 
         const SURPRISE_NICHES = [
@@ -1218,9 +1204,23 @@ REQUIRED JSON FORMAT:
 
         const STORAGE_KEY = 'viralRadarState_v1';
 
+        function parseReferenceChannels(raw) {
+          if (!raw || !raw.trim()) return [];
+          return raw.split(/[\n,]/)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(s => {
+              const m = s.match(/@([\w.-]+)/);
+              return m ? '@' + m[1] : (s.startsWith('@') ? s : '@' + s);
+            })
+            .filter((v, i, arr) => arr.indexOf(v) === i)
+            .slice(0, 5);
+        }
+
         function App() {
           const [topic, setTopic] = useState('');
           const [platform, setPlatform] = useState('YouTube');
+          const [referenceChannels, setReferenceChannels] = useState('');
           const [loading, setLoading] = useState(false);
           const [error, setError] = useState(null);
           const [results, setResults] = useState(null);
@@ -1234,8 +1234,8 @@ REQUIRED JSON FORMAT:
             let cur = AIProvider.getCurrentProviderName();
             let provider = config[cur];
 
-            // Restore last session (topic, platform, provider/model, results) so switching
-            // apps or reopening the tab does not lose prior research. Only an explicit
+            // Restore last session (topic, platform, reference channels, provider/model, results) so
+            // switching apps or reopening the tab does not lose prior research. Only an explicit
             // "New search" click or clearing site data resets this.
             try {
               const saved = localStorage.getItem(STORAGE_KEY);
@@ -1243,6 +1243,7 @@ REQUIRED JSON FORMAT:
                 const parsed = JSON.parse(saved);
                 if (parsed.topic) setTopic(parsed.topic);
                 if (parsed.platform) setPlatform(parsed.platform);
+                if (parsed.referenceChannels) setReferenceChannels(parsed.referenceChannels);
                 if (parsed.provider && config[parsed.provider]) {
                   cur = parsed.provider;
                   AIProvider.setProvider(cur);
@@ -1298,16 +1299,14 @@ REQUIRED JSON FORMAT:
               const options = { platform, providerName: activeProvider, model: selectedModel, timeout: 120000 };
               const allAgentResults = {};
 
-              // Discovery runs first — its real video titles feed the Intelligence agent below.
-              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', options);
-              const videoTitles = allAgentResults.discovery?.result?.videoCandidates || [];
+              const refChannels = parseReferenceChannels(referenceChannels);
+              allAgentResults.discovery = await AgentRouter.routeTask(topic, 'discovery', { ...options, referenceChannels: refChannels });
 
-              for (const key of ['scoring', 'ranking', 'intelligence', 'seo', 'competitor']) {
-                const agentOptions = key === 'intelligence' ? { ...options, videoTitles } : options;
-                allAgentResults[key] = await AgentRouter.routeTask(topic, key, agentOptions);
+              for (const key of ['ranking', 'seo']) {
+                allAgentResults[key] = await AgentRouter.routeTask(topic, key, options);
               }
               setResults(allAgentResults);
-              persist({ topic, platform, provider: activeProvider, model: selectedModel, results: allAgentResults });
+              persist({ topic, platform, provider: activeProvider, model: selectedModel, referenceChannels, results: allAgentResults });
             } catch (err) {
               setError(err.message || "Something went wrong during research.");
             } finally {
@@ -1383,6 +1382,21 @@ REQUIRED JSON FORMAT:
                       </div>
                     </div>
 
+                    <div className="ref-channels-block">
+                      <div className="ref-channels-label">
+                        <span>◆ Reference channels <span className="ref-optional">(optional — teach the style you want)</span></span>
+                      </div>
+                      <textarea
+                        className="ref-channels-input"
+                        value={referenceChannels}
+                        onChange={(e) => setReferenceChannels(e.target.value)}
+                        placeholder={"youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"}
+                        disabled={loading}
+                        rows={2}
+                      />
+                      <div className="ref-channels-hint">Paste channel links whose ranked-moment style you want to match. The AI won't copy their videos — it uses them as a format/tone reference while still grounding results in fresh, real videos.</div>
+                    </div>
+
                     <button className="run-btn" onClick={handleResearch} disabled={loading}>
                       {loading ? 'Scanning…' : <>Run Research →</>}
                     </button>
@@ -1390,7 +1404,7 @@ REQUIRED JSON FORMAT:
                 </div>
 
                 <div className="agent-strip">
-                  {['Discovery', 'Scoring', 'Ranking', 'Intelligence', 'SEO', 'Competitor'].map((a) => (
+                  {['Discovery', 'Ranking', 'SEO'].map((a) => (
                     <span className="agent-chip" key={a}>{a}Agent</span>
                   ))}
                 </div>
