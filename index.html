@@ -1,1067 +1,1032 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Viral Radar — Source Intelligence Engine</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #0a0b0d;
-            --bg-elevated: #131518;
-            --bg-card: #17191d;
-            --border: #262a30;
-            --border-bright: #3a3f47;
-            --acid: #c6ff3d;
-            --acid-dim: #8fb82c;
-            --coral: #ff5a36;
-            --coral-dim: #b33e26;
-            --text: #f2f3f0;
-            --text-dim: #9a9fa6;
-            --text-faint: #5c6169;
-            --font-display: 'Archivo Black', sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
-            --font-body: 'Work Sans', sans-serif;
-
-            /* Viral Engine specific colors (from viral engine.jsx) */
-            --rank6-color: #FF6B35;
-            --rank5-color: #F7931E;
-            --rank4-color: #FFD700;
-            --rank3-color: #FF4444;
-            --rank2-color: #CC00FF;
-            --rank1-color: #FF0050;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; min-height: 100%; }
-        body {
-            font-family: var(--font-body);
-            background: var(--bg);
-            color: var(--text);
-            -webkit-font-smoothing: antialiased;
-            position: relative;
-            overflow-x: hidden;
-        }
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 1;
-            opacity: 0.035;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        }
-        body::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            background-image:
-                linear-gradient(var(--border) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border) 1px, transparent 1px);
-            background-size: 64px 64px;
-            opacity: 0.25;
-            mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 0%, transparent 70%);
-        }
-        #root { position: relative; z-index: 2; }
-        .spinner { border: 3px solid var(--border); border-top: 3px solid var(--acid); border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-        ::selection { background: var(--acid); color: #0a0b0d; }
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
-
-        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
-
-        /* ---------- NAV ---------- */
-        .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
-        .nav-brand { display: flex; align-items: center; gap: 10px; }
-        .nav-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--acid); font-size: 20px; transform: rotate(0deg); animation: none; }
-        .nav-name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
-        .nav-badge { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); background: rgba(198,255,61,0.07); padding: 4px 10px; border-radius: 20px; letter-spacing: 0.05em; }
-
-        /* ---------- HERO ---------- */
-        .hero { padding: 20px 0 44px; text-align: center; }
-        .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border-bright); padding: 6px 14px; border-radius: 20px; margin-bottom: 26px; letter-spacing: 0.03em; }
-        .hero-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1.6s ease-in-out infinite; }
-        .hero h1 { font-family: var(--font-display); font-size: clamp(34px, 6.4vw, 58px); line-height: 1.02; letter-spacing: -0.01em; text-transform: uppercase; margin-bottom: 18px; }
-        .hero h1 span { color: var(--acid); }
-        .hero p { font-size: 16px; color: var(--text-dim); max-width: 480px; margin: 0 auto; line-height: 1.55; }
-
-        /* ---------- CONSOLE INPUT ---------- */
-        .console { margin-top: 36px; background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 4px; box-shadow: 0 0 0 1px rgba(198,255,61,0.03), 0 20px 60px -20px rgba(0,0,0,0.6); }
-        .console-head { display: flex; align-items: center; gap: 7px; padding: 12px 16px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-        .console-head .cdot { width: 8px; height: 8px; border-radius: 50%; }
-        .console-body { padding: 4px 14px 16px; }
-        .console-prompt { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 15px; padding: 6px 4px 16px; }
-        .console-prompt .caret { color: var(--acid); }
-        .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
-        .console-prompt input::placeholder { color: var(--text-faint); }
-        .surprise-btn { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 7px; font-size: 15px; padding: 5px 9px; cursor: pointer; line-height: 1; transition: transform 0.15s ease, border-color 0.15s ease; }
-        .surprise-btn:hover:not(:disabled) { border-color: var(--acid-dim); transform: rotate(-8deg) scale(1.08); }
-        .surprise-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
-
-        .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
-        .ref-channels-block { padding: 10px 4px 14px; border-top: 1px dashed var(--border); margin-top: 2px; }
-        .ref-channels-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); margin-bottom: 7px; letter-spacing: 0.02em; }
-        .ref-optional { color: var(--text-faint); font-weight: 400; }
-        .ref-channels-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 9px 11px; border-radius: 8px; resize: vertical; line-height: 1.5; }
-        .ref-channels-input::placeholder { color: var(--text-faint); }
-        .ref-channels-input:focus { outline: none; border-color: var(--acid-dim); }
-        .ref-channels-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
-        .select-wrap { position: relative; }
-        .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
-        .select-wrap select {
-            width: 100%; appearance: none; background: var(--bg-card); border: 1px solid var(--border);
-            color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; padding: 9px 26px 9px 11px;
-            border-radius: 8px; cursor: pointer;
-        }
-        .select-wrap select:hover { border-color: var(--border-bright); color: var(--text); }
-        .select-wrap select:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .run-btn {
-            width: 100%; background: var(--acid); color: #0a0b0d; border: none; font-family: var(--font-mono);
-            font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px;
-            border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: transform 0.12s ease, box-shadow 0.12s ease;
-        }
-        .run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
-        .run-btn:active:not(:disabled) { transform: translateY(0); }
-        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
-
-        /* ---------- AGENT STRIP ---------- */
-        .agent-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
-        .agent-chip { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; letter-spacing: 0.02em; }
-
-        /* ---------- ERROR ---------- */
-        .error-box { margin-top: 24px; background: rgba(255,90,54,0.08); border: 1px solid var(--coral-dim); color: #ffb199; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-family: var(--font-mono); }
-
-        /* ---------- LOADING ---------- */
-        .loading-box { margin-top: 40px; text-align: center; padding: 40px 0; }
-        .loading-box p { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-top: 16px; letter-spacing: 0.02em; }
-
-        /* ---------- RESULTS ---------- */
-        .results { margin-top: 52px; }
-        .results-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 10px; flex-wrap: wrap; }
-        .restored-tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-        .new-search-btn { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border-bright); padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all 0.12s ease; }
-        .new-search-btn:hover { border-color: var(--coral); color: var(--coral); }
-        .agent-block { margin-bottom: 44px; animation: fadeUp 0.45s ease both; }
-        .agent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-        .agent-title-row { display: flex; align-items: center; gap: 10px; }
-        .agent-index { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
-        .agent-title { font-family: var(--font-display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.01em; }
-        .agent-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-        .agent-meta b { color: var(--text-dim); }
-
-        .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
-        .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
-
-        /* Discovery video cards */
-        .video-grid { display: grid; gap: 10px; }
-        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease; }
-        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.08), 0 8px 24px -12px rgba(198,255,61,0.25); }
-        .video-card.featured { flex-direction: column; margin-bottom: 12px; padding: 14px; background: linear-gradient(160deg, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--acid-dim); position: relative; overflow: hidden; }
-        .video-card.featured::before { content: ''; position: absolute; top: -40%; right: -20%; width: 60%; height: 140%; background: radial-gradient(circle, rgba(198,255,61,0.08), transparent 65%); pointer-events: none; }
-        .video-card.featured:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.15), 0 16px 40px -16px rgba(198,255,61,0.35); }
-        .featured-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--acid); margin-bottom: 10px; display: inline-block; }
-        .featured-body { display: flex; gap: 14px; align-items: center; }
-        .featured-thumb { width: 132px; height: 82px; }
-        .featured-title { font-size: 15px; -webkit-line-clamp: 3; }
-        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
-        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-        .video-sub .views { color: var(--acid); }
-        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
-        .trend-list { list-style: none; margin-top: 6px; }
-        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
-        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
-
-        /* Viral Engine Specific Styles (from viral engine.jsx) */
-        .retention-curve-wrapper {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
-            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
-        }
-        .retention-curve-label {
-            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
-            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
-        }
-        .retention-rank-item {
-            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-        }
-        .retention-percent {
-            font-size: 8px; font-weight: 700;
-        }
-        .retention-bar-inner {
-            width: 100%; border-radius: 3px 3px 0 0;
-            height: var(--bar-height); /* Dynamic height */
-            background: linear-gradient(180deg, var(--item-color), rgba(255,255,255,0.03));
-            box-shadow: 0 -3px 10px var(--item-glow);
-        }
-        .retention-rank-label {
-            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
-        }
-
-        .mode-selector { display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07); }
-        .mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left; }
-        .mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35); }
-        .mode-btn-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
-        .mode-btn-title.active { color: #FF0050; }
-        .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
-        .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
-
-        .console-input-section { background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
-        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 9px; }
-        .console-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: var(--text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
-        .console-input::placeholder { color: var(--text-faint); }
-        .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .example-topic-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 600; }
-        .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
-        .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .date-filter-section { margin-bottom: 14px; }
-        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
-        .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .date-filter-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 700; }
-        .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
-        .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
-        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
-        .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
-
-        .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
-
-        .result-summary-box { background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
-        .result-summary-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px; }
-        .result-summary-topic { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
-        .result-summary-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
-        .summary-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
-        .summary-badge.trend { border-color: var(--trend-color)40; color: var(--trend-color); }
-        .summary-badge.opportunity { background: rgba(255,0,80,0.12); border-color: rgba(255,0,80,0.26); color: #FF0050; }
-        .summary-badge.viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
-        .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
-        .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
-
-        .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-        .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
-        .editor-note-value { font-size: 13px; color: rgba(240,240,245,0.7); line-height: 1.4; }
-        .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
-        .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
-        .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .editor-note-value-small { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
-
-        .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
-        .view-mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050; }
-
-        .rank-selector { display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .rank-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; color: rgba(240,240,245,0.28); cursor: pointer; transition: all 0.16s; }
-        .rank-btn.active { color: #fff; }
-        .rank-btn-glow { box-shadow: 0 0 13px; }
-
-        /* Card styles for Insights */
-        .insights-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-        .insights-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--acid); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .insights-list { list-style: none; padding-left: 0; }
-        .insights-list li { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; padding-left: 18px; position: relative; }
-        .insights-list li::before { content: '✨'; position: absolute; left: 0; font-size: 14px; top: 0; }
-        .insights-item-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); text-transform: uppercase; margin-bottom: 4px; }
-        .insights-item-value { font-size: 13px; color: var(--text); line-height: 1.5; }
-        .insights-tags-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .insights-tag-chip { background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--acid); font-weight: 600; }
-        .insights-platform-btn { background: var(--acid)08; border: 1px solid var(--acid)30; color: var(--acid); }
-
-        /* Raw Evidence Card */
-        .evidence-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-        .evidence-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--coral); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .evidence-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-        .evidence-item:last-child { border-bottom: none; }
-        .evidence-thumb { width: 100px; height: 60px; flex-shrink: 0; background: var(--bg-elevated); border-radius: 6px; object-fit: cover; }
-        .evidence-info { flex: 1; min-width: 0; }
-        .evidence-info-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .evidence-info-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
-        .evidence-info-platform { color: var(--acid); }
-        .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
-        .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
-
-
-        /* General utility classes */
-        .flex-row { display: flex; align-items: center; }
-        .flex-col { display: flex; flex-direction: column; }
-        .gap-4 { gap: 4px; }
-        .gap-6 { gap: 6px; }
-        .gap-7 { gap: 7px; }
-        .gap-8 { gap: 8px; }
-        .gap-9 { gap: 9px; }
-        .gap-10 { gap: 10px; }
-        .mt-8 { margin-top: 8px; }
-        .mb-10 { margin-bottom: 10px; }
-        .mb-14 { margin-bottom: 14px; }
-        .mb-16 { margin-bottom: 16px; }
-        .mb-24 { margin-bottom: 24px; }
-        .text-center { text-align: center; }
-        .hidden { display: none !important; }
-
-        @media (max-width: 560px) {
-            .config-row { grid-template-columns: 1fr; }
-            .evidence-thumb { width: 80px; height: 50px; }
-        }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Viral Radar — Source Intelligence Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0a0b0d;--bg-e:#131518;--bg-c:#17191d;--bd:#262a30;--bd-b:#3a3f47;--acid:#c6ff3d;--acid-d:#8fb82c;--coral:#ff5a36;--text:#f2f3f0;--text-d:#9a9fa6;--text-f:#5c6169;--font-d:'Archivo Black',sans-serif;--font-m:'JetBrains Mono',monospace;--font-b:'Work Sans',sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font-b);-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--bd) 1px,transparent 1px),linear-gradient(90deg,var(--bd) 1px,transparent 1px);background-size:64px 64px;opacity:.2;mask-image:radial-gradient(ellipse 80% 50% at 50% 0%,black 0%,transparent 70%);}
+#root{position:relative;z-index:2;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,45%{opacity:1}50%,100%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+::selection{background:var(--acid);color:#0a0b0d;}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--bd-b);border-radius:6px}
+.shell{max-width:960px;margin:0 auto;padding:0 16px 80px;}
+/* Nav */
+.nav{display:flex;align-items:center;justify-content:space-between;padding:28px 0 40px;}
+.nav-brand{display:flex;align-items:center;gap:10px;font-family:var(--font-m);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;}
+.nav-mark{color:var(--acid);font-size:20px;}
+.nav-badge{font-family:var(--font-m);font-size:11px;color:var(--acid);border:1px solid var(--acid-d);background:rgba(198,255,61,.07);padding:4px 10px;border-radius:20px;letter-spacing:.05em;}
+.nav-actions{display:flex;align-items:center;gap:8px;}
+.btn-sm{font-family:var(--font-m);font-size:11px;color:var(--text-d);background:var(--bg-c);border:1px solid var(--bd-b);padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .15s;}
+.btn-sm:hover{border-color:var(--acid-d);color:var(--acid);}
+/* Hero */
+.hero{text-align:center;padding:20px 0 44px;}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-m);font-size:11.5px;color:var(--text-d);border:1px solid var(--bd-b);padding:6px 14px;border-radius:20px;margin-bottom:26px;}
+.hero-tag .dot{width:6px;height:6px;border-radius:50%;background:var(--acid);animation:pulse 1.6s ease-in-out infinite;}
+.hero h1{font-family:var(--font-d);font-size:clamp(32px,6vw,56px);line-height:1.02;text-transform:uppercase;margin-bottom:16px;}
+.hero h1 span{color:var(--acid);}
+.hero p{font-size:15px;color:var(--text-d);max-width:480px;margin:0 auto;line-height:1.6;}
+/* Retention curve */
+.ret-curve{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:18px 22px 12px;margin-bottom:24px;display:flex;align-items:flex-end;gap:7px;}
+.ret-label{font-size:9px;color:rgba(240,240,245,.22);letter-spacing:.11em;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);margin-right:3px;padding-bottom:4px;}
+.ret-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+/* Console */
+.console{background:var(--bg-e);border:1px solid var(--bd-b);border-radius:14px;padding:4px;box-shadow:0 0 0 1px rgba(198,255,61,.03),0 20px 60px -20px rgba(0,0,0,.6);margin-bottom:24px;}
+.console-head{display:flex;align-items:center;gap:7px;padding:12px 16px 8px;font-family:var(--font-m);font-size:11px;color:var(--text-f);}
+.cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.console-body{padding:4px 14px 16px;}
+.console-prompt{display:flex;align-items:center;gap:10px;font-family:var(--font-m);font-size:15px;padding:6px 4px 16px;}
+.c-caret{color:var(--acid);}
+.c-input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font-m);font-size:15px;}
+.c-input::placeholder{color:var(--text-f);}
+.c-cursor{display:inline-block;width:8px;height:17px;background:var(--acid);animation:blink 1s step-end infinite;margin-left:-4px;}
+.surprise-btn{background:var(--bg-c);border:1px solid var(--bd-b);border-radius:7px;font-size:15px;padding:5px 9px;cursor:pointer;line-height:1;transition:transform .15s,border-color .15s;}
+.surprise-btn:hover{border-color:var(--acid-d);transform:rotate(-8deg) scale(1.08);}
+.surprise-btn:disabled{opacity:.4;cursor:not-allowed;}
+.config-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 4px 10px;}
+.field-label{font-family:var(--font-m);font-size:11px;color:var(--acid-d);margin-bottom:5px;letter-spacing:.02em;}
+.select-wrap{position:relative;}
+.select-wrap::after{content:'▾';position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text-f);font-size:10px;pointer-events:none;}
+.select-wrap select{width:100%;appearance:none;background:var(--bg-c);border:1px solid var(--bd);color:var(--text-d);font-family:var(--font-m);font-size:11.5px;padding:9px 26px 9px 11px;border-radius:8px;cursor:pointer;outline:none;transition:border-color .15s;}
+.select-wrap select:hover{border-color:var(--bd-b);color:var(--text);}
+.select-wrap select:disabled{opacity:.5;cursor:not-allowed;}
+.expand-row{padding:8px 4px;border-top:1px dashed var(--bd);}
+.expand-label{font-family:var(--font-m);font-size:11px;color:var(--acid-d);margin-bottom:7px;}
+.expand-opt{color:var(--text-f);font-weight:400;}
+.expand-textarea{width:100%;background:var(--bg-c);border:1px solid var(--bd);color:var(--text);font-family:var(--font-m);font-size:12px;padding:9px 11px;border-radius:8px;resize:vertical;line-height:1.5;outline:none;transition:border-color .15s;}
+.expand-textarea:focus{border-color:var(--acid-d);}
+.expand-textarea::placeholder{color:var(--text-f);}
+.expand-hint{font-size:11px;color:var(--text-f);margin-top:6px;line-height:1.5;}
+.example-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 4px 12px;}
+.ex-btn{background:var(--bg-c);border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:10px;color:var(--text-f);cursor:pointer;font-weight:600;font-family:var(--font-m);transition:all .12s;}
+.ex-btn:hover,.ex-btn.active{background:rgba(198,255,61,.1);border-color:var(--acid-d);color:var(--acid);}
+.ex-btn:disabled{opacity:.5;cursor:not-allowed;}
+.run-btn{width:100%;background:var(--acid);color:#0a0b0d;border:none;font-family:var(--font-m);font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;padding:15px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s,box-shadow .12s,background .15s,color .15s;}
+.run-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px -8px rgba(198,255,61,.5);}
+.run-btn:disabled{background:var(--bd-b);color:var(--text-d);cursor:not-allowed;}
+.run-btn.loading{background:rgba(198,255,61,.15);color:var(--acid);}
+/* Agent strip */
+.agent-strip{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:28px;}
+.agent-chip{font-family:var(--font-m);font-size:10.5px;border:1px solid var(--bd);padding:6px 12px;border-radius:20px;letter-spacing:.02em;display:flex;align-items:center;gap:6px;transition:all .2s;cursor:default;}
+.agent-chip.idle{color:var(--text-f);}
+.agent-chip.loading{color:var(--acid);border-color:var(--acid-d);background:rgba(198,255,61,.06);}
+.agent-chip.done{color:#4ade80;border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.06);}
+.agent-chip.error{color:var(--coral);border-color:rgba(255,90,54,.35);background:rgba(255,90,54,.06);}
+.status-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.status-dot.idle{background:var(--text-f);}
+.status-dot.loading{background:var(--acid);animation:pulse .8s ease-in-out infinite;}
+.status-dot.done{background:#4ade80;}
+.status-dot.error{background:var(--coral);}
+/* Spinner */
+.spinner{border:2px solid var(--bd);border-top-color:var(--acid);border-radius:50%;width:18px;height:18px;animation:spin .7s linear infinite;flex-shrink:0;}
+/* Error box */
+.err-box{background:rgba(255,90,54,.08);border:1px solid rgba(255,90,54,.3);border-radius:10px;padding:12px 16px;font-size:13px;font-family:var(--font-m);color:#ffb199;margin-bottom:20px;}
+/* Results */
+.results{margin-top:40px;animation:fadeUp .4s ease;}
+.results-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;}
+.results-topic{font-family:var(--font-d);font-size:clamp(18px,3vw,26px);text-transform:uppercase;}
+.results-topic span{color:var(--acid);}
+.tab-bar{display:flex;gap:5px;background:rgba(255,255,255,.03);padding:4px;border-radius:12px;border:1px solid rgba(255,255,255,.06);margin-bottom:24px;flex-wrap:wrap;}
+.tab-btn{flex:1;min-width:80px;background:transparent;border:1px solid transparent;border-radius:9px;padding:9px 10px;font-family:var(--font-m);font-size:11px;font-weight:700;color:var(--text-f);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;text-transform:uppercase;letter-spacing:.04em;}
+.tab-btn:hover{color:var(--text-d);}
+.tab-btn.active{background:rgba(198,255,61,.12);border-color:rgba(198,255,61,.3);color:var(--acid);}
+.tab-btn.has-error{color:var(--coral);}
+.tab-content{animation:fadeUp .3s ease;}
+/* Video cards */
+.video-grid{display:grid;gap:10px;}
+.v-card{display:flex;gap:12px;background:var(--bg-c);border:1px solid var(--bd);border-radius:10px;padding:10px;text-decoration:none;color:inherit;transition:border-color .15s,transform .15s;}
+.v-card:hover{border-color:var(--acid-d);transform:translateX(2px);}
+.v-thumb{width:96px;height:60px;flex-shrink:0;border-radius:6px;object-fit:cover;background:var(--bg-e);}
+.v-info{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px;}
+.v-title{font-size:13px;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.v-meta{font-family:var(--font-m);font-size:10px;color:var(--text-f);}
+.v-meta .views{color:var(--acid);}
+/* Rank cards */
+.rank-card{background:var(--bg-c);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:12px;animation:fadeUp .3s ease;transition:border-color .2s;}
+.rank-card:hover{border-color:var(--bd-b);}
+.rank-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.rank-num{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-size:14px;color:#fff;flex-shrink:0;}
+.rank-meta{flex:1;min-width:0;}
+.rank-label{font-family:var(--font-m);font-size:9px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;opacity:.7;}
+.rank-name{font-size:14px;font-weight:700;line-height:1.3;}
+.rank-why{font-size:12px;color:var(--text-d);margin-bottom:10px;line-height:1.5;}
+.rank-score-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.score-pill{font-family:var(--font-m);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid;}
+.source-row{display:flex;gap:6px;flex-wrap:wrap;}
+.src-btn{font-family:var(--font-m);font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid;cursor:pointer;background:transparent;transition:opacity .15s;}
+.src-btn:hover{opacity:.75;}
+/* SEO */
+.seo-section{margin-bottom:20px;}
+.seo-section-title{font-family:var(--font-m);font-size:10px;color:var(--acid-d);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;}
+.tag-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.tag-chip{font-family:var(--font-m);font-size:11px;background:var(--bg-c);border:1px solid var(--bd);color:var(--text-d);padding:4px 10px;border-radius:6px;}
+.seo-card{background:var(--bg-c);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px;}
+.seo-card-label{font-family:var(--font-m);font-size:9px;color:var(--text-f);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.seo-card-val{font-size:13px;color:var(--text);line-height:1.5;}
+/* Intelligence */
+.intel-card{background:var(--bg-c);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px;}
+.intel-label{font-family:var(--font-m);font-size:9px;color:var(--acid-d);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.intel-val{font-size:13px;color:var(--text-d);line-height:1.5;}
+/* Competitor */
+.comp-card{background:var(--bg-c);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px;transition:border-color .15s;}
+.comp-card:hover{border-color:var(--bd-b);}
+.comp-handle{font-family:var(--font-m);font-size:14px;font-weight:700;color:var(--acid);margin-bottom:6px;}
+.comp-row{display:flex;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+.comp-label{font-family:var(--font-m);font-size:9px;color:var(--text-f);text-transform:uppercase;letter-spacing:.1em;min-width:70px;padding-top:1px;}
+.comp-val{font-size:12px;color:var(--text-d);flex:1;}
+/* Settings modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:var(--bg-e);border:1px solid var(--bd-b);border-radius:14px;padding:24px;width:100%;max-width:480px;}
+.modal h3{font-family:var(--font-m);font-size:14px;color:var(--acid);margin-bottom:16px;}
+.modal label{font-family:var(--font-m);font-size:11px;color:var(--text-d);display:block;margin-bottom:6px;}
+.modal input{width:100%;background:var(--bg-c);border:1px solid var(--bd);color:var(--text);font-family:var(--font-m);font-size:12px;padding:10px 12px;border-radius:8px;outline:none;margin-bottom:12px;}
+.modal input:focus{border-color:var(--acid-d);}
+.modal-hint{font-size:11px;color:var(--text-f);margin-bottom:16px;line-height:1.5;}
+.modal-btns{display:flex;justify-content:flex-end;gap:8px;}
+.copy-btn{font-family:var(--font-m);font-size:11px;background:var(--bg-c);border:1px solid var(--bd-b);padding:5px 12px;border-radius:20px;cursor:pointer;color:var(--text-d);transition:all .15s;}
+.copy-btn:hover{border-color:var(--acid-d);color:var(--acid);}
+.copy-btn.copied{border-color:rgba(74,222,128,.4);color:#4ade80;}
+/* Empty state */
+.empty{text-align:center;padding:50px 20px;color:var(--text-f);}
+.empty .glyph{font-size:36px;margin-bottom:10px;}
+/* Badges */
+.opp-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-m);font-size:10px;font-weight:700;padding:3px 10px;border-radius:5px;}
+.opp-high{background:rgba(198,255,61,.1);border:1px solid var(--acid-d);color:var(--acid);}
+.opp-med{background:rgba(255,165,0,.1);border:1px solid rgba(255,165,0,.4);color:#FFA500;}
+.opp-low{background:rgba(255,90,54,.1);border:1px solid rgba(255,90,54,.35);color:var(--coral);}
+/* Divider */
+.divider{border:none;border-top:1px solid var(--bd);margin:20px 0;}
+@media(max-width:580px){.config-row{grid-template-columns:1fr 1fr;}.config-row .select-wrap:last-child{grid-column:1/-1;}.tab-btn{min-width:60px;font-size:10px;}}
+</style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
-            <div class="spinner" style="margin:0 auto 16px;"></div>
-            Booting Viral Radar…
+<div id="root">
+  <div style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#5c6169">
+    <div style="border:2px solid #262a30;border-top-color:#c6ff3d;border-radius:50%;width:28px;height:28px;animation:spin .8s linear infinite;margin:0 auto 16px"></div>
+    Booting Viral Radar…
+  </div>
+</div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+const RANK_META = [
+  { rank:6, label:"SCROLL STOPPER", color:"#FF6B35", glow:"rgba(255,107,53,0.35)", bar:85  },
+  { rank:5, label:"INTEREST",       color:"#F7931E", glow:"rgba(247,147,30,0.35)", bar:65  },
+  { rank:4, label:"INTRODUCTION",   color:"#FFD700", glow:"rgba(255,215,0,0.30)",  bar:50  },
+  { rank:3, label:"ESCALATION",     color:"#FF4444", glow:"rgba(255,68,68,0.35)",  bar:75  },
+  { rank:2, label:"FALSE WINNER",   color:"#CC00FF", glow:"rgba(204,0,255,0.40)",  bar:95  },
+  { rank:1, label:"FINAL PAYOFF",   color:"#FF0050", glow:"rgba(255,0,80,0.50)",   bar:100 },
+];
+
+const EXAMPLES = [
+  "Worst Martial Arts Fails","Dumbest MMA Moments",
+  "Funniest Gym Fails","Most Embarrassing Sports Goals",
+  "Craziest Referee Mistakes","Worst Penalty Kicks Ever",
+  "Painful Basketball Bloopers","Skateboard Wipeouts",
+];
+
+const SURPRISE = [
+  "ranking the worst martial arts fails","don't check the sound moments",
+  "funniest chicken scream compilations","instant regret prank fails",
+  "gym fails that hurt to watch","near miss moments that will make you gasp",
+  "instant karma caught on camera","ranking worst decisions caught on camera",
+];
+
+const DATE_FILTERS = ["24 Hours","7 Days","30 Days","1 Year","All Time"];
+
+const PLATFORMS = {
+  youtube:{ name:"YouTube", color:"#FF0000",
+    url:q=>`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+  tiktok:{ name:"TikTok", color:"#00F2EA",
+    url:q=>`https://www.tiktok.com/search?q=${encodeURIComponent(q)}` },
+  reddit:{ name:"Reddit", color:"#FF4500",
+    url:q=>`https://www.reddit.com/search/?q=${encodeURIComponent(q)}&sort=top` },
+};
+
+const LLM_PROVIDERS = {
+  google:{ name:"Google Gemini", models:[
+    {id:"gemini-1.5-flash-latest",name:"Gemini 1.5 Flash (free)"},
+    {id:"gemini-pro",name:"Gemini Pro"},
+  ]},
+  openrouter:{ name:"OpenRouter", models:[
+    {id:"meta-llama/llama-3.1-8b-instruct:free",name:"Llama 3.1 8B (free)"},
+    {id:"google/gemma-3-12b-it:free",name:"Gemma 3 12B (free)"},
+    {id:"openai/gpt-4o-mini",name:"GPT-4o Mini (paid)"},
+  ]},
+  github:{ name:"GitHub Models", models:[
+    {id:"gpt-4o-mini",name:"GPT-4o Mini (free)"},
+  ]},
+  cloudflare:{ name:"Cloudflare AI", models:[
+    {id:"@cf/meta/llama-3.1-8b-instruct",name:"Llama 3.1 (Cloudflare)"},
+  ]},
+};
+
+// ─── API Helper ────────────────────────────────────────────────────────────
+async function callWorker(baseUrl, endpoint, payload, timeoutMs = 90000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${baseUrl}${endpoint}`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      throw new Error(e.error || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch(err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") throw new Error("Request timed out (90s) — try again or check Worker.");
+    throw err;
+  }
+}
+
+// ─── Agent Prompts ─────────────────────────────────────────────────────────
+function rankingPrompt(topic) {
+  return `You are a viral content strategist. For topic "${topic}", create a 6-rank escalating clip structure.
+Reply ONLY with valid JSON — no markdown, no prose, first char must be {.
+{"ranks":[
+  {"rank":6,"label":"SCROLL STOPPER","clipName":"specific moment type","primaryKeyword":"keyword","whyHere":"1 sentence why this hooks","trendDirection":"Rising","opportunityScore":80,"viralScore":{"final":78},"sources":{"youtube":{"queries":["query1","query2"]},"tiktok":{"queries":["query1"],"hashtags":["hashtag1"]},"reddit":{"queries":["query1"],"subreddits":["sub1"]}}}
+]}
+Include exactly 6 ranks from rank 6 down to 1. Each rank escalates intensity. rank 2 = false winner, rank 1 = ultimate payoff.`;
+}
+
+function seoPrompt(topic) {
+  return `SEO analysis for "${topic}" viral YouTube video. Reply ONLY with valid JSON — no markdown, first char {.
+{"title_formula":"formula with power words","description_hook":"opening line","tags":["t1","t2","t3","t4","t5","t6"],"youtube_queries":["q1","q2","q3"],"tiktok_hashtags":["#h1","#h2","#h3"],"reddit_subreddits":["r1","r2"],"trend_status":"Rising","upload_timing":"best day/time","competition_level":"Medium","opportunity_summary":"1 sentence"}`;
+}
+
+function intelligencePrompt(topic, videoTitles) {
+  const titles = videoTitles.slice(0,5).map(t=>`- "${t}"`).join("\n");
+  return `Analyze cross-video patterns for "${topic}" viral content.
+Top videos: ${titles || "(none yet)"}
+Reply ONLY with valid JSON — no markdown, first char {.
+{"pattern":"what makes these clips viral","hook_formula":"universal hook structure","emotion_triggers":["e1","e2","e3"],"replay_factor":"why viewers rewatch","content_gaps":["untapped angle 1","untapped angle 2"],"best_time_to_post":"day+time","viral_multiplier":"what pushes to 10M+"}`;
+}
+
+function competitorPrompt(topic) {
+  return `Top 3 YouTube channels posting "${topic}" content. Reply ONLY with valid JSON — no markdown, first char {.
+{"competitors":[{"channel":"@handle","avg_views":"estimate","posting_freq":"frequency","strengths":"what they do well","content_gaps":"what they miss or do poorly"}]}
+Exactly 3 competitors.`;
+}
+
+// ─── Components ────────────────────────────────────────────────────────────
+function RetentionCurve() {
+  return (
+    <div className="ret-curve">
+      <div className="ret-label">Retention</div>
+      {[...RANK_META].reverse().map(m=>(
+        <div key={m.rank} className="ret-item">
+          <span style={{fontSize:8,fontWeight:700,color:m.color}}>{m.bar}%</span>
+          <div style={{
+            width:"100%",height:m.bar*.5,borderRadius:"3px 3px 0 0",
+            background:`linear-gradient(180deg,${m.color},rgba(255,255,255,.02))`,
+            boxShadow:`0 -3px 10px ${m.glow}`,
+          }}/>
+          <span style={{fontSize:9,color:"rgba(240,240,245,.28)",fontWeight:700}}>#{m.rank}</span>
         </div>
+      ))}
     </div>
+  );
+}
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+function AgentChip({name, status}) {
+  return (
+    <div className={`agent-chip ${status}`}>
+      <span className={`status-dot ${status}`}/>
+      {status === "loading" && <span className="spinner" style={{width:10,height:10,border:"2px solid rgba(198,255,61,.2)",borderTopColor:"#c6ff3d"}}/>}
+      {name}
+    </div>
+  );
+}
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+function SrcBtn({platform, label, query}) {
+  const p = PLATFORMS[platform];
+  if (!p || !query) return null;
+  return (
+    <button className="src-btn" onClick={()=>window.open(p.url(query),"_blank","noopener")}
+      style={{color:p.color,borderColor:`${p.color}35`}}>
+      {label||query}
+    </button>
+  );
+}
 
-        // --- Constants (Global) ---
-        const RANK_META = [
-            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
-            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
-            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
-            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
-            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
-            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
-        ];
-
-        const EXAMPLE_TOPICS = [
-            "Worst Martial Arts Fails", "Dumbest MMA Moments",
-            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
-            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
-            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
-        ];
-
-        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
-
-        const PLATFORM_CFG = {
-            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
-                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-                shortsUrl: (q) => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}` },
-            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
-                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
-                tagUrl: (t) => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}` },
-            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
-                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
-                subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
-            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
-                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`,
-                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}` },
-            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
-                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
-                tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
-            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
-                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
-            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
-                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` }, // Search public channels
-        };
-
-        const SURPRISE_NICHES = [
-            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
-            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
-            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
-            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
-            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
-            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
-            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
-        ];
-
-        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
-
-        // --- API Helper ---
-        const DEFAULT_TIMEOUT = 120000; // 2 minutes
-        // IMPORTANT: Replace with YOUR Cloudflare Worker URL
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
-
-        const LLM_PROVIDERS_CONFIG = {
-            openrouter: { name: "OpenRouter", models: [
-                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
-                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-            ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
-            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
-            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
-            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
-        };
-
-        async function callWorkerAPI(endpoint, payload, options = {}) {
-            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
-            const controller = new AbortController();
-            const signal = controller.signal;
-            const timeout = options.timeout || DEFAULT_TIMEOUT;
-            const timer = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const res = await fetch(workerUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                    signal: signal
-                });
-                clearTimeout(timer);
-
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
-                }
-                return data;
-            } catch (err) {
-                clearTimeout(timer);
-                console.error("Error fetching from worker:", err);
-                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
-            }
-        }
-
-        // --- UI Components ---
-        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
-
-        function PlatformBtn({ platform, label, url, small = false }) {
-            const c = PLATFORM_CFG[platform];
-            if (!c) {
-                console.warn(`Platform config not found for: ${platform}`);
-                return <button className={small ? 'platform-btn-small' : 'platform-btn'} disabled>{label}</button>;
-            }
+function DiscoveryTab({data, videoTitle}) {
+  if (!data) return <div className="empty"><div className="glyph">◎</div>No discovery data yet.</div>;
+  const videos = data.real_videos || [];
+  const ranks = data.ranks || [];
+  return (
+    <div className="tab-content">
+      {videos.length > 0 && (
+        <>
+          <div style={{fontFamily:"var(--font-m)",fontSize:10,color:"var(--acid-d)",textTransform:"uppercase",letterSpacing:".1em",marginBottom:10}}>
+            🎬 Real YouTube Videos Found
+          </div>
+          <div className="video-grid" style={{marginBottom:20}}>
+            {videos.slice(0,6).map((v,i)=>(
+              <a key={i} className="v-card" href={v.url} target="_blank" rel="noopener noreferrer">
+                {v.thumbnail && <img className="v-thumb" src={v.thumbnail} alt="" loading="lazy"/>}
+                {!v.thumbnail && <div className="v-thumb" style={{background:"var(--bg-e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"var(--text-f)"}}>YT</div>}
+                <div className="v-info">
+                  <div className="v-title">{v.title||v.clipName}</div>
+                  <div className="v-meta">
+                    {v.channel && <span>{v.channel} · </span>}
+                    {v.viewCount != null && <span className="views">{(v.viewCount||0).toLocaleString()} views</span>}
+                    {v.views != null && !v.viewCount && <span className="views">{(v.views||0).toLocaleString()} views</span>}
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+          <hr className="divider"/>
+        </>
+      )}
+      {ranks.length > 0 && (
+        <>
+          <div style={{fontFamily:"var(--font-m)",fontSize:10,color:"var(--acid-d)",textTransform:"uppercase",letterSpacing:".1em",marginBottom:10}}>
+            📊 Clip Rankings
+          </div>
+          {ranks.map((r,i)=>{
+            const m = RANK_META.find(x=>x.rank===r.rank)||RANK_META[i]||RANK_META[0];
             return (
-                <button onClick={() => openLink(url)} style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    background: c.bg, border: `1px solid ${c.border}`,
-                    borderRadius: 7, padding: small ? "4px 9px" : "5px 11px",
-                    fontSize: small ? 10 : 11, fontWeight: 700, color: c.color,
-                    cursor: "pointer", whiteSpace: "nowrap",
-                }}>
-                    <span style={{ fontSize: small ? 9 : 10 }}>{c.icon}</span>{label}
-                    <span style={{ fontSize: 8, opacity: 0.55 }}>↗</span>
+              <div key={i} className="rank-card" style={{borderColor:`${m.color}22`}}>
+                <div className="rank-head">
+                  <div className="rank-num" style={{background:m.color,boxShadow:`0 0 12px ${m.glow}`}}>#{m.rank}</div>
+                  <div className="rank-meta">
+                    <div className="rank-label" style={{color:m.color}}>{m.label}</div>
+                    <div className="rank-name">{r.clipName||r.primaryKeyword}</div>
+                  </div>
+                  {r.viralScore?.final && (
+                    <span className="score-pill" style={{color:m.color,borderColor:`${m.color}35`,background:`${m.color}10`}}>
+                      ⚡{r.viralScore.final}
+                    </span>
+                  )}
+                </div>
+                {r.whyHere && <div className="rank-why">{r.whyHere}</div>}
+                <div className="source-row">
+                  {(r.sources?.youtube?.queries||[]).slice(0,1).map((q,j)=>(
+                    <SrcBtn key={j} platform="youtube" label="▶ YouTube" query={q}/>
+                  ))}
+                  {(r.sources?.tiktok?.queries||[]).slice(0,1).map((q,j)=>(
+                    <SrcBtn key={j} platform="tiktok" label="♬ TikTok" query={q}/>
+                  ))}
+                  {(r.sources?.reddit?.queries||[]).slice(0,1).map((q,j)=>(
+                    <SrcBtn key={j} platform="reddit" label="● Reddit" query={q}/>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+function RankingTab({data}) {
+  const [activeRank, setActiveRank] = useState(6);
+  if (!data) return <div className="empty"><div className="glyph">◎</div>No ranking data yet.</div>;
+  const ranks = data.ranks || [];
+  const rd = ranks.find(r=>r.rank===activeRank)||ranks[0];
+  const m = RANK_META.find(x=>x.rank===activeRank)||RANK_META[0];
+  return (
+    <div className="tab-content">
+      <RetentionCurve/>
+      <div style={{display:"flex",gap:5,marginBottom:16,background:"rgba(255,255,255,.03)",padding:4,borderRadius:12,border:"1px solid rgba(255,255,255,.06)"}}>
+        {[...RANK_META].reverse().map(rm=>(
+          <button key={rm.rank} onClick={()=>setActiveRank(rm.rank)} style={{
+            flex:1,background:activeRank===rm.rank?rm.color:"transparent",border:"none",borderRadius:8,
+            padding:"7px 3px",fontSize:12,fontWeight:800,
+            color:activeRank===rm.rank?"#fff":"rgba(240,240,245,.28)",cursor:"pointer",transition:"all .15s",
+            boxShadow:activeRank===rm.rank?`0 0 12px ${rm.glow}`:"none",
+          }}>#{rm.rank}</button>
+        ))}
+      </div>
+      {rd && m && (
+        <div className="rank-card" style={{borderColor:`${m.color}35`}}>
+          <div className="rank-head">
+            <div className="rank-num" style={{background:m.color,boxShadow:`0 0 16px ${m.glow}`}}>#{m.rank}</div>
+            <div className="rank-meta">
+              <div className="rank-label" style={{color:m.color}}>{m.label}</div>
+              <div className="rank-name">{rd.clipName||rd.primaryKeyword}</div>
+            </div>
+            {rd.opportunityScore && <span className="opp-badge opp-high">🚀 {rd.opportunityScore}</span>}
+          </div>
+          {rd.primaryKeyword && (
+            <div style={{background:`${m.color}10`,border:`1px solid ${m.color}30`,borderRadius:8,padding:"8px 12px",marginBottom:10,fontFamily:"var(--font-m)",fontSize:12,fontWeight:700,color:m.color}}>
+              🎯 {rd.primaryKeyword}
+            </div>
+          )}
+          {rd.secondaryKeywords?.length > 0 && (
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+              {rd.secondaryKeywords.map((k,i)=><span key={i} className="tag-chip">{k}</span>)}
+            </div>
+          )}
+          {rd.whyHere && <div className="rank-why">{rd.whyHere}</div>}
+          <div className="rank-score-row">
+            {rd.trendDirection && <span className="score-pill" style={{color:"#4ade80",borderColor:"rgba(74,222,128,.3)",background:"rgba(74,222,128,.08)"}}>📈 {rd.trendDirection}</span>}
+            {rd.rarity && <span className="score-pill" style={{color:"#a78bfa",borderColor:"rgba(167,139,250,.3)",background:"rgba(167,139,250,.08)"}}>💎 {rd.rarity}</span>}
+            {rd.competition && <span className="score-pill" style={{color:"#fbbf24",borderColor:"rgba(251,191,36,.3)",background:"rgba(251,191,36,.08)"}}>⚔️ {rd.competition}</span>}
+          </div>
+          <div className="source-row">
+            {(rd.sources?.youtube?.queries||[rd.primaryKeyword]).filter(Boolean).slice(0,2).map((q,j)=>(
+              <SrcBtn key={j} platform="youtube" label={`▶ "${q}"`} query={q}/>
+            ))}
+            {(rd.sources?.tiktok?.queries||[]).slice(0,1).map((q,j)=>(
+              <SrcBtn key={j} platform="tiktok" label={`♬ ${q}`} query={q}/>
+            ))}
+            {(rd.sources?.reddit?.subreddits||[]).slice(0,1).map((s,j)=>(
+              <button key={j} className="src-btn" onClick={()=>window.open(`https://www.reddit.com/r/${s}/top/?t=all`,"_blank","noopener")} style={{color:"#FF4500",borderColor:"rgba(255,69,0,.3)"}}>● r/{s}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SEOTab({data}) {
+  if (!data) return <div className="empty"><div className="glyph">◎</div>No SEO data yet.</div>;
+  return (
+    <div className="tab-content">
+      {data.title_formula && (
+        <div className="seo-card">
+          <div className="seo-card-label">📝 Title Formula</div>
+          <div className="seo-card-val">{data.title_formula}</div>
+        </div>
+      )}
+      {data.description_hook && (
+        <div className="seo-card">
+          <div className="seo-card-label">✍️ Description Hook</div>
+          <div className="seo-card-val">{data.description_hook}</div>
+        </div>
+      )}
+      {data.upload_timing && (
+        <div className="seo-card">
+          <div className="seo-card-label">🕐 Best Upload Time</div>
+          <div className="seo-card-val">{data.upload_timing}</div>
+        </div>
+      )}
+      {data.opportunity_summary && (
+        <div className="seo-card" style={{borderColor:"rgba(198,255,61,.25)",background:"rgba(198,255,61,.04)"}}>
+          <div className="seo-card-label" style={{color:"var(--acid)"}}>🚀 Opportunity</div>
+          <div className="seo-card-val">{data.opportunity_summary}</div>
+        </div>
+      )}
+      {data.tags?.length > 0 && (
+        <div className="seo-section">
+          <div className="seo-section-title">🏷️ Tags</div>
+          <div className="tag-grid">{data.tags.map((t,i)=><span key={i} className="tag-chip">{t}</span>)}</div>
+        </div>
+      )}
+      {data.youtube_queries?.length > 0 && (
+        <div className="seo-section">
+          <div className="seo-section-title">▶ YouTube Search Queries</div>
+          <div className="tag-grid">
+            {data.youtube_queries.map((q,i)=>(
+              <button key={i} onClick={()=>window.open(PLATFORMS.youtube.url(q),"_blank","noopener")} className="src-btn" style={{color:"#FF0000",borderColor:"rgba(255,0,0,.3)"}}>
+                "{q}" ↗
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {data.tiktok_hashtags?.length > 0 && (
+        <div className="seo-section">
+          <div className="seo-section-title">♬ TikTok Hashtags</div>
+          <div className="tag-grid">
+            {data.tiktok_hashtags.map((h,i)=>(
+              <button key={i} onClick={()=>window.open(PLATFORMS.tiktok.url(h),"_blank","noopener")} className="src-btn" style={{color:"#00F2EA",borderColor:"rgba(0,242,234,.3)"}}>
+                {h} ↗
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {data.reddit_subreddits?.length > 0 && (
+        <div className="seo-section">
+          <div className="seo-section-title">● Reddit Communities</div>
+          <div className="tag-grid">
+            {data.reddit_subreddits.map((r,i)=>(
+              <button key={i} onClick={()=>window.open(`https://www.reddit.com/r/${r}/top/?t=all`,"_blank","noopener")} className="src-btn" style={{color:"#FF4500",borderColor:"rgba(255,69,0,.3)"}}>
+                r/{r} ↗
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntelligenceTab({data}) {
+  if (!data) return <div className="empty"><div className="glyph">◎</div>No intelligence data yet.</div>;
+  return (
+    <div className="tab-content">
+      {data.pattern && (
+        <div className="intel-card" style={{borderColor:"rgba(204,0,255,.25)",background:"rgba(204,0,255,.04)"}}>
+          <div className="intel-label" style={{color:"#CC00FF"}}>🧠 Viral Pattern</div>
+          <div className="intel-val">{data.pattern}</div>
+        </div>
+      )}
+      {data.hook_formula && (
+        <div className="intel-card">
+          <div className="intel-label">⚡ Universal Hook Formula</div>
+          <div className="intel-val">{data.hook_formula}</div>
+        </div>
+      )}
+      {data.replay_factor && (
+        <div className="intel-card">
+          <div className="intel-label">🔄 Replay Factor</div>
+          <div className="intel-val">{data.replay_factor}</div>
+        </div>
+      )}
+      {data.viral_multiplier && (
+        <div className="intel-card" style={{borderColor:"rgba(255,0,80,.25)",background:"rgba(255,0,80,.04)"}}>
+          <div className="intel-label" style={{color:"#FF0050"}}>🚀 Viral Multiplier</div>
+          <div className="intel-val">{data.viral_multiplier}</div>
+        </div>
+      )}
+      {data.best_time_to_post && (
+        <div className="intel-card">
+          <div className="intel-label">🕐 Best Time to Post</div>
+          <div className="intel-val">{data.best_time_to_post}</div>
+        </div>
+      )}
+      {data.emotion_triggers?.length > 0 && (
+        <div className="intel-card">
+          <div className="intel-label">😮 Emotion Triggers</div>
+          <div className="tag-grid" style={{marginTop:6}}>
+            {data.emotion_triggers.map((e,i)=><span key={i} className="tag-chip">{e}</span>)}
+          </div>
+        </div>
+      )}
+      {data.content_gaps?.length > 0 && (
+        <div className="intel-card" style={{borderColor:"rgba(198,255,61,.2)"}}>
+          <div className="intel-label" style={{color:"var(--acid)"}}>💡 Untapped Content Gaps</div>
+          {data.content_gaps.map((g,i)=>(
+            <div key={i} style={{fontSize:13,color:"var(--text-d)",padding:"4px 0",display:"flex",gap:8,alignItems:"flex-start"}}>
+              <span style={{color:"var(--acid)",marginTop:1}}>▶</span>{g}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompetitorTab({data}) {
+  if (!data) return <div className="empty"><div className="glyph">◎</div>No competitor data yet.</div>;
+  const comps = data.competitors || [];
+  return (
+    <div className="tab-content">
+      {comps.map((c,i)=>(
+        <div key={i} className="comp-card">
+          <div className="comp-handle">
+            <a href={`https://www.youtube.com/${c.channel}`} target="_blank" rel="noopener noreferrer"
+              style={{color:"var(--acid)",textDecoration:"none"}}>
+              {c.channel} ↗
+            </a>
+          </div>
+          {c.avg_views && (
+            <div className="comp-row">
+              <div className="comp-label">Avg Views</div>
+              <div className="comp-val">{c.avg_views}</div>
+            </div>
+          )}
+          {c.posting_freq && (
+            <div className="comp-row">
+              <div className="comp-label">Posts</div>
+              <div className="comp-val">{c.posting_freq}</div>
+            </div>
+          )}
+          {c.strengths && (
+            <div className="comp-row">
+              <div className="comp-label">✅ Strengths</div>
+              <div className="comp-val">{c.strengths}</div>
+            </div>
+          )}
+          {c.content_gaps && (
+            <div className="comp-row">
+              <div className="comp-label" style={{color:"var(--acid)"}}>💡 Gaps</div>
+              <div className="comp-val" style={{color:"var(--acid-d)"}}>{c.content_gaps}</div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main App ──────────────────────────────────────────────────────────────
+function App() {
+  // ── ALL STATE (fixes black screen — no missing declarations) ──
+  const [topic, setTopic]                 = useState("");
+  const [creativeBrief, setCreativeBrief] = useState("");
+  const [refChannels, setRefChannels]     = useState("");
+  const [dateFilter, setDateFilter]       = useState("7 Days");
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState(null);
+  const [agentResults, setAgentResults]   = useState({});   // {discovery,ranking,seo,intelligence,competitor}
+  const [agentStatus, setAgentStatus]     = useState({ discovery:"idle", ranking:"idle", seo:"idle", intelligence:"idle", competitor:"idle" });
+  const [activeProvider, setActiveProvider] = useState("google");
+  const [selectedModel, setSelectedModel]   = useState("gemini-1.5-flash-latest");
+  const [availableModels, setAvailableModels] = useState(LLM_PROVIDERS.google.models);
+  const [activeTab, setActiveTab]         = useState("discovery");
+  const [phaseIdx, setPhaseIdx]           = useState(0);    // ← CRITICAL FIX (was missing)
+  const [copied, setCopied]               = useState(false); // ← CRITICAL FIX (was missing)
+  const [workerUrl, setWorkerUrl]         = useState("https://viral-discovery-proxy.fasterwgseverkh.workers.dev");
+  const [showSettings, setShowSettings]   = useState(false);
+  const [tempUrl, setTempUrl]             = useState("");
+  const [hasResult, setHasResult]         = useState(false);
+  const intervalRef = useRef(null);
+
+  const phases = ["Planning strategy…","Scanning YouTube…","Analyzing clips…","Generating insights…","Compiling ranks…","Finalizing report…"];
+
+  // Restore from localStorage on mount
+  useEffect(()=>{
+    try {
+      const saved = localStorage.getItem("viralRadar_v3");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.topic)       setTopic(s.topic);
+        if (s.workerUrl)   setWorkerUrl(s.workerUrl);
+        if (s.agentResults && Object.keys(s.agentResults).length > 0) {
+          setAgentResults(s.agentResults);
+          setHasResult(true);
+          setAgentStatus({ discovery:"done", ranking:"done", seo:"done", intelligence:"done", competitor:"done" });
+        }
+      }
+    } catch {}
+  },[]);
+
+  function saveState(results) {
+    try { localStorage.setItem("viralRadar_v3", JSON.stringify({ topic, workerUrl, agentResults: results })); } catch {}
+  }
+
+  function setStatus(agent, status) {
+    setAgentStatus(prev => ({...prev, [agent]: status}));
+  }
+  function setResult(agent, data) {
+    setAgentResults(prev => {
+      const next = {...prev, [agent]: data};
+      saveState(next);
+      return next;
+    });
+  }
+
+  function handleProviderChange(e) {
+    const name = e.target.value;
+    const cfg = LLM_PROVIDERS[name];
+    setActiveProvider(name);
+    setAvailableModels(cfg.models);
+    setSelectedModel(cfg.models[0]?.id || "");
+  }
+
+  async function runAgent(agentName, endpoint, payload) {
+    setStatus(agentName, "loading");
+    try {
+      const data = await callWorker(workerUrl, endpoint, payload);
+      // Parse text field if needed
+      let parsed = data;
+      if (data.text && typeof data.text === "string") {
+        try { parsed = JSON.parse(data.text); } catch { parsed = data; }
+      }
+      setResult(agentName, parsed);
+      setStatus(agentName, "done");
+      return parsed;
+    } catch(err) {
+      console.error(`[${agentName}] Error:`, err.message);
+      setResult(agentName, { error: err.message });
+      setStatus(agentName, "error");
+      return null;
+    }
+  }
+
+  async function handleResearch() {
+    if (!topic.trim()) return;
+    // Reset state
+    setLoading(true);
+    setError(null);
+    setHasResult(false);
+    setAgentResults({});
+    setAgentStatus({ discovery:"idle", ranking:"idle", seo:"idle", intelligence:"idle", competitor:"idle" });
+    setActiveTab("discovery");
+    setPhaseIdx(0); // now defined
+    setCopied(false); // now defined
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(()=>setPhaseIdx(p=>(p+1)%phases.length), 900);
+
+    const channels = refChannels.split("\n").map(c=>c.trim()).filter(Boolean);
+
+    // Agent 1: Discovery (main — YouTube grounded)
+    const discoveryData = await runAgent("discovery", "/api/generate", {
+      topic: topic.trim(),
+      dateFilter,
+      provider: activeProvider,
+      model: selectedModel,
+      referenceChannels: channels,
+      styleInstructions: creativeBrief.trim(),
+    });
+
+    // Agents 2–5: run in parallel
+    const videoTitles = (discoveryData?.real_videos||[]).map(v=>v.title||"").filter(Boolean);
+    await Promise.all([
+      runAgent("ranking", "/api/complete", {
+        prompt: rankingPrompt(topic.trim()),
+        provider: activeProvider,
+        model: selectedModel,
+      }),
+      runAgent("seo", "/api/complete", {
+        prompt: seoPrompt(topic.trim()),
+        provider: activeProvider,
+        model: selectedModel,
+      }),
+      runAgent("intelligence", "/api/complete", {
+        prompt: intelligencePrompt(topic.trim(), videoTitles),
+        provider: activeProvider,
+        model: selectedModel,
+      }),
+      runAgent("competitor", "/api/complete", {
+        prompt: competitorPrompt(topic.trim()),
+        provider: activeProvider,
+        model: selectedModel,
+      }),
+    ]);
+
+    clearInterval(intervalRef.current);
+    setLoading(false);
+    setHasResult(true);
+  }
+
+  function handleNewSearch() {
+    clearInterval(intervalRef.current);
+    setTopic(""); setCreativeBrief(""); setRefChannels("");
+    setLoading(false); setError(null); setHasResult(false);
+    setAgentResults({});
+    setAgentStatus({ discovery:"idle", ranking:"idle", seo:"idle", intelligence:"idle", competitor:"idle" });
+    setPhaseIdx(0); setCopied(false);
+    localStorage.removeItem("viralRadar_v3");
+  }
+
+  function copyResults() {
+    const r = agentResults;
+    const lines = [`📊 Viral Radar Report: ${topic}\n`];
+    if (r.seo?.title_formula) lines.push(`Title Formula: ${r.seo.title_formula}`);
+    if (r.seo?.tags) lines.push(`Tags: ${r.seo.tags.join(", ")}`);
+    if (r.intelligence?.pattern) lines.push(`\nViral Pattern: ${r.intelligence.pattern}`);
+    if (r.intelligence?.content_gaps) lines.push(`Content Gaps: ${r.intelligence.content_gaps.join(", ")}`);
+    if (r.ranking?.ranks) {
+      lines.push("\n6-Rank Structure:");
+      r.ranking.ranks.forEach(rk=>lines.push(`  #${rk.rank} ${rk.label||""}: ${rk.clipName||""} — ${rk.primaryKeyword||""}`));
+    }
+    navigator.clipboard.writeText(lines.join("\n")).then(()=>{
+      setCopied(true);
+      setTimeout(()=>setCopied(false), 2200);
+    });
+  }
+
+  function saveWorkerUrl() {
+    if (tempUrl.trim()) setWorkerUrl(tempUrl.trim());
+    setShowSettings(false);
+  }
+
+  const TABS = [
+    { id:"discovery",   label:"Discovery",    icon:"🎬", agentKey:"discovery"    },
+    { id:"ranking",     label:"Ranking",      icon:"📊", agentKey:"ranking"      },
+    { id:"seo",         label:"SEO",          icon:"🔍", agentKey:"seo"          },
+    { id:"intelligence",label:"Intelligence", icon:"🧠", agentKey:"intelligence" },
+    { id:"competitor",  label:"Competitor",   icon:"⚔️", agentKey:"competitor"   },
+  ];
+
+  function renderTab() {
+    const r = agentResults;
+    const status = agentStatus[activeTab];
+    if (status === "loading") return (
+      <div style={{textAlign:"center",padding:"40px",color:"var(--text-f)"}}>
+        <div className="spinner" style={{margin:"0 auto 12px",width:24,height:24}}/>
+        <div style={{fontFamily:"var(--font-m)",fontSize:12}}>Running agent…</div>
+      </div>
+    );
+    if (r[activeTab]?.error) return (
+      <div className="err-box">⚠️ {r[activeTab].error}</div>
+    );
+    switch(activeTab) {
+      case "discovery":    return <DiscoveryTab data={r.discovery} />;
+      case "ranking":      return <RankingTab data={r.ranking} />;
+      case "seo":          return <SEOTab data={r.seo} />;
+      case "intelligence": return <IntelligenceTab data={r.intelligence} />;
+      case "competitor":   return <CompetitorTab data={r.competitor} />;
+      default:             return null;
+    }
+  }
+
+  return (
+    <div className="shell">
+
+      {/* Settings modal */}
+      {showSettings && (
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowSettings(false)}>
+          <div className="modal">
+            <h3>⚙️ Worker URL</h3>
+            <label>Cloudflare Worker Base URL</label>
+            <input defaultValue={workerUrl} onChange={e=>setTempUrl(e.target.value)}
+              placeholder="https://your-worker.workers.dev" onKeyDown={e=>e.key==="Enter"&&saveWorkerUrl()}/>
+            <div className="modal-hint">
+              Current: <span style={{color:"var(--acid)",wordBreak:"break-all"}}>{workerUrl}</span><br/>
+              Make sure CORS is enabled. The worker must have GEMINI_API_KEY or OPENROUTER_API_KEY set.
+            </div>
+            <div className="modal-btns">
+              <button className="btn-sm" onClick={()=>setShowSettings(false)}>Cancel</button>
+              <button className="btn-sm" style={{borderColor:"var(--acid-d)",color:"var(--acid)"}} onClick={saveWorkerUrl}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Nav */}
+      <header className="nav">
+        <div className="nav-brand">
+          <span className="nav-mark">✦</span>
+          Viral Radar
+        </div>
+        <div className="nav-actions">
+          <span className="nav-badge">Source Intelligence Engine</span>
+          <button className="btn-sm" onClick={()=>{setTempUrl(workerUrl);setShowSettings(true);}}>⚙️ Worker</button>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="hero">
+        <div className="hero-tag"><span className="dot"></span> 5 AI agents · real YouTube grounding · multi-provider fallback</div>
+        <h1>Stop guessing<br/>what goes <span>viral.</span></h1>
+        <p>Drop a topic. Get real videos, a 6-rank structure, SEO keywords, competitor gaps, and cross-video intelligence — all in one pass.</p>
+      </section>
+
+      {/* Console input */}
+      <div className="console">
+        <div className="console-head">
+          <span className="cdot" style={{background:"#ff5f57"}}/>
+          <span className="cdot" style={{background:"#febc2e"}}/>
+          <span className="cdot" style={{background:"#28c840"}}/>
+          <span style={{marginLeft:6}}>research.sh</span>
+        </div>
+        <div className="console-body">
+          {/* Topic input */}
+          <div className="console-prompt">
+            <span className="c-caret">›</span>
+            <input className="c-input" type="text" value={topic}
+              onChange={e=>setTopic(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&!loading&&handleResearch()}
+              placeholder="e.g. Worst Martial Arts Fails"
+              disabled={loading}/>
+            {!topic && !loading && <span className="c-cursor"/>}
+            <button className="surprise-btn" disabled={loading} title="Surprise me"
+              onClick={()=>setTopic(SURPRISE[Math.floor(Math.random()*SURPRISE.length)])}>🎲</button>
+          </div>
+
+          {/* Example topics */}
+          <div className="example-row">
+            {EXAMPLES.map(t=>(
+              <button key={t} className={`ex-btn${topic===t?" active":""}`} disabled={loading} onClick={()=>setTopic(t)}>{t}</button>
+            ))}
+          </div>
+
+          {/* Config row */}
+          <div className="config-row">
+            <div>
+              <div className="field-label">📅 Date Range</div>
+              <div className="select-wrap">
+                <select value={dateFilter} onChange={e=>setDateFilter(e.target.value)} disabled={loading}>
+                  {DATE_FILTERS.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <div className="field-label">🤖 AI Provider</div>
+              <div className="select-wrap">
+                <select value={activeProvider} onChange={handleProviderChange} disabled={loading}>
+                  {Object.entries(LLM_PROVIDERS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <div className="field-label">⚙️ Model</div>
+              <div className="select-wrap">
+                <select value={selectedModel} onChange={e=>setSelectedModel(e.target.value)} disabled={loading}>
+                  {availableModels.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Creative brief */}
+          <div className="expand-row">
+            <div className="expand-label">◆ Creative Brief <span className="expand-opt">(optional — describe your content format)</span></div>
+            <textarea className="expand-textarea" value={creativeBrief} onChange={e=>setCreativeBrief(e.target.value)}
+              disabled={loading} rows={2}
+              placeholder="e.g. 6-rank countdown, short clips only (5-20s), strong reaction moments, not compilations…"/>
+            <div className="expand-hint">The AI reads this as direct instructions — tells it what "good" looks like for your niche.</div>
+          </div>
+
+          {/* Reference channels */}
+          <div className="expand-row">
+            <div className="expand-label">◆ Style DNA Sources <span className="expand-opt">(optional — paste channel links)</span></div>
+            <textarea className="expand-textarea" value={refChannels} onChange={e=>setRefChannels(e.target.value)}
+              disabled={loading} rows={2}
+              placeholder="youtube.com/@oogway_ranks&#10;youtube.com/@polarranks"/>
+            <div className="expand-hint">AI uses these as format/tone reference only — never copies their videos.</div>
+          </div>
+
+          {/* Run button */}
+          <button className={`run-btn${loading?" loading":""}`}
+            onClick={handleResearch} disabled={loading||!topic.trim()}>
+            {loading
+              ? <><span style={{animation:"spin .8s linear infinite",display:"inline-block"}}>⚡</span>{phases[phaseIdx]}</>
+              : "🚀 Run Research — 5 Agents"
+            }
+          </button>
+        </div>
+      </div>
+
+      {/* Agent strip */}
+      <div className="agent-strip">
+        {[
+          { name:"DiscoveryAgent",    key:"discovery"     },
+          { name:"RankingAgent",      key:"ranking"       },
+          { name:"SEOAgent",          key:"seo"           },
+          { name:"IntelligenceAgent", key:"intelligence"  },
+          { name:"CompetitorAgent",   key:"competitor"    },
+        ].map(a=><AgentChip key={a.key} name={a.name} status={agentStatus[a.key]}/>)}
+      </div>
+
+      {/* Global error */}
+      {error && <div className="err-box">⚠️ {error}</div>}
+
+      {/* Results */}
+      {hasResult && (
+        <div className="results">
+          <div className="results-topbar">
+            <div className="results-topic">Results: <span>{topic}</span></div>
+            <div style={{display:"flex",gap:8}}>
+              <button className={`copy-btn${copied?" copied":""}`} onClick={copyResults}>
+                {copied?"✔ Copied":"📋 Copy Report"}
+              </button>
+              <button className="btn-sm" onClick={handleNewSearch}>New Search</button>
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="tab-bar">
+            {TABS.map(t=>{
+              const st = agentStatus[t.agentKey];
+              const hasErr = agentResults[t.agentKey]?.error;
+              return (
+                <button key={t.id} className={`tab-btn${activeTab===t.id?" active":""}${hasErr?" has-error":""}`}
+                  onClick={()=>setActiveTab(t.id)}>
+                  {t.icon}&nbsp;{t.label}
+                  {st==="loading" && <span style={{width:6,height:6,borderRadius:"50%",background:"var(--acid)",animation:"pulse .8s infinite",display:"inline-block"}}/>}
+                  {st==="done" && !hasErr && <span style={{color:"#4ade80",fontSize:8}}>●</span>}
+                  {hasErr && <span style={{color:"var(--coral)",fontSize:8}}>●</span>}
                 </button>
-            );
-        }
+              );
+            })}
+          </div>
 
-        function RetentionCurve() {
-            return (
-                <div className="retention-curve-wrapper">
-                    <div className="retention-curve-label">Retention</div>
-                    {[...RANK_META].reverse().map(m => (
-                        <div key={m.rank} className="retention-rank-item">
-                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
-                            <div className="retention-bar-inner" style={{
-                                '--bar-height': `${m.bar * 0.5}px`,
-                                '--item-color': m.color,
-                                '--item-glow': m.glow,
-                                height: `${m.bar * 0.5}px`,
-                                background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
-                                boxShadow: `0 -3px 10px ${m.glow}`
-                            }} />
-                            <span className="retention-rank-label">#{m.rank}</span>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
+          {/* Tab content */}
+          {renderTab()}
+        </div>
+      )}
 
-        function InsightsCard({ title, icon, children }) {
-            return (
-                <div className="insights-card">
-                    <div className="insights-card-title">
-                        {icon} {title}
-                    </div>
-                    {children}
-                </div>
-            );
-        }
+      {!hasResult && !loading && (
+        <div className="empty" style={{marginTop:40}}>
+          <div className="glyph">🚀</div>
+          <div style={{fontSize:16,marginBottom:8}}>Enter a topic above to start</div>
+          <div style={{fontSize:13}}>5 AI agents will run in parallel and give you real results</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-        function EvidenceList({ data, platformType }) {
-            if (!data || data.length === 0) {
-                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
-            }
-
-            return (
-                <div className="evidence-list">
-                    {data.map((item, i) => (
-                        <div key={i} className="evidence-item">
-                            {/* Optional: Add thumbnail if available, for now placeholder */}
-                            {item.thumbnail_url ? 
-                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
-                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
-                            }
-                            <div className="evidence-info">
-                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
-                                    {item.title}
-                                </a>
-                                <div className="evidence-info-meta">
-                                    <span className="evidence-info-platform">{item.platform}</span>
-                                    {item.channel && ` · ${item.channel}`}
-                                    {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
-                                    {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
-                                    {item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`}
-                                    {item.comments && ` · ${item.comments.toLocaleString()} comments`}
-                                    {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
-                                </div>
-                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
-                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-
-        function App() {
-            const [topic, setTopic] = useState('');
-            const [creativeBrief, setCreativeBrief] = useState('');
-            const [referenceChannels, setReferenceChannels] = useState('');
-            const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
-            const [activeProvider, setActiveProvider] = useState(() => {
-                const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
-                return firstConfigured || 'google';
-            });
-            const [availableModels, setAvailableModels] = useState([]);
-            const [selectedModel, setSelectedModel] = useState('');
-            const [restored, setRestored] = useState(false);
-            const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
-
-            const intervalRef = useRef(null);
-
-            const phases = [
-                "Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…",
-                "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…",
-            ];
-
-            const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
-
-            // Helper to persist state to localStorage
-            const persistState = (newState) => {
-                try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-                } catch (e) {
-                    console.error("Failed to save state to localStorage:", e);
-                }
-            };
-
-            // Helper to restore state from localStorage
-            const restoreState = () => {
-                try {
-                    const savedState = localStorage.getItem(STORAGE_KEY);
-                    if (savedState) {
-                        const parsedState = JSON.parse(savedState);
-                        setTopic(parsedState.topic || '');
-                        setCreativeBrief(parsedState.creativeBrief || '');
-                        setReferenceChannels(parsedState.referenceChannels || '');
-                        setDateFilter(parsedState.dateFilter || '7 Days');
-                        setResults(parsedState.results || null);
-                        setRestored(!!parsedState.results);
-                        setActiveView(parsedState.activeView || 'insights');
-
-                        // Restore LLM provider and model
-                        if (parsedState.activeProvider && LLM_PROVIDERS_CONFIG[parsedState.activeProvider]) {
-                            setActiveProvider(parsedState.activeProvider);
-                            const providerCfg = LLM_PROVIDERS_CONFIG[parsedState.activeProvider];
-                            setAvailableModels(providerCfg.models);
-                            if (parsedState.selectedModel && providerCfg.models.some(m => m.id === parsedState.selectedModel)) {
-                                setSelectedModel(parsedState.selectedModel);
-                            } else {
-                                setSelectedModel(providerCfg.models[0]?.id || '');
-                            }
-                        } else {
-                             const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
-                             if (firstConfigured) {
-                                 setActiveProvider(firstConfigured);
-                                 setAvailableModels(LLM_PROVIDERS_CONFIG[firstConfigured].models);
-                                 setSelectedModel(LLM_PROVIDERS_CONFIG[firstConfigured].models[0]?.id || '');
-                             }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Failed to restore state from localStorage:", e);
-                }
-            };
-
-            // Initial fetch for worker capabilities and restore state
-            useEffect(() => {
-                const init = async () => {
-                    let initialProviderName = activeProvider;
-
-                    try {
-                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
-                        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
-                        const data = await response.json();
-                        
-                        const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
-                        if (firstConfiguredFromWorker) {
-                            initialProviderName = firstConfiguredFromWorker;
-                        } else {
-                            setError("No LLM providers are configured in your Cloudflare Worker. Please check your Worker's environment variables.");
-                            initialProviderName = ''; // No providers
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch worker capabilities, falling back to hardcoded defaults:", e);
-                        setError("Worker connection error or timeout (10s). Please ensure your Cloudflare Worker is deployed and its URL is correct. Falling back to hardcoded providers.");
-                        initialProviderName = 'google';
-                    }
-
-                    const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
-                    if (currentProviderCfg) {
-                        setActiveProvider(initialProviderName);
-                        setAvailableModels(currentProviderCfg.models);
-                        setSelectedModel(currentProviderCfg.models[0]?.id || '');
-                    } else {
-                        setActiveProvider('');
-                        setAvailableModels([]);
-                        setSelectedModel('');
-                    }
-
-                    restoreState();
-                };
-                init();
-            }, []);
-
-
-            // Persist state whenever relevant state changes
-            useEffect(() => {
-                persistState({
-                    topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
-                    activeProvider, selectedModel,
-                });
-            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel]);
-
-
-            const handleProviderChange = (e) => {
-                const name = e.target.value;
-                const cfg = LLM_PROVIDERS_CONFIG[name];
-                setActiveProvider(name);
-                setAvailableModels(cfg.models);
-                setSelectedModel(cfg.models[0]?.id || '');
-            };
-
-            const handleNewSearch = () => {
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                setTopic('');
-                setCreativeBrief('');
-                setReferenceChannels('');
-                setDateFilter('7 Days');
-                setLoading(false);
-                setError(null);
-                setResults(null);
-                setRestored(false);
-                setActiveView('insights');
-                setCopied(false);
-                setPhaseIdx(0);
-                localStorage.removeItem(STORAGE_KEY);
-            };
-
-            const handleSurpriseMe = () => {
-                const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
-                setTopic(pick);
-                setCreativeBrief("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
-                setReferenceChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
-            };
-
-            const copyResult = () => {
-                if (!results) return;
-
-                const insights = results.ai_actionable_insights;
-                const rankedClips = insights?.ranked_clip_opportunities || [];
-
-                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
-                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
-                copyText += `--- Actionable Insights ---\n\n`;
-
-                if (insights?.hook_suggestions?.length > 0) {
-                    copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\n`;
-                }
-                if (insights?.hashtag_strategy?.length > 0) {
-                    copyText += `\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\n`;
-                }
-                if (insights?.key_search_phrases_for_discoverability?.length > 0) {
-                    copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
-                }
-                if (insights?.suggested_source_platforms_for_originals?.length > 0) {
-                    copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
-                }
-                if (insights?.repost_analysis_insight) {
-                    copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.title_insights) {
-                    copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.description_hook) {
-                    copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
-                    copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\n`;
-                }
-
-                copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
-                if (rankedClips.length > 0) {
-                    rankedClips.forEach(clip => {
-                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
-                        copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
-                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
-                        if (clip.url_to_potential_original_clip) {
-                            copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
-                        }
-                        if (clip.editorial_repost_analysis) {
-                            copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\n`;
-                        }
-                        copyText += `\n`;
-                    });
-                } else {
-                    copyText += `No ranked clip opportunities found yet.\n`;
-                }
-
-                navigator.clipboard.writeText(copyText).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                });
-            };
-
-            const handleResearch = async () => {
-                if (!topic.trim()) { setError("Enter a topic first."); return; }
-                if (!selectedModel) { setError("Please select an LLM model."); return; }
-
-                setLoading(true);
-                setError(null);
-                setResults(null);
-                setRestored(false);
-                setActiveView('insights');
-                setCopied(false);
-                setPhaseIdx(0);
-
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                intervalRef.current = setInterval(() => {
-                    setPhaseIdx(p => (p + 1) % phases.length);
-                }, 900);
-
-                try {
-                    const payload = {
-                        topic: topic.trim(),
-                        creativeBrief: creativeBrief.trim(),
-                        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
-                        dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
-                        provider: activeProvider,
-                        model: selectedModel,
-                    };
-
-                    // Call the new Worker endpoint
-                    const insights = await callWorkerAPI('/api/generate-insights', payload);
-                    setResults(insights);
-
-                } catch (err) {
-                    console.error("Source Intelligence Engine failed:", err);
-                    setError(err.message || "An unknown error occurred during source intelligence processing.");
-                } finally {
-                    if (intervalRef.current) clearInterval(intervalRef.current);
-                    setLoading(false);
-                    setPhaseIdx(0);
-                }
-            };
-
-            const hasResult = !!results;
-
-            return (
-                <div className="shell">
-                    <div className="nav">
-                        <div className="nav-brand">
-                            <span className="nav-mark">✦</span>
-                            <span className="nav-name">Viral Radar</span>
-                        </div>
-                        <span className="nav-badge">Source Intelligence Engine</span>
-                    </div>
-
-                    <div className="hero">
-                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
-                        <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
-                        <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
-                    </div>
-
-                    <RetentionCurve />
-
-                    <div className="console console-input-section"> {/* Combined styles for consistency */}
-                        <div className="console-head">
-                            <span className="cdot" style={{ background: '#ff5f57' }}></span>
-                            <span className="cdot" style={{ background: '#febc2e' }}></span>
-                            <span style={{ background: '#28c840' }}></span>
-                            <span style={{ marginLeft: '6px' }}>research.sh</span>
-                        </div>
-                        <div className="console-body">
-                            <div className="console-prompt">
-                                <span className="caret">›</span>
-                                <input
-                                    type="text"
-                                    value={topic} onChange={e => setTopic(e.target.value)}
-                                    onKeyDown={e => e.key === "Enter" && !loading && handleResearch()}
-                                    placeholder="e.g. Worst Martial Arts Fails"
-                                    disabled={loading}
-                                    className="console-input"
-                                />
-                                {!topic && !loading && <span className="console-cursor"></span>}
-                                <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
-                            </div>
-
-                            <div className="config-row">
-                                <div className="select-wrap">
-                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
-                                    <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
-                                        {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
-                                    <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
-                                        {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
-                                            <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
-                                    <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
-                                        {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
-                                </div>
-                                <textarea
-                                    className="ref-channels-input"
-                                    value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
-                                    placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
-                                    disabled={loading}
-                                    rows={3}
-                                />
-                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
-                            </div>
-
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
-                                </div>
-                                <textarea
-                                    className="ref-channels-input"
-                                    value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
-                                    placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
-                                    disabled={loading}
-                                    rows={2}
-                                />
-                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
-                            </div>
-
-                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
-                                {loading
-                                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                                        <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
-                                        {phases[phaseIdx]}
-                                    </span>
-                                    : "🚀 Get Source Intelligence"}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="agent-strip">
-                        <span className="agent-chip">ResearchPlanner</span>
-                        <span className="agent-chip">SourceHunter</span>
-                        <span className="agent-chip">InsightsGenerator</span>
-                    </div>
-
-                    {error && (
-                        <div className="error-box">
-                            ⚠️ {error}
-                        </div>
-                    )}
-
-                    {loading && (
-                        <div className="loading-box">
-                            <div className="spinner" style={{ margin: '0 auto' }}></div>
-                            <p>Orchestrating AI Agents & Backend Services...</p>
-                        </div>
-                    )}
-
-                    {hasResult && !loading && (
-                        <div className="results">
-                            <div className="results-topbar">
-                                {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
-                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
-                            </div>
-                            <div className="result-summary-box">
-                                <div>
-                                    <div className="result-summary-title">
-                                        Source Intelligence Report for:
-                                    </div>
-                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
-                                </div>
-                                <div className="result-summary-badges">
-                                    {results.ai_actionable_insights?.overall_opportunity_reasoning && (
-                                        <span className="summary-badge opportunity">
-                                            🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
-                                        </span>
-                                    )}
-                                    {results.ai_actionable_insights?.trend_status && (
-                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
-                                            📈 {results.ai_actionable_insights.trend_status}
-                                        </span>
-                                    )}
-                                    <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
-                                        {copied ? "✔ Copied" : "📋 Copy"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="view-mode-selector">
-                                {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
-                                    <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
-                                        {v.icon} {v.label}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {activeView === "insights" && results.ai_actionable_insights && (
-                                <div className="insights-section">
-                                    <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
-                                        <ul className="insights-list">
-                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
-                                                <li key={i}>
-                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
-                                                    <div className="insights-item-value">
-                                                        Platform: {clip.suggested_source_platform || 'Any'} |
-                                                        Search Terms: {clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}
-                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
-                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="YouTube Upload Strategy" icon="🚀">
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Suggestions:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hashtag Strategy:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Title Insights:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Description Hook:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
-                                        </div>
-                                        <div>
-                                            <div className="insights-item-label">SEO Priority Tags:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
-                                            </div>
-                                        </div>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="Editorial DNA Summary" icon="🧬">
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Clip Length Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Style:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Emotion Focus:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
-                                        </div>
-                                        <div>
-                                            <div className="insights-item-label">Source Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
-                                        </div>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="Research Constraints Applied" icon="✅">
-                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
-                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
-                                        </ul>
-                                    </InsightsCard>
-
-                                </div>
-                            )}
-
-                            {activeView === "raw_evidence" && results.raw_evidence_found && (
-                                <div className="raw-evidence-section">
-                                    <InsightsCard title="Raw Evidence Found" icon="📚">
-                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
-                                        
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
-                                        <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
-                                        <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
-                                        <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
-                                        
-                                        {/* Add more platforms as needed */}
-                                    </InsightsCard>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {!hasResult && !loading && (
-                        <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
-                            <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
-                            <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
-                            <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
 </body>
 </html>
-            
