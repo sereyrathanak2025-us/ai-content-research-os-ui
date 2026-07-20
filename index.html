@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Viral Radar — Stop guessing what goes viral</title>
+    <title>Viral Radar — Source Intelligence Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -76,7 +76,7 @@
         ::-webkit-scrollbar-track { background: var(--bg); }
         ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
 
-        .shell { max-width: 880px; margin: 0 auto; padding: 0 20px 100px; }
+        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
 
         /* ---------- NAV ---------- */
         .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
@@ -219,26 +219,26 @@
         .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
         .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
 
-        .console-input-section { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; margin-bottom: 20px; }
-        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: rgba(240,240,245,0.3); text-transform: uppercase; margin-bottom: 9px; }
-        .console-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: #F0F0F5; outline: none; box-sizing: border-box; margin-bottom: 12px; }
-        .console-input::placeholder { color: rgba(240,240,245,0.16); }
+        .console-input-section { background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 9px; }
+        .console-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: var(--text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
+        .console-input::placeholder { color: var(--text-faint); }
         .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .example-topic-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 600; }
+        .example-topic-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 600; }
         .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
         .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .date-filter-section { margin-bottom: 14px; }
-        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px; }
+        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
         .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .date-filter-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: rgba(240,240,245,0.4); cursor: pointer; font-weight: 700; }
+        .date-filter-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 700; }
         .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
         .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .generate-btn { width: 100%; background: linear-gradient(135deg,#FF0050,#CC00FF); border: none; border-radius: 10px; padding: 14px 20px; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer; letter-spacing: 0.04em; box-shadow: 0 4px 20px rgba(255,0,80,0.28); opacity: 1; transition: all 0.18s; }
-        .generate-btn.loading { background: rgba(255,0,80,0.22); box-shadow: none; cursor: not-allowed; }
-        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; }
-        .generate-btn:hover:not(.loading):not(.disabled) { filter: brightness(1.08); }
+        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
+        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+        .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
 
         .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
 
@@ -253,16 +253,13 @@
         .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
         .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
 
-        .open-loop-hook { background: rgba(255,107,53,0.07); border: 1px solid rgba(255,107,53,0.18); border-radius: 10px; padding: 13px 17px; margin-bottom: 16px; }
-        .open-loop-hook-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF6B35; text-transform: uppercase; margin-bottom: 4px; }
-        .open-loop-hook-text { font-size: 15px; font-weight: 700; font-style: italic; }
-
         .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
         .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
+        .editor-note-value { font-size: 13px; color: rgba(240,240,245,0.7); line-height: 1.4; }
         .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
         .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
         .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .editor-note-value { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
+        .editor-note-value-small { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
 
         .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
         .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
@@ -273,110 +270,31 @@
         .rank-btn.active { color: #fff; }
         .rank-btn-glow { box-shadow: 0 0 13px; }
 
-        /* Card styles (ScriptCard, ResearchCard) */
-        .card { background: rgba(255,255,255,0.03); border-radius: 16px; overflow: hidden; animation: fadeUp 0.25s ease; }
-        .card-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
-        .card-header-left { display: flex; align-items: center; gap: 12px; }
-        .rank-badge { border-radius: 9px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900; color: #fff; }
-        .rank-label-small { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; margin-bottom: 2px; }
-        .card-title { font-size: 13px; font-weight: 700; }
-        .card-header-right { display: flex; gap: 7px; flex-wrap: wrap; }
-        .retention-badge { border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 800; }
-        .caption-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 12px; font-size: 12px; font-weight: 700; }
-        .card-body { padding: 18px 20px; }
-        .clip-description { font-size: 13px; line-height: 1.65; color: rgba(240,240,245,0.85); margin-bottom: 16px; }
-        .detail-grid { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 16px; }
-        .detail-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 10px 12px; }
-        .detail-label { font-size: 8px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.25); text-transform: uppercase; margin-bottom: 4px; }
-        .detail-value { font-size: 11px; color: rgba(240,240,245,0.65); line-height: 1.45; }
-        .transition-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 9px; padding: 10px 14px; display: flex; alignItems: center; gap: 9px; margin-top: 14px; }
-        .transition-label { font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; flex-shrink: 0; }
-        .transition-text { font-size: 12px; font-weight: 700; font-style: italic; color: rgba(240,240,245,0.68); }
+        /* Card styles for Insights */
+        .insights-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .insights-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--acid); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .insights-list { list-style: none; padding-left: 0; }
+        .insights-list li { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; padding-left: 18px; position: relative; }
+        .insights-list li::before { content: '✨'; position: absolute; left: 0; font-size: 14px; top: 0; }
+        .insights-item-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); text-transform: uppercase; margin-bottom: 4px; }
+        .insights-item-value { font-size: 13px; color: var(--text); line-height: 1.5; }
+        .insights-tags-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .insights-tag-chip { background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--acid); font-weight: 600; }
+        .insights-platform-btn { background: var(--acid)08; border: 1px solid var(--acid)30; color: var(--acid); }
 
-        /* Source Panel */
-        .source-panel { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; margin-top: 14px; }
-        .source-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2); }
-        .source-tab-btn { flex: 1; padding: 9px 4px; font-size: 11px; font-weight: 700; border: none; background: transparent; border-bottom: 2px solid transparent; cursor: pointer; }
-        .source-tab-btn.active { color: var(--platform-color); background: var(--platform-color)10; border-bottom-color: var(--platform-color); }
-        .source-tab-btn.inactive { color: rgba(240,240,245,0.28); }
-        .source-content { padding: 14px 16px; }
-        .source-section-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--platform-color); text-transform: uppercase; margin-bottom: 8px; opacity: 0.8; }
-        .source-query-item { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
-        .source-query-text { font-size: 11px; color: rgba(240,240,245,0.65); flex: 1; line-height: 1.4; }
-        .platform-btn { display: inline-flex; align-items: center; gap: 5px; border-radius: 7px; padding: 5px 11px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-        .platform-btn-small { padding: 4px 9px; font-size: 10px; }
-        .platform-btn-icon { font-size: 10px; }
-        .platform-btn-icon-small { font-size: 9px; }
-        .platform-btn-arrow { font-size: 8px; opacity: 0.55; }
+        /* Raw Evidence Card */
+        .evidence-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .evidence-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--coral); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .evidence-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .evidence-item:last-child { border-bottom: none; }
+        .evidence-thumb { width: 100px; height: 60px; flex-shrink: 0; background: var(--bg-elevated); border-radius: 6px; object-fit: cover; }
+        .evidence-info { flex: 1; min-width: 0; }
+        .evidence-info-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .evidence-info-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+        .evidence-info-platform { color: var(--acid); }
+        .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
+        .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
 
-        /* Research card specific */
-        .card.research .card-header, .card.research .rank-badge, .card.research .retention-badge { /* Specific overrides */
-            background: linear-gradient(135deg,var(--rank-color)16,transparent);
-            border-bottom: 1px solid var(--rank-color)25;
-        }
-        .card.research .rank-badge { background: var(--rank-color); box-shadow: 0 0 12px var(--rank-glow); }
-        .card.research .retention-badge { background: var(--rank-color)16; border: 1px solid var(--rank-color)30; color: var(--rank-color); }
-
-        .research-clip-name { font-size: 15px; font-weight: 800; line-height: 1.3; }
-        .research-summary-badges { display: flex; flex-wrap: wrap; gap: 7px; }
-        .research-summary-badge { background: rgba(255,255,255,0.06); border: 1px solid; border-radius: 7px; padding: 3px 9px; font-size: 10px; font-weight: 700; }
-        .research-primary-keyword { margin-bottom: 14px; }
-        .research-primary-keyword .detail-label { color: rgba(240,240,245,0.28); }
-        .research-primary-keyword-value { background: var(--rank-color)12; border: 1px solid var(--rank-color)30; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 800; color: var(--rank-color); }
-        .research-secondary-keywords { margin-bottom: 16px; }
-        .research-secondary-keywords-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .research-secondary-keyword-chip { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 3px 10px; font-size: 11px; color: rgba(240,240,245,0.65); font-weight: 600; }
-        .research-why-here { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; padding: 11px 14px; margin-bottom: 16px; }
-        .research-why-here-label { font-size: 9px; font-weight: 700; letter-spacing: 0.11em; color: rgba(240,240,245,0.27); text-transform: uppercase; margin-bottom: 5px; }
-        .research-why-here-value { font-size: 12px; color: rgba(240,240,245,0.72); line-height: 1.5; }
-
-        .research-emotion-scores { margin-bottom: 14px; }
-        .research-emotion-scores-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.28); text-transform: uppercase; margin-bottom: 8px; }
-        .emotion-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
-        .emotion-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; }
-        .emotion-label { font-size: 9px; font-weight: 700; color: rgba(240,240,245,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
-        .emotion-score-row { display: flex; align-items: center; gap: 7px; }
-        .emotion-score-value { font-size: 13px; font-weight: 800; }
-        .score-bar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; flex: 1; }
-        .score-bar-fill { height: 100%; width: 0%; background: #FF0050; border-radius: 3px; transition: width 0.6s ease; }
-
-        .viral-score-wheel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px 16px; }
-        .viral-score-wheel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .viral-score-wheel-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: rgba(240,240,245,0.3); text-transform: uppercase; }
-        .viral-score-wheel-final { font-size: 22px; font-weight: 900; }
-        .viral-score-wheel-final small { font-size: 11px; opacity: 0.5; }
-        .viral-score-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-        .viral-score-item-label { font-size: 10px; color: rgba(240,240,245,0.45); width: 110px; flex-shrink: 0; }
-        .viral-score-item-value { font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); width: 26px; text-align: right; }
-        .viral-score-item-weight { font-size: 9px; color: rgba(240,240,245,0.2); width: 28px; }
-
-        /* All Sources View */
-        .all-sources-platform-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .all-sources-platform-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 8px; font-size: 12px; font-weight: 700; color: rgba(240,240,245,0.35); cursor: pointer; transition: all 0.15s; }
-        .all-sources-platform-btn.active { background: var(--platform-color)14; border-color: var(--platform-color)35; color: var(--platform-color); }
-        .all-sources-content-box { background: rgba(255,255,255,0.03); border-radius: 14px; overflow: hidden; }
-        .all-sources-header { background: var(--platform-color)0e; border-bottom: 1px solid var(--platform-color)20; padding: 12px 18px; }
-        .all-sources-header-title { font-size: 13px; font-weight: 800; color: var(--platform-color); }
-        .all-sources-rank-list { padding: 14px 18px; }
-        .all-sources-rank-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 14px; margin-bottom: 14px; }
-        .all-sources-rank-item:last-child { border-bottom: none; margin-bottom: 0; }
-        .all-sources-rank-header { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
-        .all-sources-rank-badge { background: var(--rank-color); border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; color: #fff; }
-        .all-sources-rank-label { font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.5); }
-        .all-sources-clip-name { font-size: 11px; color: rgba(240,240,245,0.35); }
-        .all-sources-queries-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
-        .all-sources-extras-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-
-        .clip-dna-box { flex: 1; min-width: 220px; background: rgba(204,0,255,0.05); border: 1px solid rgba(204,0,255,0.16); border-radius: 13px; padding: 14px 18px; }
-        .clip-dna-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 10px; }
-        .clip-dna-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-        .clip-dna-item { background: rgba(255,255,255,0.04); border: 1px solid rgba(204,0,255,0.12); border-radius: 6px; padding: 5px 10px; }
-        .clip-dna-item-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 2px; }
-        .clip-dna-item-value { font-size: 11px; color: rgba(240,240,245,0.75); font-weight: 600; }
-
-        .replay-hook-box { flex: 1; min-width: 180px; background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.2); border-radius: 13px; padding: 14px 18px; display: flex; flex-direction: column; justify-content: center; }
-        .replay-hook-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #FF0050; text-transform: uppercase; margin-bottom: 7px; }
-        .replay-hook-text { font-size: 15px; font-weight: 800; }
 
         /* General utility classes */
         .flex-row { display: flex; align-items: center; }
@@ -397,7 +315,7 @@
 
         @media (max-width: 560px) {
             .config-row { grid-template-columns: 1fr; }
-            /* More responsive adjustments if needed */
+            .evidence-thumb { width: 80px; height: 50px; }
         }
     </style>
 </head>
@@ -418,12 +336,12 @@
 
         // --- Constants (Global) ---
         const RANK_META = [
-            { rank: 6, label: "SCROLL STOPPER", retention: "85%", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
-            { rank: 5, label: "INTEREST", retention: "65%", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
-            { rank: 4, label: "INTRODUCTION", retention: "50%", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
-            { rank: 3, label: "ESCALATION", retention: "75%", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
-            { rank: 2, label: "FALSE WINNER", retention: "95%", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
-            { rank: 1, label: "FINAL PAYOFF", retention: "100%", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
+            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
+            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
+            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
+            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
+            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
+            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
         ];
 
         const EXAMPLE_TOPICS = [
@@ -435,7 +353,6 @@
 
         const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
 
-        // Corrected PLATFORM_CFG (removed trailing slashes)
         const PLATFORM_CFG = {
             youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
                 searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
@@ -452,8 +369,10 @@
             twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
                 searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
                 tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
-            linkedin: { name: "LinkedIn", icon: "in", color: "#0A66C2", bg: "rgba(10,102,194,0.08)", border: "rgba(10,102,194,0.25)",
-                searchUrl: (q) => `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(q)}` },
+            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
+                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
+            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
+                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` }, // Search public channels
         };
 
         const SURPRISE_NICHES = [
@@ -467,103 +386,59 @@
         ];
 
         const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
-        const TREND_DIR_COLOR = { Rising: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
-        const RARITY_COLOR = { Common: "#888", Uncommon: "#4CAF50", Rare: "#2196F3", "Very Rare": "#CC00FF", Legendary: "#FF0050" };
-        const COMP_COLOR = { Low: "#4CAF50", Medium: "#FFD700", High: "#FF4444" };
-        const ALERT_META = {
-            "Hidden Gem": { icon: "💎", color: "#CC00FF" },
-            "Emerging Trend": { icon: "📈", color: "#4CAF50" },
-            "Viral Potential": { icon: "🔥", color: "#FF0050" },
-            "Early Opportunity": { icon: "🚀", color: "#FFD700" },
-        };
-        function opportunityColor(score) { return score >= 75 ? "#FF0050" : score >= 50 ? "#CC00FF" : score >= 25 ? "#FFD700" : "#888"; }
 
         // --- API Helper ---
         const DEFAULT_TIMEOUT = 120000; // 2 minutes
         // IMPORTANT: Replace with YOUR Cloudflare Worker URL
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; 
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
 
-        const LLM_PROVIDERS_CONFIG = { // This is for LLM Providers, NOT platforms like YouTube/TikTok
+        const LLM_PROVIDERS_CONFIG = {
             openrouter: { name: "OpenRouter", models: [
                 { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
                 { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
                 { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
                 { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
             ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-flash-latest", name: "Gemini Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
+            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
             cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
             github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
             huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
         };
-        
-        function cleanJsonResponse(text) {
-            if (!text || typeof text !== 'string') return '';
-            text = text
-                .replace(/^.*?User Safety:.*?(?=\{)/is, '')
-                .replace(/^.*?I cannot.*?(?=\{)/is, '')
-                .replace(/^.*?I don't.*?(?=\{)/is, '')
-                .replace(/^```json\s*/i, '')
-                .replace(/^```\s*/i, '')
-                .replace(/\s*```$/i, '')
-                .trim();
-
-            const start = text.indexOf('{');
-            const end = text.lastIndexOf('}');
-            if (start !== -1 && end !== -1 && end > start) {
-                return text.slice(start, end + 1);
-            }
-            return text;
-        }
 
         async function callWorkerAPI(endpoint, payload, options = {}) {
-            const { providerName, model, dateFilter, referenceChannels, styleInstructions } = options;
             const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
-
             const controller = new AbortController();
             const signal = controller.signal;
             const timeout = options.timeout || DEFAULT_TIMEOUT;
             const timer = setTimeout(() => controller.abort(), timeout);
 
             try {
-                const body = {
-                    topic: payload.topic,
-                    dateFilter: dateFilter,
-                    provider: providerName || null,
-                    model: model || null,
-                    referenceChannels: Array.isArray(referenceChannels) && referenceChannels.length ? referenceChannels : undefined,
-                    styleInstructions: styleInstructions || undefined,
-                    prompt: payload.prompt || undefined // For /api/complete
-                };
-                console.log("Sending payload to worker:", body); // Debug log
-
                 const res = await fetch(workerUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
+                    body: JSON.stringify(payload),
                     signal: signal
                 });
                 clearTimeout(timer);
 
                 const data = await res.json();
-                console.log("Received response from worker:", data); // Debug log
-
                 if (!res.ok) {
                     throw new Error(data.error || `Worker request failed with status ${res.status}`);
                 }
                 return data;
-
             } catch (err) {
                 clearTimeout(timer);
-                console.error("Error fetching from worker:", err); // Debug log
+                console.error("Error fetching from worker:", err);
                 throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
             }
         }
 
-        // --- UI Components (React) ---
+        // --- UI Components ---
+        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
 
         function PlatformBtn({ platform, label, url, small = false }) {
             const c = PLATFORM_CFG[platform];
-            if (!c) { // Fallback for undefined platform
+            if (!c) {
                 console.warn(`Platform config not found for: ${platform}`);
                 return <button className={small ? 'platform-btn-small' : 'platform-btn'} disabled>{label}</button>;
             }
@@ -581,21 +456,13 @@
             );
         }
 
-        function ScoreBar({ value, color, max = 100 }) {
-            return (
-                <div style={{ height: 5, background: "rgba(255,255,255,0.07)", borderRadius: 3, overflow: "hidden", flex: 1 }}>
-                    <div style={{ height: "100%", width: `${(value / max) * 100}%`, background: color, borderRadius: 3, transition: "width 0.6s ease" }} />
-                </div>
-            );
-        }
-
         function RetentionCurve() {
             return (
                 <div className="retention-curve-wrapper">
                     <div className="retention-curve-label">Retention</div>
                     {[...RANK_META].reverse().map(m => (
                         <div key={m.rank} className="retention-rank-item">
-                            <span className="retention-percent" style={{ color: m.color }}>{m.retention}</span>
+                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
                             <div className="retention-bar-inner" style={{
                                 '--bar-height': `${m.bar * 0.5}px`,
                                 '--item-color': m.color,
@@ -611,366 +478,79 @@
             );
         }
 
-        function SrcPanel({ sources }) {
-            const [tab, setTab] = useState("youtube");
-            const cfg = PLATFORM_CFG[tab];
-            const src = sources?.[tab] || {};
-            const queries = src.queries || [];
-            const extras = tab === "youtube" ? (src.shorts || []) : tab === "tiktok" ? (src.hashtags || []) : tab === "instagram" ? (src.hashtags || []) : (src.subreddits || []);
-
+        function InsightsCard({ title, icon, children }) {
             return (
-                <div className="source-panel">
-                    <div className="source-tabs">
-                        {["youtube", "tiktok", "instagram", "reddit"].map(p => {
-                            const pc = PLATFORM_CFG[p];
-                            if (!pc) return null; // Skip if platform config is missing
-                            const active = tab === p;
-                            return (
-                                <button key={p} onClick={() => setTab(p)} className={`source-tab-btn ${active ? 'active' : 'inactive'}`}
-                                    style={{ '--platform-color': pc.color }}
-                                >
-                                    {pc.icon} {pc.name}
-                                </button>
-                            );
-                        })}
+                <div className="insights-card">
+                    <div className="insights-card-title">
+                        {icon} {title}
                     </div>
-                    <div className="source-content">
-                        <div className="source-section-label" style={{ '--platform-color': cfg.color }}>🔍 Search Queries</div>
-                        {queries.length > 0 ? (
-                            queries.map((q, i) => (
-                                <div key={i} className="source-query-item">
-                                    <span className="source-query-text">"{q}"</span>
-                                    <PlatformBtn platform={tab} label="Search" url={cfg.searchUrl(q)} small />
-                                </div>
-                            ))
-                        ) : (
-                            <div className="source-query-text" style={{ opacity: 0.5 }}>No specific queries.</div>
-                        )}
-
-                        <div className="source-section-label" style={{ '--platform-color': cfg.color, marginTop: "12px", marginBottom: "8px" }}>
-                            {tab === "youtube" ? "📱 Shorts" : tab === "tiktok" || tab === "instagram" ? "#️⃣ Hashtags" : "🏠 Subreddits"}
-                        </div>
-                        <div className="flex-row gap-6" style={{ flexWrap: "wrap" }}>
-                            {extras.length > 0 ? (
-                                extras.map((x, i) => {
-                                    let url, lbl;
-                                    if (tab === "youtube") {
-                                        url = cfg.shortsUrl ? cfg.shortsUrl(x) : '';
-                                        lbl = `"${x}"`;
-                                    } else if (tab === "tiktok" || tab === "instagram") {
-                                        url = cfg.tagUrl ? cfg.tagUrl(x) : '';
-                                        lbl = `#${x}`;
-                                    } else { // reddit
-                                        url = cfg.subUrl ? cfg.subUrl(x) : '';
-                                        lbl = `r/${x}`;
-                                    }
-                                    return url ? <PlatformBtn key={i} platform={tab} label={lbl} url={url} small /> : null;
-                                })
-                            ) : (
-                                <div className="source-query-text" style={{ opacity: 0.5 }}>No specific items.</div>
-                            )}
-                        </div>
-                    </div>
+                    {children}
                 </div>
             );
         }
 
-        function ScriptCard({ rd, meta }) {
-            if (!rd || !meta) return null;
-            return (
-                <div className="card" style={{
-                    border: `1px solid ${meta.color}38`, borderRadius: 16, overflow: "hidden", boxShadow: `0 0 36px ${meta.glow}`, animation: "fadeUp 0.25s ease"
-                }}>
-                    <div className="card-header" style={{ background: `linear-gradient(135deg,${meta.color}16,transparent)`, borderBottom: `1px solid ${meta.color}25` }}>
-                        <div className="card-header-left">
-                            <div className="rank-badge" style={{ background: meta.color, boxShadow: `0 0 12px ${meta.glow}` }}>#{meta.rank}</div>
-                            <div>
-                                <div className="rank-label-small" style={{ color: meta.color }}>{meta.label}</div>
-                                <div className="card-title">{rd.emotionalPurpose}</div>
-                            </div>
-                        </div>
-                        <div className="card-header-right">
-                            <span className="retention-badge" style={{ background: `${meta.color}16`, border: `1px solid ${meta.color}30`, color: meta.color }}>{rd.retentionScore}</span>
-                            <span className="caption-badge" style={{ color: "rgba(240,240,245,0.7)", fontWeight: 700 }}>{rd.caption}</span>
-                        </div>
-                    </div>
-                    <div className="card-body">
-                        <div className="clip-description">{rd.clipDescription}</div>
-                        <div className="detail-grid">
-                            <div className="detail-item">
-                                <div className="detail-label">📈 Why Stronger</div>
-                                <div className="detail-value">{rd.whyStronger}</div>
-                            </div>
-                            <div className="detail-item">
-                                <div className="detail-label">⚡ Emotional Level</div>
-                                <div className="detail-value">{rd.emotionalLevel}</div>
-                            </div>
-                            <div className="detail-item">
-                                <div className="detail-label">🎯 Next Expectation</div>
-                                <div className="detail-value">{rd.expectationSet}</div>
-                            </div>
-                        </div>
-                        <SrcPanel sources={rd.sources} />
-                        {rd.transitionText && (
-                            <div className="transition-box">
-                                <span className="transition-label">Transition →</span>
-                                <span className="transition-text">{rd.transitionText}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-        function EmotionGrid({ scores }) {
-            return (
-                <div className="emotion-grid">
-                    {Object.entries(scores || {}).map(([k, v]) => (
-                        <div key={k} className="emotion-item">
-                            <div className="emotion-label">{k}</div>
-                            <div className="emotion-score-row">
-                                <span className="emotion-score-value" style={{ color: v >= 8 ? "#FF0050" : v >= 6 ? "#FFD700" : "#888" }}>{v}</span>
-                                <ScoreBar value={v} color={v >= 8 ? "#FF0050" : v >= 6 ? "#FFD700" : "#4CAF50"} max={10} />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-        function ViralScoreWheel({ vs }) {
-            const scores = [
-                { k: "Virality", v: vs.virality, w: "25%" },
-                { k: "Emotion Impact", v: vs.emotionImpact, w: "20%" },
-                { k: "Trend", v: vs.trend, w: "15%" },
-                { k: "Hook", v: vs.hook, w: "15%" },
-                { k: "Replay", v: vs.replay, w: "10%" },
-                { k: "Rarity", v: vs.rarity, w: "10%" },
-                { k: "Competition Edge", v: vs.competition, w: "5%" },
-            ];
-            const final = vs.final || 0;
-            const finalColor = final >= 80 ? "#FF0050" : final >= 60 ? "#CC00FF" : final >= 40 ? "#FFD700" : "#888";
-            return (
-                <div className="viral-score-wheel">
-                    <div className="viral-score-wheel-header">
-                        <span className="viral-score-wheel-label">🔥 Viral Score</span>
-                        <span className="viral-score-wheel-final" style={{ color: finalColor }}>{final}<small>/100</small></span>
-                    </div>
-                    {scores.map(s => (
-                        <div key={s.k} className="viral-score-item">
-                            <span className="viral-score-item-label">{s.k}</span>
-                            <ScoreBar value={s.v || 0} color={finalColor} max={100} />
-                            <span className="viral-score-item-value">{s.v || 0}</span>
-                            <span className="viral-score-item-weight">{s.w}</span>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-        function ResearchCard({ rd, meta }) {
-            if (!rd || !meta) return null;
-            const rarityColor = RARITY_COLOR[rd.rarity] || "#888";
-            const compColor = COMP_COLOR[rd.competition] || "#888";
-            const trendDirColor = TREND_DIR_COLOR[rd.trendDirection] || "#888";
-            const oppColor = opportunityColor(rd.opportunityScore || 0);
-
-            return (
-                <div className="card research" style={{
-                    border: `1px solid ${meta.color}38`, borderRadius: 16, overflow: "hidden", boxShadow: `0 0 36px ${meta.glow}`, animation: "fadeUp 0.25s ease"
-                }}>
-                    <div className="card-header" style={{ background: `linear-gradient(135deg,${meta.color}16,transparent)`, borderBottom: `1px solid ${meta.color}25` }}>
-                        <div className="card-header-left">
-                            <div className="rank-badge" style={{ background: meta.color, boxShadow: `0 0 12px ${meta.glow}` }}>#{meta.rank}</div>
-                            <div>
-                                <div className="rank-label-small" style={{ color: meta.color }}>{meta.label}</div>
-                                <div className="research-clip-name">{rd.clipName}</div>
-                            </div>
-                        </div>
-                        <div className="research-summary-badges">
-                            <span className="research-summary-badge" style={{ borderColor: rarityColor + '40', color: rarityColor }}>💎 {rd.rarity}</span>
-                            <span className="research-summary-badge" style={{ borderColor: compColor + '40', color: compColor }}>⚔️ {rd.competition} Competition</span>
-                            <span className="research-summary-badge" style={{ borderColor: "rgba(240,240,245,0.5)40", color: "rgba(240,240,245,0.5)" }}>🔎 {rd.difficulty || 'Medium'} Find</span>
-                            <span className="research-summary-badge" style={{ borderColor: trendDirColor + '40', color: trendDirColor }}>📈 {rd.trendDirection || 'Stable'} Trend</span>
-                            <span className="research-summary-badge" style={{ borderColor: oppColor + '40', color: oppColor }}>🚀 Opportunity {rd.opportunityScore ?? "–"}</span>
-                        </div>
-                        {rd.alerts?.length > 0 && (
-                            <div className="flex-row gap-7" style={{ marginTop: "8px", flexWrap: "wrap" }}>
-                                {rd.alerts.map((a, i) => {
-                                    const am = ALERT_META[a] || { icon: "⚡", color: "#888" };
-                                    return <span key={i} className="research-summary-badge" style={{ background: `${am.color}14`, borderColor: `${am.color}40`, color: am.color }}>{am.icon} {a}</span>;
-                                })}
-                            </div>
-                        )}
-                    </div>
-                    <div className="card-body">
-                        <div className="research-primary-keyword">
-                            <div className="detail-label">🎯 Primary SEO Keyword</div>
-                            <div className="research-primary-keyword-value" style={{ background: `${meta.color}12`, borderColor: `${meta.color}30`, color: meta.color }}>{rd.primaryKeyword}</div>
-                        </div>
-                        <div className="research-secondary-keywords">
-                            <div className="detail-label">🔑 Secondary Keywords</div>
-                            <div className="research-secondary-keywords-grid">
-                                {(rd.secondaryKeywords || []).map((k, i) => <span key={i} className="research-secondary-keyword-chip">{k}</span>)}
-                            </div>
-                        </div>
-                        <div className="research-why-here">
-                            <div className="detail-label">📝 Why It Ranks Here</div>
-                            <div className="detail-value">{rd.whyHere}</div>
-                        </div>
-                        <div className="detail-grid mb-16">
-                            <div className="detail-item">
-                                <div className="detail-label">🪝 Hook Score</div>
-                                <div className="flex-row gap-8">
-                                    <span className="emotion-score-value" style={{ color: opportunityColor(rd.viralScore?.hook || 0) }}>{rd.viralScore?.hook ?? "–"}</span>
-                                    <ScoreBar value={rd.viralScore?.hook || 0} color={opportunityColor(rd.viralScore?.hook || 0)} max={100} />
-                                </div>
-                            </div>
-                            <div className="detail-item">
-                                <div className="detail-label">🪜 Escalation Score</div>
-                                <div className="flex-row gap-8">
-                                    <span className="emotion-score-value" style={{ color: opportunityColor(rd.escalationScore || 0) }}>{rd.escalationScore ?? "–"}</span>
-                                    <ScoreBar value={rd.escalationScore || 0} color={opportunityColor(rd.escalationScore || 0)} max={100} />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="research-emotion-scores">
-                            <div className="detail-label">🎭 Emotion Scores</div>
-                            <EmotionGrid scores={rd.emotionScore} />
-                        </div>
-                        <div className="mb-14">
-                            <ViralScoreWheel vs={rd.viralScore || {}} />
-                        </div>
-
-                        {/* NEW FIELDS FOR HUMAN EDITOR GUIDANCE */}
-                        <div className="research-why-here" style={{ background: 'rgba(198,255,61,0.06)', borderColor: 'var(--acid-dim)', marginBottom: '16px' }}>
-                            <div className="detail-label" style={{ color: 'var(--acid)' }}>Suggested Source Platform</div>
-                            <div className="detail-value">{rd.suggestedSourcePlatform || 'Any'}</div>
-                        </div>
-                        {rd.exampleSearchTermsForOriginalClip?.length > 0 && (
-                            <div className="research-secondary-keywords">
-                                <div className="detail-label" style={{ color: 'var(--acid)' }}>Exact Search Terms For Original Clip</div>
-                                <div className="research-secondary-keywords-grid">
-                                    {(rd.exampleSearchTermsForOriginalClip || []).map((term, i) =>
-                                        <span key={i} className="research-secondary-keyword-chip" style={{ background: 'rgba(198,255,61,0.08)', borderColor: 'var(--acid-dim)', color: 'var(--acid)' }}>"{term}"</span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        <SrcPanel sources={rd.sources} />
-                    </div>
-                </div>
-            );
-        }
-
-        function AllSourcesView({ ranks }) {
-            let initialPlatform = 'youtube';
-            // Find first platform with data to set as initial tab
-            if (ranks && ranks.length > 0) {
-                const firstRankWithSources = ranks.find(r => r.sources && Object.keys(r.sources).some(p => r.sources[p] && (r.sources[p].queries?.length > 0 || r.sources[p].shorts?.length > 0 || r.sources[p].hashtags?.length > 0 || r.sources[p].subreddits?.length > 0)));
-                if (firstRankWithSources) {
-                    initialPlatform = Object.keys(PLATFORM_CFG).find(p => firstRankWithSources.sources[p] && (firstRankWithSources.sources[p].queries?.length > 0 || firstRankWithSources.sources[p].shorts?.length > 0 || firstRankWithSources.sources[p].hashtags?.length > 0 || firstRankWithSources.sources[p].subreddits?.length > 0)) || 'youtube';
-                }
+        function EvidenceList({ data, platformType }) {
+            if (!data || data.length === 0) {
+                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
             }
 
-            const [currentPlatform, setCurrentPlatform] = useState(initialPlatform);
-            const cfg = PLATFORM_CFG[currentPlatform];
-
             return (
-                <div>
-                    <div className="all-sources-platform-selector">
-                        {["youtube", "tiktok", "instagram", "reddit"].map(p => {
-                            const pc = PLATFORM_CFG[p];
-                            if (!pc) return null; // Skip if platform config is missing
-                            const active = currentPlatform === p;
-                            return (
-                                <button key={p} onClick={() => setCurrentPlatform(p)} className={`all-sources-platform-btn ${active ? 'active' : ''}`}
-                                    style={{ '--platform-color': pc.color }}
-                                >
-                                    {pc.icon} {pc.name}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    <div className="all-sources-content-box" style={{ '--platform-color': cfg.color }}>
-                        <div className="all-sources-header" style={{ background: `${cfg.color}0e`, borderBottom: `1px solid ${cfg.color}20` }}>
-                            <span className="all-sources-header-title" style={{ color: cfg.color }}>{cfg.icon} {cfg.name} — All Ranks</span>
+                <div className="evidence-list">
+                    {data.map((item, i) => (
+                        <div key={i} className="evidence-item">
+                            {/* Optional: Add thumbnail if available, for now placeholder */}
+                            {item.thumbnail_url ? 
+                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
+                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
+                            }
+                            <div className="evidence-info">
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
+                                    {item.title}
+                                </a>
+                                <div className="evidence-info-meta">
+                                    <span className="evidence-info-platform">{item.platform}</span>
+                                    {item.channel && ` · ${item.channel}`}
+                                    {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
+                                    {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
+                                    {item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`}
+                                    {item.comments && ` · ${item.comments.toLocaleString()} comments`}
+                                    {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
+                                </div>
+                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
+                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
+                            </div>
                         </div>
-                        <div className="all-sources-rank-list">
-                            {ranks && ranks.length > 0 ? (
-                                ranks.map(r => {
-                                    const rm = RANK_META.find(m => m.rank === r.rank);
-                                    const src = r.sources?.[currentPlatform] || {};
-                                    const queries = src.queries || [];
-                                    let extras = [];
-                                    if (currentPlatform === "youtube") extras = (src.shorts || []);
-                                    else if (currentPlatform === "tiktok" || currentPlatform === "instagram") extras = (src.hashtags || []);
-                                    else extras = (src.subreddits || []);
-
-                                    return (
-                                        <div key={r.rank} className="all-sources-rank-item">
-                                            <div className="all-sources-rank-header">
-                                                <span className="all-sources-rank-badge" style={{ background: rm?.color }}>#{r.rank}</span>
-                                                <span className="all-sources-rank-label">{rm?.label}</span>
-                                                {r.clipName && <span className="all-sources-clip-name">— {r.clipName}</span>}
-                                            </div>
-                                            <div className="all-sources-queries-grid">
-                                                {queries.map((q, i) => <PlatformBtn key={i} platform={currentPlatform} label={`"${q.length > 28 ? q.slice(0, 28) + "…" : q}"`} url={cfg.searchUrl(q)} small />)}
-                                            </div>
-                                            <div className="all-sources-extras-grid">
-                                                {extras.map((x, i) => {
-                                                    let url, lbl;
-                                                    if (currentPlatform === "youtube") {
-                                                        url = cfg.shortsUrl ? cfg.shortsUrl(x) : '';
-                                                        lbl = `"${x}"`;
-                                                    } else if (currentPlatform === "tiktok" || currentPlatform === "instagram") {
-                                                        url = cfg.tagUrl ? cfg.tagUrl(x) : '';
-                                                        lbl = `#${x}`;
-                                                    } else { // reddit
-                                                        url = cfg.subUrl ? cfg.subUrl(x) : '';
-                                                        lbl = `r/${x}`;
-                                                    }
-                                                    return url ? <PlatformBtn key={i} platform={currentPlatform} label={lbl} url={url} small /> : null;
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="empty-panel">No sources available.</div>
-                            )}
-                        </div>
-                    </div>
+                    ))}
                 </div>
             );
         }
+
 
         function App() {
             const [topic, setTopic] = useState('');
-            const [mode, setMode] = useState('research');
-            const [dateFilter, setDateFilter] = useState('7 Days');
+            const [creativeBrief, setCreativeBrief] = useState('');
+            const [referenceChannels, setReferenceChannels] = useState('');
+            const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
             const [loading, setLoading] = useState(false);
-            const [retryMsg, setRetryMsg] = useState("");
-            const [scriptData, setScriptData] = useState(null);
-            const [researchData, setResearchData] = useState(null);
             const [error, setError] = useState(null);
-            const [activeRank, setActiveRank] = useState(6);
-            const [activeView, setActiveView] = useState("ranks");
-            const [copied, setCopied] = useState(false);
-            const [phaseIdx, setPhaseIdx] = useState(0);
-            const [activeProvider, setActiveProvider] = useState(LLM_PROVIDERS_CONFIG.google.name);
-            const [availableModels, setAvailableModels] = useState(LLM_PROVIDERS_CONFIG.google.models);
-            const [selectedModel, setSelectedModel] = useState(LLM_PROVIDERS_CONFIG.google.models[0].id);
+            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
+            const [activeProvider, setActiveProvider] = useState(() => {
+                const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                return firstConfigured || 'google';
+            });
+            const [availableModels, setAvailableModels] = useState([]);
+            const [selectedModel, setSelectedModel] = useState('');
             const [restored, setRestored] = useState(false);
+            const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
 
             const intervalRef = useRef(null);
 
             const phases = [
-                "Analyzing viral potential…", "Mapping emotional curve…", "Building escalation logic…",
-                "Scanning trend signals…", "Generating clip sources…", "Unlocking final payoff…",
+                "Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…",
+                "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…",
             ];
 
-            const STORAGE_KEY = 'viralRadarState_v1_react'; // New key for React state persistence
+            const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
 
             // Helper to persist state to localStorage
             const persistState = (newState) => {
@@ -988,13 +568,12 @@
                     if (savedState) {
                         const parsedState = JSON.parse(savedState);
                         setTopic(parsedState.topic || '');
-                        setMode(parsedState.mode || 'research');
+                        setCreativeBrief(parsedState.creativeBrief || '');
+                        setReferenceChannels(parsedState.referenceChannels || '');
                         setDateFilter(parsedState.dateFilter || '7 Days');
-                        setScriptData(parsedState.scriptData || null);
-                        setResearchData(parsedState.researchData || null);
-                        setActiveRank(parsedState.activeRank || 6);
-                        setActiveView(parsedState.activeView || 'ranks');
-                        setRestored(!!(parsedState.scriptData || parsedState.researchData));
+                        setResults(parsedState.results || null);
+                        setRestored(!!parsedState.results);
+                        setActiveView(parsedState.activeView || 'insights');
 
                         // Restore LLM provider and model
                         if (parsedState.activeProvider && LLM_PROVIDERS_CONFIG[parsedState.activeProvider]) {
@@ -1006,59 +585,67 @@
                             } else {
                                 setSelectedModel(providerCfg.models[0]?.id || '');
                             }
+                        } else {
+                             const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                             if (firstConfigured) {
+                                 setActiveProvider(firstConfigured);
+                                 setAvailableModels(LLM_PROVIDERS_CONFIG[firstConfigured].models);
+                                 setSelectedModel(LLM_PROVIDERS_CONFIG[firstConfigured].models[0]?.id || '');
+                             }
                         }
-
-                        // Restore text areas directly via DOM, as they are uncontrolled components
-                        document.getElementById('referenceChannelsInput').value = parsedState.referenceChannels || '';
-                        document.getElementById('styleInstructionsInput').value = parsedState.styleInstructions || '';
                     }
                 } catch (e) {
                     console.error("Failed to restore state from localStorage:", e);
                 }
             };
 
-            // Initial fetch for provider config and restore state
+            // Initial fetch for worker capabilities and restore state
             useEffect(() => {
                 const init = async () => {
-                    let initialProviderName = "google";
-                    try {
-                        const response = await fetch(`${WORKER_BASE_URL}/`);
-                        const data = await response.json();
-                        // console.log("Worker provider config status:", data.providers_configured);
+                    let initialProviderName = activeProvider;
 
-                        // Find first configured provider as default
-                        const firstConfiguredProvider = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
-                        if (firstConfiguredProvider) {
-                            initialProviderName = firstConfiguredProvider;
+                    try {
+                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
+                        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
+                        const data = await response.json();
+                        
+                        const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
+                        if (firstConfiguredFromWorker) {
+                            initialProviderName = firstConfiguredFromWorker;
+                        } else {
+                            setError("No LLM providers are configured in your Cloudflare Worker. Please check your Worker's environment variables.");
+                            initialProviderName = ''; // No providers
                         }
                     } catch (e) {
                         console.error("Failed to fetch worker capabilities, falling back to hardcoded defaults:", e);
-                        setError("Worker connection error. Please ensure your Cloudflare Worker is deployed and its URL is correct.");
+                        setError("Worker connection error or timeout (10s). Please ensure your Cloudflare Worker is deployed and its URL is correct. Falling back to hardcoded providers.");
+                        initialProviderName = 'google';
                     }
 
-                    // Update state based on fetched/default provider config
                     const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
                     if (currentProviderCfg) {
                         setActiveProvider(initialProviderName);
                         setAvailableModels(currentProviderCfg.models);
                         setSelectedModel(currentProviderCfg.models[0]?.id || '');
+                    } else {
+                        setActiveProvider('');
+                        setAvailableModels([]);
+                        setSelectedModel('');
                     }
 
-                    restoreState(); // Restore state after initial provider config is set
+                    restoreState();
                 };
                 init();
-            }, []); // Run once on component mount
+            }, []);
 
 
             // Persist state whenever relevant state changes
             useEffect(() => {
                 persistState({
-                    topic, mode, dateFilter, scriptData, researchData, activeRank, activeView,
-                    referenceChannels: document.getElementById('referenceChannelsInput')?.value || '',
-                    styleInstructions: document.getElementById('styleInstructionsInput')?.value || '',
+                    topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
                     activeProvider, selectedModel,
                 });
-            }, [topic, mode, dateFilter, scriptData, researchData, activeRank, activeView, activeProvider, selectedModel]);
+            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel]);
 
 
             const handleProviderChange = (e) => {
@@ -1072,52 +659,80 @@
             const handleNewSearch = () => {
                 if (intervalRef.current) clearInterval(intervalRef.current);
                 setTopic('');
-                setMode('research');
+                setCreativeBrief('');
+                setReferenceChannels('');
                 setDateFilter('7 Days');
                 setLoading(false);
-                setRetryMsg('');
-                setScriptData(null);
-                setResearchData(null);
                 setError(null);
-                setActiveRank(6);
-                setActiveView('ranks');
+                setResults(null);
+                setRestored(false);
+                setActiveView('insights');
                 setCopied(false);
                 setPhaseIdx(0);
-                setRestored(false);
-                document.getElementById('referenceChannelsInput').value = '';
-                document.getElementById('styleInstructionsInput').value = '';
                 localStorage.removeItem(STORAGE_KEY);
             };
 
             const handleSurpriseMe = () => {
                 const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
                 setTopic(pick);
-            };
-
-            const parseReferenceChannels = (raw) => {
-                if (!raw || !raw.trim()) return [];
-                return raw.split(/[\n,]/)
-                    .map(s => s.trim())
-                    .filter(Boolean)
-                    .map(s => {
-                        const m = s.match(/@([\w.-]+)/);
-                        return m ? '@' + m[1] : (s.startsWith('@') ? s : '@' + s);
-                    })
-                    .filter((v, i, arr) => arr.indexOf(v) === i)
-                    .slice(0, 5);
+                setCreativeBrief("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
+                setReferenceChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
             };
 
             const copyResult = () => {
-                const currentData = mode === "script" ? scriptData : researchData;
-                if (!currentData) return;
+                if (!results) return;
 
-                const t = mode === "script"
-                    ? `🎬 ${currentData.topic}\n\nHook: "${currentData.openLoopHook}"\n\n` +
-                    (currentData.ranks || []).map(r => `#${r.rank} ${r.label}\n${r.clipDescription}\nCaption: ${r.caption}\n${r.transitionText ? `→ ${r.transitionText}` : ""}`).join("\n\n")
-                    : `📊 RESEARCH: ${currentData.topic}\nDate: ${currentData.dateFilter}\nOverall Opportunity: ${currentData.overall_opportunity_reasoning || 'N/A'}\nTrend: ${currentData.metadata?.trendStatus || 'N/A'}\n\n` +
-                    (currentData.ranks || []).map(r => `#${r.rank} ${r.clipName}\nSEO: ${r.primaryKeyword}\nViral: ${r.viralScore?.final}/100 | Hook: ${r.viralScore?.hook ?? "–"} | Opportunity: ${r.opportunityScore ?? "–"} | Rarity: ${r.rarity}\nSuggested Platform: ${r.suggestedSourcePlatform || 'Any'}\nSearch Terms: ${r.exampleSearchTermsForOriginalClip?.join(', ') || 'N/A'}`).join("\n\n");
+                const insights = results.ai_actionable_insights;
+                const rankedClips = insights?.ranked_clip_opportunities || [];
 
-                navigator.clipboard.writeText(t).then(() => {
+                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
+                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
+                copyText += `--- Actionable Insights ---\n\n`;
+
+                if (insights?.hook_suggestions?.length > 0) {
+                    copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\n`;
+                }
+                if (insights?.hashtag_strategy?.length > 0) {
+                    copyText += `\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\n`;
+                }
+                if (insights?.key_search_phrases_for_discoverability?.length > 0) {
+                    copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
+                }
+                if (insights?.suggested_source_platforms_for_originals?.length > 0) {
+                    copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
+                }
+                if (insights?.repost_analysis_insight) {
+                    copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.title_insights) {
+                    copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.description_hook) {
+                    copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
+                    copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\n`;
+                }
+
+                copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
+                if (rankedClips.length > 0) {
+                    rankedClips.forEach(clip => {
+                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
+                        copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
+                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
+                        if (clip.url_to_potential_original_clip) {
+                            copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
+                        }
+                        if (clip.editorial_repost_analysis) {
+                            copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\n`;
+                        }
+                        copyText += `\n`;
+                    });
+                } else {
+                    copyText += `No ranked clip opportunities found yet.\n`;
+                }
+
+                navigator.clipboard.writeText(copyText).then(() => {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                 });
@@ -1129,12 +744,11 @@
 
                 setLoading(true);
                 setError(null);
-                setScriptData(null);
-                setResearchData(null);
-                setRetryMsg('');
-                setPhaseIdx(0);
+                setResults(null);
                 setRestored(false);
-                setActiveRank(6); // Reset active rank to 6 for new search
+                setActiveView('insights');
+                setCopied(false);
+                setPhaseIdx(0);
 
                 if (intervalRef.current) clearInterval(intervalRef.current);
                 intervalRef.current = setInterval(() => {
@@ -1142,54 +756,22 @@
                 }, 900);
 
                 try {
-                    const options = {
-                        providerName: activeProvider,
+                    const payload = {
+                        topic: topic.trim(),
+                        creativeBrief: creativeBrief.trim(),
+                        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
+                        dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
+                        provider: activeProvider,
                         model: selectedModel,
-                        dateFilter: dateFilter,
-                        referenceChannels: parseReferenceChannels(document.getElementById('referenceChannelsInput').value),
-                        styleInstructions: document.getElementById('styleInstructionsInput').value.trim(),
                     };
 
-                    let resultData;
-                    if (mode === 'script') {
-                        const scriptPrompt = `You are an elite viral short-form content strategist for YouTube Shorts, TikTok, and Reels.
-Create a 6-rank viral video script. The topic is "${topic.trim()}".
-Follow these rules:
-- Emotional curve: Shock→Curiosity→Interest→Escalation→Tension→Payoff→Replay
-- Ranks: #6=Scroll Stopper(85%) #5=Interest(65%) #4=Introduction(50%) #3=Escalation(75%) #2=False Winner(95%) #1=Final Payoff(100%)
-- All clips same category. Each rank escalates. #2 feels like winner. #1 exceeds everything.
+                    // Call the new Worker endpoint
+                    const insights = await callWorkerAPI('/api/generate-insights', payload);
+                    setResults(insights);
 
-Output ONLY valid JSON for the script using this exact shape:
-{
-  "topic":"${topic.trim()}","emotionalCurve":"string","escalationLogic":"string",
-  "openLoopHook":"string","viralPotential":"High|Very High|Extreme",
-  "replayQuestion":"string",
-  "clipDNA":{"object":"string","environment":"string","emotion":"string","escalation":"string","ending":"string"},
-  "ranks":[{
-    "rank":6,"label":"SCROLL STOPPER","emotionalPurpose":"string",
-    "clipDescription":"vivid 2-3 sentences","whyStronger":"string",
-    "emotionalLevel":"string","expectationSet":"string",
-    "retentionScore":"85%","caption":"Max 4 words + emoji",
-    "transitionText":"But it gets worse...",
-    "sources":{
-      "youtube":{"queries":["q1","q2"],"shorts":["s1","s2"]},
-      "tiktok":{"queries":["q1","q2"],"hashtags":["h1","h2"]},
-      "reddit":{"queries":["q1","q2"],"subreddits":["r1","r2"]}
-    }
-  }]
-}
-Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
-                        const llmResponse = await callWorkerAPI('/api/complete', { prompt: scriptPrompt, topic: topic }, options);
-                        resultData = JSON.parse(cleanJsonResponse(llmResponse.text));
-                        setScriptData(resultData);
-                    } else { // Research mode
-                        const llmResponse = await callWorkerAPI('/api/generate', { topic: topic }, options);
-                        resultData = llmResponse;
-                        setResearchData(resultData);
-                    }
                 } catch (err) {
-                    console.error("Research failed:", err);
-                    setError(err.message);
+                    console.error("Source Intelligence Engine failed:", err);
+                    setError(err.message || "An unknown error occurred during source intelligence processing.");
                 } finally {
                     if (intervalRef.current) clearInterval(intervalRef.current);
                     setLoading(false);
@@ -1197,8 +779,7 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                 }
             };
 
-            const currentData = mode === "script" ? scriptData : researchData;
-            const hasResult = !!currentData;
+            const hasResult = !!results;
 
             return (
                 <div className="shell">
@@ -1207,38 +788,23 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                             <span className="nav-mark">✦</span>
                             <span className="nav-name">Viral Radar</span>
                         </div>
-                        <span className="nav-badge">FREE · NO SIGNUP</span>
+                        <span className="nav-badge">Source Intelligence Engine</span>
                     </div>
 
                     <div className="hero">
-                        <div className="hero-tag"><span className="dot"></span> 5 AI agents · real YouTube grounding</div>
-                        <h1>Stop guessing<br />what goes <span>viral</span>.</h1>
-                        <p>Drop in an idea. Get real videos, a viral score, a 6-beat retention structure, SEO, and competitor gaps — in one pass.</p>
+                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
+                        <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
+                        <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
                     </div>
 
                     <RetentionCurve />
 
-                    <div className="mode-selector">
-                        {[
-                            { id: "script", icon: "🎬", label: "Script Builder", sub: "6-rank video script + sources" },
-                            { id: "research", icon: "📊", label: "Research Engine", sub: "Viral scoring + SEO + trends" },
-                        ].map(m => {
-                            const active = mode === m.id;
-                            return (
-                                <button key={m.id} onClick={() => { setMode(m.id); setActiveRank(6); setError(null); setScriptData(null); setResearchData(null); }} className={`mode-btn ${active ? 'active' : ''}`}>
-                                    <div className={`mode-btn-title ${active ? 'active' : 'inactive'}`}>{m.icon} {m.label}</div>
-                                    <div className="mode-btn-subtitle">{m.sub}</div>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="console">
+                    <div className="console console-input-section"> {/* Combined styles for consistency */}
                         <div className="console-head">
                             <span className="cdot" style={{ background: '#ff5f57' }}></span>
                             <span className="cdot" style={{ background: '#febc2e' }}></span>
-                            <span className="cdot" style={{ background: '#28c840' }}></span>
-                            <span style={{ marginLeft: 6 }}>research.sh</span>
+                            <span style={{ background: '#28c840' }}></span>
+                            <span style={{ marginLeft: '6px' }}>research.sh</span>
                         </div>
                         <div className="console-body">
                             <div className="console-prompt">
@@ -1257,19 +823,22 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
 
                             <div className="config-row">
                                 <div className="select-wrap">
-                                    <select value={mode === 'research' ? dateFilter : '7 Days'} onChange={e => setDateFilter(e.target.value)} disabled={loading || mode === 'script'}>
+                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
+                                    <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
                                         {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                 </div>
                                 <div className="select-wrap">
-                                    <select value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
-                                        {Object.entries(LLM_PROVIDERS_CONFIG).map(([key, p]) => (
-                                            <option key={key} value={key}>{p.name}</option>
+                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
+                                    <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
+                                        {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
+                                            <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div className="select-wrap">
-                                    <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
+                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
+                                    <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
                                         {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                 </div>
@@ -1277,57 +846,47 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
 
                             <div className="ref-channels-block">
                                 <div className="ref-channels-label">
-                                    <span>◆ Creative brief <span className="ref-optional">(optional — describe the exact format you want)</span></span>
+                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
                                 </div>
                                 <textarea
-                                    id="styleInstructionsInput" // Added ID for direct access
                                     className="ref-channels-input"
-                                    defaultValue={document.getElementById('styleInstructionsInput')?.value || ''} // Use defaultValue for uncontrolled
-                                    onBlur={e => {}} // No need for onChange as it's used on submit
-                                    placeholder="e.g. ranked #6→#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank"
+                                    value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
+                                    placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
                                     disabled={loading}
-                                    rows={2}
+                                    rows={3}
                                 />
-                                <div className="ref-channels-hint">This is read as direct instructions, not just a search topic — it tells the AI what "good" looks like for your niche.</div>
+                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
                             </div>
 
                             <div className="ref-channels-block">
                                 <div className="ref-channels-label">
-                                    <span>◆ Reference channels <span className="ref-optional">(optional — teach the style you want)</span></span>
+                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
                                 </div>
                                 <textarea
-                                    id="referenceChannelsInput" // Added ID for direct access
                                     className="ref-channels-input"
-                                    defaultValue={document.getElementById('referenceChannelsInput')?.value || ''} // Use defaultValue for uncontrolled
-                                    onBlur={e => {}} // No need for onChange as it's used on submit
+                                    value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
                                     placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
                                     disabled={loading}
                                     rows={2}
                                 />
-                                <div className="ref-channels-hint">Paste channel links whose ranked-moment style you want to match. The AI won't copy their videos — it uses them as a format/tone reference while still grounding results in fresh, real videos.</div>
+                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
                             </div>
 
-                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim()}>
+                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
                                 {loading
                                     ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                                         <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
                                         {phases[phaseIdx]}
                                     </span>
-                                    : (mode === "script" ? "⚡ Generate Script + Clip Sources" : "📊 Run Viral Research")}
+                                    : "🚀 Get Source Intelligence"}
                             </button>
-
-                            {retryMsg && (
-                                <div className="retry-msg">
-                                    {retryMsg}
-                                </div>
-                            )}
                         </div>
                     </div>
 
                     <div className="agent-strip">
-                        {['Discovery', 'Ranking', 'SEO'].map((a) => (
-                            <span className="agent-chip" key={a}>{a}Agent</span>
-                        ))}
+                        <span className="agent-chip">ResearchPlanner</span>
+                        <span className="agent-chip">SourceHunter</span>
+                        <span className="agent-chip">InsightsGenerator</span>
                     </div>
 
                     {error && (
@@ -1339,7 +898,7 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                     {loading && (
                         <div className="loading-box">
                             <div className="spinner" style={{ margin: '0 auto' }}></div>
-                            <p>running LLM agents · up to 2 min on cold providers</p>
+                            <p>Orchestrating AI Agents & Backend Services...</p>
                         </div>
                     )}
 
@@ -1347,29 +906,24 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                         <div className="results">
                             <div className="results-topbar">
                                 {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
-                                <button className="new-search-btn" onClick={handleNewSearch}>New search</button>
+                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
                             </div>
                             <div className="result-summary-box">
                                 <div>
                                     <div className="result-summary-title">
-                                        {mode === "script" ? "Script" : "Research"} — {currentData?.dateFilter || ""}
+                                        Source Intelligence Report for:
                                     </div>
-                                    <div className="result-summary-topic">{currentData?.topic}</div>
+                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
                                 </div>
                                 <div className="result-summary-badges">
-                                    {mode === "research" && currentData?.metadata?.trendStatus && (
-                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[currentData.metadata.trendStatus] || "#888") + '40', color: TREND_COLOR[currentData.metadata.trendStatus] }}>
-                                            📈 {currentData.metadata.trendStatus}
-                                        </span>
-                                    )}
-                                    {mode === "research" && currentData?.overall_opportunity_reasoning && (
+                                    {results.ai_actionable_insights?.overall_opportunity_reasoning && (
                                         <span className="summary-badge opportunity">
-                                            🚀 {currentData.overall_opportunity_reasoning.split(' ')[0]} Opp
+                                            🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
                                         </span>
                                     )}
-                                    {mode === "script" && currentData?.viralPotential && (
-                                        <span className="summary-badge viral-potential">
-                                            🔥 {currentData.viralPotential}
+                                    {results.ai_actionable_insights?.trend_status && (
+                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
+                                            📈 {results.ai_actionable_insights.trend_status}
                                         </span>
                                     )}
                                     <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
@@ -1378,60 +932,118 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
                                 </div>
                             </div>
 
-                            {mode === "research" && currentData?.overall_opportunity_reasoning && (
-                                <div className="editor-intelligence-box">
-                                    <div className="editor-intelligence-label">📊 Overall Opportunity Reasoning</div>
-                                    <p className="editor-note-value">{currentData.overall_opportunity_reasoning}</p>
-                                </div>
-                            )}
-
                             <div className="view-mode-selector">
-                                {[{ id: "ranks", icon: "🎯", label: "Per Rank" }, { id: "sources", icon: "🔗", label: "All Sources" }].map(v => (
+                                {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
                                     <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
                                         {v.icon} {v.label}
                                     </button>
                                 ))}
                             </div>
 
-                            {activeView === "ranks" && (
-                                <>
-                                    <div className="rank-selector">
-                                        {[...RANK_META].reverse().map(m => (
-                                            <button key={m.rank} onClick={() => setActiveRank(m.rank)} className={`rank-btn ${activeRank === m.rank ? 'active' : ''}`}
-                                                style={activeRank === m.rank ? { background: m.color, boxShadow: `0 0 13px ${m.glow}` } : {}}
-                                            >
-                                                #{m.rank}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {mode === "script"
-                                        ? <ScriptCard rd={currentData?.ranks?.find(r => r.rank === activeRank)} meta={RANK_META.find(m => m.rank === activeRank)} />
-                                        : <ResearchCard rd={currentData?.ranks?.find(r => r.rank === activeRank)} meta={RANK_META.find(m => m.rank === activeRank)} />
-                                    }
-                                </>
+                            {activeView === "insights" && results.ai_actionable_insights && (
+                                <div className="insights-section">
+                                    <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
+                                        <ul className="insights-list">
+                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
+                                                <li key={i}>
+                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
+                                                    <div className="insights-item-value">
+                                                        Platform: {clip.suggested_source_platform || 'Any'} |
+                                                        Search Terms: {clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}
+                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
+                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="YouTube Upload Strategy" icon="🚀">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Suggestions:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hashtag Strategy:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Title Insights:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Description Hook:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">SEO Priority Tags:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
+                                            </div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Editorial DNA Summary" icon="🧬">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Clip Length Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Style:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Emotion Focus:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">Source Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Research Constraints Applied" icon="✅">
+                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
+                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
+                                        </ul>
+                                    </InsightsCard>
+
+                                </div>
                             )}
 
-                            {activeView === "sources" && <AllSourcesView ranks={currentData?.ranks} />}
+                            {activeView === "raw_evidence" && results.raw_evidence_found && (
+                                <div className="raw-evidence-section">
+                                    <InsightsCard title="Raw Evidence Found" icon="📚">
+                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
+                                        
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
 
-                            {mode === "script" && currentData?.clipDNA && (
-                                <div className="flex-row gap-12" style={{ flexWrap: "wrap", marginTop: "16px" }}>
-                                    <div className="clip-dna-box">
-                                        <div className="clip-dna-label">🧬 Clip DNA</div>
-                                        <div className="clip-dna-grid">
-                                            {Object.entries(currentData.clipDNA).map(([k, v]) => (
-                                                <div key={k} className="clip-dna-item">
-                                                    <div className="clip-dna-item-label">{k}</div>
-                                                    <div className="clip-dna-item-value">{v}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {currentData?.replayQuestion && (
-                                        <div className="replay-hook-box">
-                                            <div className="replay-hook-label">🔄 Replay Hook</div>
-                                            <div className="replay-hook-text">{currentData.replayQuestion}</div>
-                                        </div>
-                                    )}
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
+                                        <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
+                                        
+                                        {/* Add more platforms as needed */}
+                                    </InsightsCard>
                                 </div>
                             )}
                         </div>
@@ -1439,8 +1051,9 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
 
                     {!hasResult && !loading && (
                         <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
-                            <div style={{ fontSize: 42, marginBottom: 9 }}>{mode === "script" ? "🎬" : "📊"}</div>
-                            <div style={{ fontSize: 13 }}>{mode === "script" ? "Enter a topic to generate your viral script + clip sources" : "Enter a topic to run viral research + SEO analysis"}</div>
+                            <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
+                            <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
+                            <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
                         </div>
                     )}
                 </div>
@@ -1451,4 +1064,208 @@ Ranks array: 6 items rank 6 to 1. Rank 1 has no transitionText.`;
     </script>
 </body>
 </html>
-```*
+```បង! ខ្ញុំបានបញ្ចប់ការអនុវត្តន៍សម្រាប់ផ្នែក **External Python Backend Service** ដែល Cloudflare Worker របស់អ្នកនឹងហៅ!
+
+នេះគឺជាផ្នែកដ៏សំខាន់ដែលបំពេញនូវ Architecture របស់ "Source Intelligence Engine" របស់យើង។ ខ្ញុំបានបង្កើត Endpoint ថ្មីមួយនៅក្នុង Python Backend របស់អ្នក ដែលទទួល Data ពី Worker, ដំណើរការ Logic Python របស់អ្នកទាំងអស់, និងបញ្ជូន Deterministic Facts ត្រឡប់ទៅ Worker វិញ។
+
+---
+
+### **1. `backend/api/endpoints/source_intelligence.py` (File ថ្មី)**
+
+File នេះនឹងបង្កើត Endpoint ថ្មីមួយ (`/api/source-intelligence-process`) នៅក្នុង External Python Backend Service របស់អ្នក។
+
+```python
+# backend/api/endpoints/source_intelligence.py
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
+
+from backend.models.db import get_db, Creator # Assuming Creator is available for DB writes
+from backend.core.logger import log
+
+# Import your services for deterministic analysis
+from backend.services.discovery_engine import discovery_engine_service
+from backend.services.ranking_engine import ranking_engine_service
+from backend.services.trend_analysis_service import trend_analysis_service
+# Assuming you have an SEO service or will derive SEO from ranking_engine output
+# from backend.services.seo_service import seo_service
+# from backend.services.multimodal_engine import multimodal_engine_service # for semantic tags, if used
+
+router = APIRouter(prefix="/source-intelligence", tags=["Source Intelligence"])
+
+
+# --- Pydantic Models for "Evidence Contract" ---
+class RawClipEvidence(BaseModel):
+    url: str
+    platform: str
+    title: str
+    description_snippet: Optional[str] = None
+    upload_date_approx: Optional[str] = None
+    views_approx: Optional[int] = None
+    likes_approx: Optional[int] = None
+    upvotes_approx: Optional[int] = None
+    comments_approx: Optional[int] = None
+    shares_approx: Optional[int] = None
+    channel: Optional[str] = None
+    tags: Optional[List[str]] = []
+    source_type: str = Field(..., description="e.g., YouTube_API, Web_Search_RuFlo, TikTok_Scraper")
+    
+    # Optional fields for backend processing, not necessarily from frontend
+    id: Optional[str] = None # For internal deduplication/tracking
+    external_id: Optional[str] = None # Original platform ID
+
+class EditorialObjective(BaseModel):
+    topic: str
+    creative_brief: str
+    reference_channels: List[str]
+    date_filter: str
+
+class DeterministicAnalysisRequest(BaseModel):
+    editorial_objective: EditorialObjective
+    niche_profile: List[str]
+    research_plan: List[str]
+    editorial_dna: Dict[str, Any]
+    raw_evidence: Dict[str, List[RawClipEvidence]]
+
+
+class DeterministicAnalysisResponse(BaseModel):
+    # This will contain all deterministic facts derived by your Python Backend
+    processed_clips: List[Dict[str, Any]] # Enriched clips with backend scores/flags
+    trend_briefing: List[Dict[str, Any]]
+    overall_trend_status: str
+    # Other backend-derived deterministic facts
+    # E.g., duplicate clusters, likely original candidates (from deterministic logic)
+
+
+# --- Internal Helper for Duplicate/Original Heuristics (Deterministic) ---
+def _identify_likely_original_and_reposts(clips: List[RawClipEvidence]) -> List[Dict[str, Any]]:
+    # This is a simplified deterministic heuristic.
+    # A more robust system would involve semantic similarity via embeddings (Multimodal Engine).
+    log.info("[Python Backend] Identifying likely originals and reposts deterministically...")
+    
+    clips_with_meta = []
+    for clip in clips:
+        clip_data = clip.model_dump()
+        # Convert upload_date_approx to datetime object for comparison
+        if clip_data.get('upload_date_approx'):
+            try:
+                clip_data['upload_dt'] = datetime.fromisoformat(clip_data['upload_date_approx'].replace('Z', '+00:00'))
+            except ValueError:
+                clip_data['upload_dt'] = None
+        else:
+            clip_data['upload_dt'] = None
+        
+        # Assign a 'determinism_score' - higher if API, earlier date, higher engagement
+        score = 0
+        if clip_data['source_type'] == "YouTube_API": score += 100
+        elif clip_data['source_type'] == "TikTok_Scraper": score += 80 # Assuming scraper is somewhat reliable
+        elif clip_data['source_type'] == "Web_Search_RuFlo": score += 50
+        
+        score += (clip_data.get('views_approx', 0) / 1000000) * 10 # Scale views
+        score += (clip_data.get('likes_approx', 0) / 10000) * 5   # Scale likes
+        
+        clip_data['determinism_score'] = score
+        clips_with_meta.append(clip_data)
+
+    # Sort to find the earliest/highest scoring
+    clips_with_meta.sort(key=lambda x: (x['upload_dt'] or datetime.min, x['determinism_score']), reverse=False)
+
+    processed_clips_for_ai = []
+    seen_titles = set()
+    
+    for i, current_clip in enumerate(clips_with_meta):
+        is_original_candidate = False
+        repost_analysis = []
+        
+        # Simple duplicate check and original candidate identification
+        if current_clip['title'] not in seen_titles:
+            is_original_candidate = True
+            seen_titles.add(current_clip['title']) # Mark title as seen for originals
+            
+            # Check for potential reposts of this candidate
+            for other_clip in clips_with_meta:
+                if other_clip['url'] != current_clip['url'] and other_clip['title'] == current_clip['title']:
+                    if current_clip['upload_dt'] and other_clip['upload_dt'] and other_clip['upload_dt'] > current_clip['upload_dt']:
+                        time_diff = other_clip['upload_dt'] - current_clip['upload_dt']
+                        repost_analysis.append(f"Reposted on {other_clip['platform']} ({other_clip['channel'] or 'unknown channel'}) ~{time_diff.days} days later.")
+                    else:
+                        repost_analysis.append(f"Similar clip found on {other_clip['platform']} ({other_clip['channel'] or 'unknown channel'}).")
+        else:
+            repost_analysis.append(f"This clip appears to be a repost of an earlier version.")
+
+        processed_clips_for_ai.append({
+            "clip": current_clip,
+            "is_likely_original_candidate": is_original_candidate,
+            "repost_analysis_text": ". ".join(repost_analysis) if repost_analysis else "No explicit reposts or earlier versions identified based on current evidence.",
+            "originality_confidence_score_backend": min(100, current_clip['determinism_score'] / 10), # Scale for LLM
+        })
+    
+    # Sort again, to prioritize original candidates for LLM analysis
+    processed_clips_for_ai.sort(key=lambda x: x["is_likely_original_candidate"] and x["clip"]["determinism_score"], reverse=True)
+
+    return processed_clips_for_ai
+
+
+@router.post("/source-intelligence-process", response_model=DeterministicAnalysisResponse)
+async def process_source_intelligence(
+    req: DeterministicAnalysisRequest,
+    db: Session = Depends(get_db),
+) -> DeterministicAnalysisResponse:
+    """
+    Receives raw evidence from Cloudflare Worker, performs deterministic analysis,
+    and returns structured facts to the Worker for final AI insights generation.
+    """
+    log.info(f"[Python Backend] Received Source Intelligence request for topic: {req.editorial_objective.topic}")
+    
+    all_clips: List[RawClipEvidence] = []
+    for platform_clips in req.raw_evidence.values():
+        all_clips.extend(platform_clips)
+
+    # --- Step 1: Deterministic Duplicate/Original Identification ---
+    # This uses a heuristic based on available data, not LLM guessing
+    processed_clips_for_ai = _identify_likely_original_and_reposts(all_clips)
+    
+    # --- Step 2: Deterministic Ranking and Trend Analysis ---
+    # Use existing services with the processed clip data
+    
+    # Mock / Fallback for clips to fit RankingEngine input if needed
+    ranking_candidates = []
+    for pc in processed_clips_for_ai:
+        clip_data = pc['clip']
+        ranking_candidates.append({
+            "id": clip_data.get('id') or clip_data.get('url'),
+            "title": clip_data.get('title'),
+            "platform": clip_data.get('platform'),
+            "semantic_score": 0.7, # Placeholder, MultimodalEngine would compute this
+            "views": clip_data.get('views_approx', 0),
+            "likes": clip_data.get('likes_approx', 0),
+            "age_days": (datetime.now(timezone.utc) - datetime.fromisoformat(clip_data['published_at'].replace('Z', '+00:00'))).days if clip_data.get('published_at') else 30,
+            "followers": 0, # Placeholder
+            "creator": clip_data.get('channel', 'unknown'),
+            "tags": clip_data.get('tags', []),
+        })
+    
+    ranked_clips = ranking_engine_service.rank(ranking_candidates, user_id="ai_orchestrator")
+    
+    # Trend Analysis (can be applied to overall topic or specific creators)
+    # For simplicity, we'll give a generic trend status for the topic
+    # A more complex integration would use trend_analysis_service for specific creators.
+    overall_trend_status = trend_analysis_service._get_trend_lifecycle(
+        velocity=len(all_clips) / 5, # Simple heuristic
+        mentions_7d=len(all_clips) # Simple heuristic
+    )
+    
+    # --- Step 3: Compile Deterministic Facts for Worker ---
+    backend_derived_facts = {
+        "processed_clips_for_ai": processed_clips_for_ai, # Includes originality/repost insights
+        "ranked_clips_by_backend": ranked_clips, # Deterministic ranking
+        "overall_trend_status": overall_trend_status,
+        "niche_profile_backend_confirmed": req.niche_profile, # Pass back for LLM context
+        "editorial_dna_backend_interpreted": req.editorial_dna, # Pass back for LLM context
+    }
+
+    log.info("[Python Backend] ✅ Deterministic analysis complete. Returning facts to Worker.")
+    return DeterministicAnalysisResponse(**backend_derived_facts)
