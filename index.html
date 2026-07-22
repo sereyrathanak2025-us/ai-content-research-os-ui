@@ -1,336 +1,1067 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Viral Radar — Source Intelligence Engine</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#0a0b0d;--bg-elevated:#131518;--bg-card:#17191d;--border:#262a30;--border-bright:#3a3f47;--acid:#c6ff3d;--acid-dim:#8fb82c;--coral:#ff5a36;--coral-dim:#b33e26;--text:#f2f3f0;--text-dim:#9a9fa6;--text-faint:#5c6169;--font-display:'Archivo Black',sans-serif;--font-mono:'JetBrains Mono',monospace;--font-body:'Work Sans',sans-serif;--rank6:#FF6B35;--rank5:#F7931E;--rank4:#FFD700;--rank3:#FF4444;--rank2:#CC00FF;--rank1:#FF0050}
-*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;min-height:100%}body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:64px 64px;opacity:.25;mask-image:radial-gradient(ellipse 80% 50% at 50% 0%,black 0%,transparent 70%)}
-#root{position:relative;z-index:2}
-.spinner{border:3px solid var(--border);border-top:3px solid var(--acid);border-radius:50%;width:28px;height:28px;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}@keyframes blink{0%,45%{opacity:1}50%,100%{opacity:0}}@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-::selection{background:var(--acid);color:#0a0b0d}::-webkit-scrollbar{width:10px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border-bright);border-radius:6px}
-.shell{max-width:940px;margin:0 auto;padding:0 16px 80px}
-.nav{display:flex;align-items:center;justify-content:space-between;padding:28px 0 40px}.nav-brand{display:flex;align-items:center;gap:10px}.nav-mark{color:var(--acid);font-size:20px}.nav-name{font-family:var(--font-mono);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
-.nav-badge{font-family:var(--font-mono);font-size:11px;color:var(--acid);border:1px solid var(--acid-dim);background:rgba(198,255,61,.07);padding:4px 10px;border-radius:20px;letter-spacing:.05em}
-.hero{padding:20px 0 44px;text-align:center}.hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--text-dim);border:1px solid var(--border-bright);padding:6px 14px;border-radius:20px;margin-bottom:26px}
-.hero-tag .dot{width:6px;height:6px;border-radius:50%;background:var(--acid);animation:pulse 1.6s ease-in-out infinite}
-.hero h1{font-family:var(--font-display);font-size:clamp(34px,6.4vw,58px);line-height:1.02;letter-spacing:-.01em;text-transform:uppercase;margin-bottom:18px}.hero h1 span{color:var(--acid)}
-.hero p{font-size:16px;color:var(--text-dim);max-width:480px;margin:0 auto;line-height:1.55}
-.retention-curve-wrapper{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:18px 22px 12px;margin-bottom:24px;display:flex;align-items:flex-end;gap:7px}
-.retention-curve-label{font-size:9px;color:rgba(240,240,245,.22);letter-spacing:.11em;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);margin-right:3px;padding-bottom:4px}
-.retention-rank-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}.retention-percent{font-size:8px;font-weight:700}.retention-bar-inner{width:100%;border-radius:3px 3px 0 0}.retention-rank-label{font-size:9px;color:rgba(240,240,245,.28);font-weight:700}
-.console{margin-top:36px;background:var(--bg-elevated);border:1px solid var(--border-bright);border-radius:14px;padding:4px;box-shadow:0 0 0 1px rgba(198,255,61,.03),0 20px 60px -20px rgba(0,0,0,.6)}
-.console-head{display:flex;align-items:center;gap:7px;padding:12px 16px 8px;font-family:var(--font-mono);font-size:11px;color:var(--text-faint)}.console-head .cdot{width:8px;height:8px;border-radius:50%}
-.console-body{padding:4px 14px 16px}.console-prompt{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:15px;padding:6px 4px 16px}.console-prompt .caret{color:var(--acid)}
-.console-prompt input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font-mono);font-size:15px}.console-prompt input::placeholder{color:var(--text-faint)}
-.surprise-btn{background:var(--bg-card);border:1px solid var(--border-bright);border-radius:7px;font-size:15px;padding:5px 9px;cursor:pointer;line-height:1}.surprise-btn:hover:not(:disabled){border-color:var(--acid-dim);transform:rotate(-8deg) scale(1.08)}.surprise-btn:disabled{opacity:.4;cursor:not-allowed}
-.ref-block{padding:10px 4px 14px;border-top:1px dashed var(--border);margin-top:2px}.ref-label{font-family:var(--font-mono);font-size:11px;color:var(--acid-dim);margin-bottom:7px}.ref-input{width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:9px 11px;border-radius:8px;resize:vertical;line-height:1.5}.ref-input::placeholder{color:var(--text-faint)}.ref-input:focus{outline:none;border-color:var(--acid-dim)}.ref-hint{font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.5}
-.run-btn{width:100%;background:var(--acid);color:#0a0b0d;border:none;font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;padding:15px;border-radius:9px;cursor:pointer;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s,box-shadow .12s}.run-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px -8px rgba(198,255,61,.5)}.run-btn:disabled{opacity:.5;cursor:not-allowed;background:var(--border-bright);color:var(--text-dim)}
-.agent-strip{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:30px}.agent-chip{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);border:1px solid var(--border);padding:6px 12px;border-radius:20px}
-.error-box{margin-top:24px;background:rgba(255,90,54,.08);border:1px solid var(--coral-dim);color:#ffb199;padding:14px 16px;border-radius:10px;font-size:14px;font-family:var(--font-mono)}
-.loading-box{margin-top:40px;text-align:center;padding:40px 0}.loading-box p{font-family:var(--font-mono);font-size:12.5px;color:var(--text-dim);margin-top:16px}
-.pipeline{margin-top:36px}.pipeline-step{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;animation:fadeUp .3s ease both}.pipeline-step.completed{border-color:rgba(76,175,80,.3)}.pipeline-step.failed{border-color:rgba(255,90,54,.3)}.pipeline-step.running{border-color:rgba(198,255,61,.3)}.pipeline-step.skipped{border-color:rgba(92,97,105,.2);opacity:.5}
-.pipeline-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}.pipeline-icon.completed{background:rgba(76,175,80,.15);color:#4CAF50}.pipeline-icon.failed{background:rgba(255,90,54,.15);color:var(--coral)}.pipeline-icon.running{background:rgba(198,255,61,.15);color:var(--acid)}.pipeline-icon.skipped{background:rgba(92,97,105,.15);color:var(--text-faint)}
-.pipeline-info{flex:1;min-width:0}.pipeline-label{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text)}.pipeline-msg{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);margin-top:2px}
-.results{margin-top:52px}.results-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:10px;flex-wrap:wrap}
-.new-search-btn{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);background:var(--bg-card);border:1px solid var(--border-bright);padding:7px 14px;border-radius:20px;cursor:pointer}.new-search-btn:hover{border-color:var(--coral);color:var(--coral)}
-.section-card{background:var(--bg-card);border:1px solid var(--border-bright);border-radius:12px;padding:16px;margin-bottom:16px}
-.section-title{font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--acid);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.evidence-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}.evidence-item:last-child{border-bottom:none}
-.evidence-thumb{width:120px;height:68px;flex-shrink:0;border-radius:6px;object-fit:cover;background:var(--bg-elevated)}.evidence-info{flex:1;min-width:0}
-.evidence-title{font-size:13.5px;font-weight:600;line-height:1.3;color:var(--text);text-decoration:none;display:block;margin-bottom:4px}.evidence-title:hover{color:var(--acid)}
-.evidence-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint)}.evidence-meta .views{color:var(--acid)}
-.evidence-no-data{font-size:13px;color:var(--coral);text-align:center;padding:20px;font-family:var(--font-mono)}
-.platform-link{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg-elevated);border:1px solid var(--border-bright);border-radius:8px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;text-decoration:none;margin:4px}.platform-link:hover{border-color:var(--acid-dim);color:var(--acid)}
-.insights-list{list-style:none;padding:0}.insights-list li{font-size:13px;color:var(--text-dim);line-height:1.5;margin-bottom:8px;padding-left:18px;position:relative}.insights-list li::before{content:'✨';position:absolute;left:0;font-size:14px}
-.insights-label{font-family:var(--font-mono);font-size:11px;color:var(--acid-dim);text-transform:uppercase;margin-bottom:4px}.insights-value{font-size:13px;color:var(--text);line-height:1.5}
-.tag-grid{display:flex;flex-wrap:wrap;gap:6px}.tag-chip{background:rgba(198,255,61,.08);border:1px solid var(--acid-dim);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--acid);font-weight:600}
-.rank-card{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}.rank-badge{display:inline-block;font-family:var(--font-mono);font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;margin-bottom:8px}
-.rank-idea{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}.rank-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);margin-bottom:4px}.rank-link{color:var(--acid);font-size:12px;text-decoration:none}.rank-link:hover{text-decoration:underline}
-.text-center{text-align:center}
-@media(max-width:560px){.evidence-thumb{width:80px;height:45px}}
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viral Radar — Source Intelligence Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0b0d;
+            --bg-elevated: #131518;
+            --bg-card: #17191d;
+            --border: #262a30;
+            --border-bright: #3a3f47;
+            --acid: #c6ff3d;
+            --acid-dim: #8fb82c;
+            --coral: #ff5a36;
+            --coral-dim: #b33e26;
+            --text: #f2f3f0;
+            --text-dim: #9a9fa6;
+            --text-faint: #5c6169;
+            --font-display: 'Archivo Black', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-body: 'Work Sans', sans-serif;
+
+            /* Viral Engine specific colors (from viral engine.jsx) */
+            --rank6-color: #FF6B35;
+            --rank5-color: #F7931E;
+            --rank4-color: #FFD700;
+            --rank3-color: #FF4444;
+            --rank2-color: #CC00FF;
+            --rank1-color: #FF0050;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100%; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.035;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 64px 64px;
+            opacity: 0.25;
+            mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 0%, transparent 70%);
+        }
+        #root { position: relative; z-index: 2; }
+        .spinner { border: 3px solid var(--border); border-top: 3px solid var(--acid); border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        ::selection { background: var(--acid); color: #0a0b0d; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
+
+        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
+
+        /* ---------- NAV ---------- */
+        .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
+        .nav-brand { display: flex; align-items: center; gap: 10px; }
+        .nav-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--acid); font-size: 20px; transform: rotate(0deg); animation: none; }
+        .nav-name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .nav-badge { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); background: rgba(198,255,61,0.07); padding: 4px 10px; border-radius: 20px; letter-spacing: 0.05em; }
+
+        /* ---------- HERO ---------- */
+        .hero { padding: 20px 0 44px; text-align: center; }
+        .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border-bright); padding: 6px 14px; border-radius: 20px; margin-bottom: 26px; letter-spacing: 0.03em; }
+        .hero-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1.6s ease-in-out infinite; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(34px, 6.4vw, 58px); line-height: 1.02; letter-spacing: -0.01em; text-transform: uppercase; margin-bottom: 18px; }
+        .hero h1 span { color: var(--acid); }
+        .hero p { font-size: 16px; color: var(--text-dim); max-width: 480px; margin: 0 auto; line-height: 1.55; }
+
+        /* ---------- CONSOLE INPUT ---------- */
+        .console { margin-top: 36px; background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 4px; box-shadow: 0 0 0 1px rgba(198,255,61,0.03), 0 20px 60px -20px rgba(0,0,0,0.6); }
+        .console-head { display: flex; align-items: center; gap: 7px; padding: 12px 16px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+        .console-head .cdot { width: 8px; height: 8px; border-radius: 50%; }
+        .console-body { padding: 4px 14px 16px; }
+        .console-prompt { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 15px; padding: 6px 4px 16px; }
+        .console-prompt .caret { color: var(--acid); }
+        .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
+        .console-prompt input::placeholder { color: var(--text-faint); }
+        .surprise-btn { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 7px; font-size: 15px; padding: 5px 9px; cursor: pointer; line-height: 1; transition: transform 0.15s ease, border-color 0.15s ease; }
+        .surprise-btn:hover:not(:disabled) { border-color: var(--acid-dim); transform: rotate(-8deg) scale(1.08); }
+        .surprise-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
+
+        .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
+        .ref-channels-block { padding: 10px 4px 14px; border-top: 1px dashed var(--border); margin-top: 2px; }
+        .ref-channels-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); margin-bottom: 7px; letter-spacing: 0.02em; }
+        .ref-optional { color: var(--text-faint); font-weight: 400; }
+        .ref-channels-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 9px 11px; border-radius: 8px; resize: vertical; line-height: 1.5; }
+        .ref-channels-input::placeholder { color: var(--text-faint); }
+        .ref-channels-input:focus { outline: none; border-color: var(--acid-dim); }
+        .ref-channels-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+        .select-wrap { position: relative; }
+        .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
+        .select-wrap select {
+            width: 100%; appearance: none; background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; padding: 9px 26px 9px 11px;
+            border-radius: 8px; cursor: pointer;
+        }
+        .select-wrap select:hover { border-color: var(--border-bright); color: var(--text); }
+        .select-wrap select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .run-btn {
+            width: 100%; background: var(--acid); color: #0a0b0d; border: none; font-family: var(--font-mono);
+            font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px;
+            border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
+        .run-btn:active:not(:disabled) { transform: translateY(0); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+
+        /* ---------- AGENT STRIP ---------- */
+        .agent-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+        .agent-chip { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; letter-spacing: 0.02em; }
+
+        /* ---------- ERROR ---------- */
+        .error-box { margin-top: 24px; background: rgba(255,90,54,0.08); border: 1px solid var(--coral-dim); color: #ffb199; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-family: var(--font-mono); }
+
+        /* ---------- LOADING ---------- */
+        .loading-box { margin-top: 40px; text-align: center; padding: 40px 0; }
+        .loading-box p { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-top: 16px; letter-spacing: 0.02em; }
+
+        /* ---------- RESULTS ---------- */
+        .results { margin-top: 52px; }
+        .results-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 10px; flex-wrap: wrap; }
+        .restored-tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+        .new-search-btn { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border-bright); padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all 0.12s ease; }
+        .new-search-btn:hover { border-color: var(--coral); color: var(--coral); }
+        .agent-block { margin-bottom: 44px; animation: fadeUp 0.45s ease both; }
+        .agent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .agent-title-row { display: flex; align-items: center; gap: 10px; }
+        .agent-index { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
+        .agent-title { font-family: var(--font-display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.01em; }
+        .agent-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .agent-meta b { color: var(--text-dim); }
+
+        .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
+        .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
+
+        /* Discovery video cards */
+        .video-grid { display: grid; gap: 10px; }
+        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease; }
+        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.08), 0 8px 24px -12px rgba(198,255,61,0.25); }
+        .video-card.featured { flex-direction: column; margin-bottom: 12px; padding: 14px; background: linear-gradient(160deg, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--acid-dim); position: relative; overflow: hidden; }
+        .video-card.featured::before { content: ''; position: absolute; top: -40%; right: -20%; width: 60%; height: 140%; background: radial-gradient(circle, rgba(198,255,61,0.08), transparent 65%); pointer-events: none; }
+        .video-card.featured:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.15), 0 16px 40px -16px rgba(198,255,61,0.35); }
+        .featured-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--acid); margin-bottom: 10px; display: inline-block; }
+        .featured-body { display: flex; gap: 14px; align-items: center; }
+        .featured-thumb { width: 132px; height: 82px; }
+        .featured-title { font-size: 15px; -webkit-line-clamp: 3; }
+        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
+        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .video-sub .views { color: var(--acid); }
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
+        .trend-list { list-style: none; margin-top: 6px; }
+        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
+        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
+
+        /* Viral Engine Specific Styles (from viral engine.jsx) */
+        .retention-curve-wrapper {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
+            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
+        }
+        .retention-curve-label {
+            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
+            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
+        }
+        .retention-rank-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .retention-percent {
+            font-size: 8px; font-weight: 700;
+        }
+        .retention-bar-inner {
+            width: 100%; border-radius: 3px 3px 0 0;
+            height: var(--bar-height); /* Dynamic height */
+            background: linear-gradient(180deg, var(--item-color), rgba(255,255,255,0.03));
+            box-shadow: 0 -3px 10px var(--item-glow);
+        }
+        .retention-rank-label {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
+        }
+
+        .mode-selector { display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07); }
+        .mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left; }
+        .mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35); }
+        .mode-btn-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+        .mode-btn-title.active { color: #FF0050; }
+        .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
+        .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
+
+        .console-input-section { background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 9px; }
+        .console-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: var(--text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
+        .console-input::placeholder { color: var(--text-faint); }
+        .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+        .example-topic-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 600; }
+        .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
+        .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .date-filter-section { margin-bottom: 14px; }
+        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
+        .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+        .date-filter-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 700; }
+        .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
+        .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
+        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+        .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
+
+        .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
+
+        .result-summary-box { background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
+        .result-summary-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px; }
+        .result-summary-topic { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+        .result-summary-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+        .summary-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+        .summary-badge.trend { border-color: var(--trend-color)40; color: var(--trend-color); }
+        .summary-badge.opportunity { background: rgba(255,0,80,0.12); border-color: rgba(255,0,80,0.26); color: #FF0050; }
+        .summary-badge.viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
+        .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
+
+        .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+        .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
+        .editor-note-value { font-size: 13px; color: rgba(240,240,245,0.7); line-height: 1.4; }
+        .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
+        .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
+        .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+        .editor-note-value-small { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
+
+        .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+        .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
+        .view-mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050; }
+
+        .rank-selector { display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+        .rank-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; color: rgba(240,240,245,0.28); cursor: pointer; transition: all 0.16s; }
+        .rank-btn.active { color: #fff; }
+        .rank-btn-glow { box-shadow: 0 0 13px; }
+
+        /* Card styles for Insights */
+        .insights-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .insights-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--acid); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .insights-list { list-style: none; padding-left: 0; }
+        .insights-list li { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; padding-left: 18px; position: relative; }
+        .insights-list li::before { content: '✨'; position: absolute; left: 0; font-size: 14px; top: 0; }
+        .insights-item-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); text-transform: uppercase; margin-bottom: 4px; }
+        .insights-item-value { font-size: 13px; color: var(--text); line-height: 1.5; }
+        .insights-tags-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .insights-tag-chip { background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--acid); font-weight: 600; }
+        .insights-platform-btn { background: var(--acid)08; border: 1px solid var(--acid)30; color: var(--acid); }
+
+        /* Raw Evidence Card */
+        .evidence-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .evidence-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--coral); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .evidence-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .evidence-item:last-child { border-bottom: none; }
+        .evidence-thumb { width: 100px; height: 60px; flex-shrink: 0; background: var(--bg-elevated); border-radius: 6px; object-fit: cover; }
+        .evidence-info { flex: 1; min-width: 0; }
+        .evidence-info-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .evidence-info-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+        .evidence-info-platform { color: var(--acid); }
+        .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
+        .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
+
+
+        /* General utility classes */
+        .flex-row { display: flex; align-items: center; }
+        .flex-col { display: flex; flex-direction: column; }
+        .gap-4 { gap: 4px; }
+        .gap-6 { gap: 6px; }
+        .gap-7 { gap: 7px; }
+        .gap-8 { gap: 8px; }
+        .gap-9 { gap: 9px; }
+        .gap-10 { gap: 10px; }
+        .mt-8 { margin-top: 8px; }
+        .mb-10 { margin-bottom: 10px; }
+        .mb-14 { margin-bottom: 14px; }
+        .mb-16 { margin-bottom: 16px; }
+        .mb-24 { margin-bottom: 24px; }
+        .text-center { text-align: center; }
+        .hidden { display: none !important; }
+
+        @media (max-width: 560px) {
+            .config-row { grid-template-columns: 1fr; }
+            .evidence-thumb { width: 80px; height: 50px; }
+        }
+    </style>
 </head>
 <body>
-<div id="root"><div style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6"><div class="spinner" style="margin:0 auto 16px"></div>Booting Viral Radar…</div></div>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef } = React;
+    <div id="root">
+        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
+            <div class="spinner" style="margin:0 auto 16px;"></div>
+            Booting Viral Radar…
+        </div>
+    </div>
 
-const WORKER_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
-const SURPRISE_NICHES = [
-  "worst martial arts fails", "funniest gym fails", "dumbest sports moments",
-  "craziest skateboard wipeouts", "most embarrassing moments caught on camera",
-  "instant regret prank fails", "animals ruining everything", "near miss moments",
-  "perfect timing coincidences", "things that look fake but are real",
-  "wait for it fail compilations", "ranking worst decisions caught on camera",
-  "craziest referee mistakes", "funniest scream reactions", "instant karma caught on camera",
-];
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-const RANK_META = [
-  { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
-  { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
-  { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
-  { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
-  { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
-  { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
-];
+        // --- Constants (Global) ---
+        const RANK_META = [
+            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
+            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
+            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
+            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
+            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
+            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
+        ];
 
-function RetentionCurve() {
-  return React.createElement("div", { className: "retention-curve-wrapper" },
-    React.createElement("div", { className: "retention-curve-label" }, "Retention"),
-    [...RANK_META].reverse().map(function(m) {
-      return React.createElement("div", { key: m.rank, className: "retention-rank-item" },
-        React.createElement("span", { className: "retention-percent", style: { color: m.color } }, m.bar + "%"),
-        React.createElement("div", { className: "retention-bar-inner", style: {
-          height: (m.bar * 0.5) + "px",
-          background: "linear-gradient(180deg," + m.color + ",rgba(255,255,255,0.03))",
-          boxShadow: "0 -3px 10px " + m.glow
-        }}),
-        React.createElement("span", { className: "retention-rank-label" }, "#" + m.rank)
-      );
-    })
-  );
-}
+        const EXAMPLE_TOPICS = [
+            "Worst Martial Arts Fails", "Dumbest MMA Moments",
+            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
+            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
+            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
+        ];
 
-function App() {
-  const [topic, setTopic] = useState("");
-  const [creativeBrief, setCreativeBrief] = useState("");
-  const [refChannels, setRefChannels] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
-  const [phaseIdx, setPhaseIdx] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const intervalRef = useRef(null);
-  const phases = ["Planning research…", "Analyzing style DNA…", "Hunting for clips…", "Analyzing evidence…", "Generating insights…"];
+        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
 
-  useEffect(() => { return () => { if (intervalRef.current) clearInterval(intervalRef.current); }; }, []);
+        const PLATFORM_CFG = {
+            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
+                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+                shortsUrl: (q) => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}` },
+            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
+                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
+                tagUrl: (t) => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}` },
+            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
+                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
+                subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
+            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
+                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`,
+                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}` },
+            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
+                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
+                tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
+            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
+                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
+            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
+                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` }, // Search public channels
+        };
 
-  function handleSurprise() {
-    const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
-    setTopic(pick);
-    setCreativeBrief("Find real, shocking, funny fail clips — original short moments, not compilations. One clear event per clip. Strong reaction. Suitable for #6 to #1 ranking format like PolarRanks.");
-    setRefChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
-  }
+        const SURPRISE_NICHES = [
+            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
+            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
+            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
+            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
+            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
+            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
+            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
+        ];
 
-  async function handleResearch() {
-    if (!topic.trim()) { setError("Enter a topic first."); return; }
-    setLoading(true); setError(null); setResult(null); setCopied(false); setPhaseIdx(0);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => setPhaseIdx(p => (p + 1) % phases.length), 1200);
-    try {
-      const resp = await fetch(WORKER_URL + "/api/generate-insights", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: topic.trim(),
-          creativeBrief: creativeBrief.trim(),
-          referenceChannels: refChannels.split("\n").map(c => c.trim()).filter(Boolean),
-        })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Worker error " + resp.status);
-      setResult(data);
-    } catch (e) { setError(e.message || "Unknown error"); }
-    finally { if (intervalRef.current) clearInterval(intervalRef.current); setLoading(false); setPhaseIdx(0); }
-  }
+        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
 
-  function handleNewSearch() { setResult(null); setError(null); setTopic(""); setCreativeBrief(""); setRefChannels(""); }
+        // --- API Helper ---
+        const DEFAULT_TIMEOUT = 120000; // 2 minutes
+        // IMPORTANT: Replace with YOUR Cloudflare Worker URL
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
 
-  function copyResult() {
-    if (!result) return;
-    const ins = result.ai_actionable_insights;
-    let ct = "Source Intelligence Report: " + (result.editorial_objective?.topic || "") + "\n\n";
-    if (ins?.hook_suggestions?.length) ct += "Hooks: " + ins.hook_suggestions.join(", ") + "\n";
-    if (ins?.hashtag_strategy?.length) ct += "Hashtags: " + ins.hashtag_strategy.join(", ") + "\n";
-    if (ins?.ranked_clip_opportunities?.length) {
-      ct += "\nRanked Clips:\n";
-      ins.ranked_clip_opportunities.forEach(c => { ct += "#" + (c.rank||"?") + ": " + c.moment_idea + " — " + (c.youtube_url||"") + "\n"; });
-    }
-    navigator.clipboard.writeText(ct).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  }
+        const LLM_PROVIDERS_CONFIG = {
+            openrouter: { name: "OpenRouter", models: [
+                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
+                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
+                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
+            ]},
+            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
+            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
+            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
+            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
+        };
 
-  const hasResult = !!result;
-  const pipeline = result?.pipeline;
-  const evidence = result?.raw_evidence_found;
-  const insights = result?.ai_actionable_insights;
-  const hasEvidence = evidence && evidence.total_youtube > 0;
+        async function callWorkerAPI(endpoint, payload, options = {}) {
+            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
+            const controller = new AbortController();
+            const signal = controller.signal;
+            const timeout = options.timeout || DEFAULT_TIMEOUT;
+            const timer = setTimeout(() => controller.abort(), timeout);
 
-  return React.createElement("div", { className: "shell" },
-    React.createElement("div", { className: "nav" },
-      React.createElement("div", { className: "nav-brand" },
-        React.createElement("span", { className: "nav-mark" }, "✦"),
-        React.createElement("span", { className: "nav-name" }, "Viral Radar")
-      ),
-      React.createElement("span", { className: "nav-badge" }, "Source Intelligence Engine")
-    ),
-    React.createElement("div", { className: "hero" },
-      React.createElement("div", { className: "hero-tag" },
-        React.createElement("span", { className: "dot" }), " AI-powered Viral Clip Discovery"
-      ),
-      React.createElement("h1", null, "Uncover the ", React.createElement("span", null, "Original"), React.createElement("br"), "Viral Moments."),
-      React.createElement("p", null, "Find real source clips for your ranking videos. Like PolarRanks — funny, shocking, unexpected moments that make people laugh.")
-    ),
-    RetentionCurve(),
-    React.createElement("div", { className: "console" },
-      React.createElement("div", { className: "console-head" },
-        React.createElement("span", { className: "cdot", style: { background: "#ff5f57" } }),
-        React.createElement("span", { className: "cdot", style: { background: "#febc2e" } }),
-        React.createElement("span", { className: "cdot", style: { background: "#28c840" } }),
-        React.createElement("span", { style: { marginLeft: "6px" } }, "research.sh")
-      ),
-      React.createElement("div", { className: "console-body" },
-        React.createElement("div", { className: "console-prompt" },
-          React.createElement("span", { className: "caret" }, "›"),
-          React.createElement("input", {
-            type: "text", value: topic, onChange: e => setTopic(e.target.value),
-            onKeyDown: e => { if (e.key === "Enter" && !loading) handleResearch(); },
-            placeholder: "e.g. worst martial arts fails", disabled: loading,
-            style: { flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: "15px" }
-          }),
-          React.createElement("button", { className: "surprise-btn", onClick: handleSurprise, disabled: loading, title: "Surprise niche" }, "🎲")
-        ),
-        React.createElement("div", { className: "ref-block" },
-          React.createElement("div", { className: "ref-label" }, "◆ Creative Brief"),
-          React.createElement("textarea", {
-            className: "ref-input", value: creativeBrief, onChange: e => setCreativeBrief(e.target.value),
-            placeholder: "e.g. Find real, shocking fail clips — original, short, one clear event, strong reaction, not compilations.",
-            disabled: loading, rows: 2
-          })
-        ),
-        React.createElement("div", { className: "ref-block" },
-          React.createElement("div", { className: "ref-label" }, "◆ Style DNA Sources (YouTube channels)"),
-          React.createElement("textarea", {
-            className: "ref-input", value: refChannels, onChange: e => setRefChannels(e.target.value),
-            placeholder: "youtube.com/@oogway_ranks\nyoutube.com/@polarranks",
-            disabled: loading, rows: 2
-          }),
-          React.createElement("div", { className: "ref-hint" }, "We'll analyze these channels' recent videos to detect patterns: clip length, format, content style.")
-        ),
-        React.createElement("button", { className: "run-btn", onClick: handleResearch, disabled: loading || !topic.trim() },
-          loading
-            ? React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8 } },
-                React.createElement("span", { style: { animation: "spin 0.8s linear infinite", display: "inline-block" } }, "⚡"), phases[phaseIdx])
-            : "🚀 Get Source Intelligence"
-        )
-      )
-    ),
-    React.createElement("div", { className: "agent-strip" },
-      React.createElement("span", { className: "agent-chip" }, "ResearchPlanner"),
-      React.createElement("span", { className: "agent-chip" }, "StyleDNA"),
-      React.createElement("span", { className: "agent-chip" }, "SourceHunter"),
-      React.createElement("span", { className: "agent-chip" }, "InsightsGenerator")
-    ),
-    error && React.createElement("div", { className: "error-box" }, "⚠️ " + error),
-    loading && React.createElement("div", { className: "loading-box" },
-      React.createElement("div", { className: "spinner", style: { margin: "0 auto" } }),
-      React.createElement("p", null, "Searching for real video clips…")
-    ),
-    pipeline && React.createElement("div", { className: "pipeline" },
-      Object.keys(pipeline).map(key => {
-        const s = pipeline[key];
-        const icon = s.status === "completed" ? "✔" : s.status === "failed" ? "✕" : s.status === "running" ? "→" : "—";
-        return React.createElement("div", { key, className: "pipeline-step " + s.status },
-          React.createElement("div", { className: "pipeline-icon " + s.status }, icon),
-          React.createElement("div", { className: "pipeline-info" },
-            React.createElement("div", { className: "pipeline-label" }, s.label),
-            React.createElement("div", { className: "pipeline-msg" }, s.message || "...")
-          )
-        );
-      })
-    ),
-    hasResult && !loading && React.createElement("div", { className: "results" },
-      React.createElement("div", { className: "results-topbar" },
-        React.createElement("span", null),
-        React.createElement("button", { className: "new-search-btn", onClick: handleNewSearch }, "New Research")
-      ),
-      !hasEvidence && React.createElement("div", { className: "section-card", style: { borderColor: "var(--coral-dim)" } },
-        React.createElement("div", { className: "section-title", style: { color: "var(--coral)" } }, "⚠️ No Source Evidence Found"),
-        React.createElement("p", { style: { fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5 } },
-          result.error || "Source Hunter could not find any real video clips. Ensure YOUTUBE_API_KEY is set in Worker settings."
-        )
-      ),
-      result.ref_channel_analysis && result.ref_channel_analysis.channels_analyzed?.length > 0 &&
-        React.createElement("div", { className: "section-card" },
-          React.createElement("div", { className: "section-title" }, "🧬 Editorial DNA Extracted"),
-          result.ref_channel_analysis.detected_patterns?.map((p, i) =>
-            React.createElement("div", { key: i, style: { fontSize: "13px", color: "var(--text)", marginBottom: "6px" } }, "✓ " + p)
-          ),
-          React.createElement("div", { style: { marginTop: "10px" } },
-            React.createElement("div", { className: "insights-label" }, "Clip Length"),
-            React.createElement("div", { className: "insights-value" }, result.ref_channel_analysis.clip_length)
-          )
-        ),
-      hasEvidence && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "📹 YouTube Clips Found (" + evidence.total_youtube + ")"),
-        evidence.youtube_clips.slice(0, 20).map((clip, i) =>
-          React.createElement("div", { key: i, className: "evidence-item" },
-            clip.thumbnail ? React.createElement("img", { src: clip.thumbnail, alt: "", className: "evidence-thumb" })
-              : React.createElement("div", { className: "evidence-thumb" }),
-            React.createElement("div", { className: "evidence-info" },
-              React.createElement("a", { href: clip.url, target: "_blank", rel: "noopener noreferrer", className: "evidence-title" }, clip.title),
-              React.createElement("div", { className: "evidence-meta" },
-                React.createElement("span", { className: "views" }, clip.views.toLocaleString() + " views"),
-                " · " + clip.channel + " · " + new Date(clip.published_at).toLocaleDateString()
-              )
-            )
-          )
-        )
-      ),
-      hasEvidence && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "🔍 Search Other Platforms"),
-        React.createElement("p", { style: { fontSize: "11px", color: "var(--text-faint)", marginBottom: "10px" } }, "Click to search for clips on these platforms:"),
-        evidence.platform_search_links && Object.keys(evidence.platform_search_links).map(key => {
-          const link = evidence.platform_search_links[key];
-          return React.createElement("a", { key, href: link.url, target: "_blank", rel: "noopener noreferrer", className: "platform-link" }, link.platform + " ↗");
-        })
-      ),
-      insights && insights.ranked_clip_opportunities?.length > 0 && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "🎯 Ranked Clip Opportunities"),
-        React.createElement("button", { onClick: copyResult, className: "tag-chip", style: { marginBottom: "12px", cursor: "pointer" } }, copied ? "✔ Copied" : "📋 Copy Results"),
-        insights.ranked_clip_opportunities.map((clip, i) => {
-          const color = RANK_META.find(r => r.rank === clip.rank)?.color || "#FF6B35";
-          return React.createElement("div", { key: i, className: "rank-card", style: { borderLeft: "3px solid " + color } },
-            React.createElement("div", { className: "rank-badge", style: { background: color + "20", color } }, "RANK #" + (clip.rank || (6 - i))),
-            React.createElement("div", { className: "rank-idea" }, clip.moment_idea),
-            React.createElement("div", { className: "rank-meta" }, "Platform: " + (clip.suggested_source_platform || "YouTube") + " · Views: " + ((clip.views || 0).toLocaleString())),
-            clip.youtube_url && React.createElement("a", { href: clip.youtube_url, target: "_blank", rel: "noopener noreferrer", className: "rank-link" }, "Watch clip ↗"),
-            clip.why_interesting && React.createElement("div", { className: "rank-meta", style: { marginTop: "4px" } }, clip.why_interesting)
-          );
-        })
-      ),
-      insights && insights.hook_suggestions?.length > 0 && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "⚡ Hook Suggestions"),
-        React.createElement("div", { className: "tag-grid" }, insights.hook_suggestions.map((h, i) => React.createElement("span", { key: i, className: "tag-chip" }, h)))
-      ),
-      insights && insights.hashtag_strategy?.length > 0 && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "# Hashtag Strategy"),
-        React.createElement("div", { className: "tag-grid" }, insights.hashtag_strategy.map((h, i) => React.createElement("span", { key: i, className: "tag-chip" }, "#" + h)))
-      ),
-      insights && insights.key_search_phrases_for_discoverability?.length > 0 && React.createElement("div", { className: "section-card" },
-        React.createElement("div", { className: "section-title" }, "🔍 Discoverability Phrases"),
-        React.createElement("div", { className: "tag-grid" }, insights.key_search_phrases_for_discoverability.map((p, i) => React.createElement("span", { key: i, className: "tag-chip" }, p)))
-      )
-    ),
-    !hasResult && !loading && !error && React.createElement("div", { className: "text-center", style: { padding: "55px 20px", color: "rgba(240,240,245,0.16)" } },
-      React.createElement("div", { style: { fontSize: "42px", marginBottom: "9px" } }, "🚀"),
-      React.createElement("div", { style: { fontSize: "18px" } }, "Start your Source Intelligence Research!"),
-      React.createElement("p", { style: { marginTop: "10px", fontSize: "13px" } }, "Enter a topic like 'worst martial arts fails' to find real video clips.")
-    )
-  );
-}
+            try {
+                const res = await fetch(workerUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                    signal: signal
+                });
+                clearTimeout(timer);
 
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
-</script>
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
+                }
+                return data;
+            } catch (err) {
+                clearTimeout(timer);
+                console.error("Error fetching from worker:", err);
+                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
+            }
+        }
+
+        // --- UI Components ---
+        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
+
+        function PlatformBtn({ platform, label, url, small = false }) {
+            const c = PLATFORM_CFG[platform];
+            if (!c) {
+                console.warn(`Platform config not found for: ${platform}`);
+                return <button className={small ? 'platform-btn-small' : 'platform-btn'} disabled>{label}</button>;
+            }
+            return (
+                <button onClick={() => openLink(url)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    background: c.bg, border: `1px solid ${c.border}`,
+                    borderRadius: 7, padding: small ? "4px 9px" : "5px 11px",
+                    fontSize: small ? 10 : 11, fontWeight: 700, color: c.color,
+                    cursor: "pointer", whiteSpace: "nowrap",
+                }}>
+                    <span style={{ fontSize: small ? 9 : 10 }}>{c.icon}</span>{label}
+                    <span style={{ fontSize: 8, opacity: 0.55 }}>↗</span>
+                </button>
+            );
+        }
+
+        function RetentionCurve() {
+            return (
+                <div className="retention-curve-wrapper">
+                    <div className="retention-curve-label">Retention</div>
+                    {[...RANK_META].reverse().map(m => (
+                        <div key={m.rank} className="retention-rank-item">
+                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
+                            <div className="retention-bar-inner" style={{
+                                '--bar-height': `${m.bar * 0.5}px`,
+                                '--item-color': m.color,
+                                '--item-glow': m.glow,
+                                height: `${m.bar * 0.5}px`,
+                                background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
+                                boxShadow: `0 -3px 10px ${m.glow}`
+                            }} />
+                            <span className="retention-rank-label">#{m.rank}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function InsightsCard({ title, icon, children }) {
+            return (
+                <div className="insights-card">
+                    <div className="insights-card-title">
+                        {icon} {title}
+                    </div>
+                    {children}
+                </div>
+            );
+        }
+
+        function EvidenceList({ data, platformType }) {
+            if (!data || data.length === 0) {
+                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
+            }
+
+            return (
+                <div className="evidence-list">
+                    {data.map((item, i) => (
+                        <div key={i} className="evidence-item">
+                            {/* Optional: Add thumbnail if available, for now placeholder */}
+                            {item.thumbnail_url ? 
+                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
+                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
+                            }
+                            <div className="evidence-info">
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
+                                    {item.title}
+                                </a>
+                                <div className="evidence-info-meta">
+                                    <span className="evidence-info-platform">{item.platform}</span>
+                                    {item.channel && ` · ${item.channel}`}
+                                    {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
+                                    {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
+                                    {item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`}
+                                    {item.comments && ` · ${item.comments.toLocaleString()} comments`}
+                                    {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
+                                </div>
+                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
+                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+
+        function App() {
+            const [topic, setTopic] = useState('');
+            const [creativeBrief, setCreativeBrief] = useState('');
+            const [referenceChannels, setReferenceChannels] = useState('');
+            const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
+            const [activeProvider, setActiveProvider] = useState(() => {
+                const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                return firstConfigured || 'google';
+            });
+            const [availableModels, setAvailableModels] = useState([]);
+            const [selectedModel, setSelectedModel] = useState('');
+            const [restored, setRestored] = useState(false);
+            const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
+
+            const intervalRef = useRef(null);
+
+            const phases = [
+                "Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…",
+                "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…",
+            ];
+
+            const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
+
+            // Helper to persist state to localStorage
+            const persistState = (newState) => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+                } catch (e) {
+                    console.error("Failed to save state to localStorage:", e);
+                }
+            };
+
+            // Helper to restore state from localStorage
+            const restoreState = () => {
+                try {
+                    const savedState = localStorage.getItem(STORAGE_KEY);
+                    if (savedState) {
+                        const parsedState = JSON.parse(savedState);
+                        setTopic(parsedState.topic || '');
+                        setCreativeBrief(parsedState.creativeBrief || '');
+                        setReferenceChannels(parsedState.referenceChannels || '');
+                        setDateFilter(parsedState.dateFilter || '7 Days');
+                        setResults(parsedState.results || null);
+                        setRestored(!!parsedState.results);
+                        setActiveView(parsedState.activeView || 'insights');
+
+                        // Restore LLM provider and model
+                        if (parsedState.activeProvider && LLM_PROVIDERS_CONFIG[parsedState.activeProvider]) {
+                            setActiveProvider(parsedState.activeProvider);
+                            const providerCfg = LLM_PROVIDERS_CONFIG[parsedState.activeProvider];
+                            setAvailableModels(providerCfg.models);
+                            if (parsedState.selectedModel && providerCfg.models.some(m => m.id === parsedState.selectedModel)) {
+                                setSelectedModel(parsedState.selectedModel);
+                            } else {
+                                setSelectedModel(providerCfg.models[0]?.id || '');
+                            }
+                        } else {
+                             const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                             if (firstConfigured) {
+                                 setActiveProvider(firstConfigured);
+                                 setAvailableModels(LLM_PROVIDERS_CONFIG[firstConfigured].models);
+                                 setSelectedModel(LLM_PROVIDERS_CONFIG[firstConfigured].models[0]?.id || '');
+                             }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to restore state from localStorage:", e);
+                }
+            };
+
+            // Initial fetch for worker capabilities and restore state
+            useEffect(() => {
+                const init = async () => {
+                    let initialProviderName = activeProvider;
+
+                    try {
+                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
+                        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
+                        const data = await response.json();
+                        
+                        const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
+                        if (firstConfiguredFromWorker) {
+                            initialProviderName = firstConfiguredFromWorker;
+                        } else {
+                            setError("No LLM providers are configured in your Cloudflare Worker. Please check your Worker's environment variables.");
+                            initialProviderName = ''; // No providers
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch worker capabilities, falling back to hardcoded defaults:", e);
+                        setError("Worker connection error or timeout (10s). Please ensure your Cloudflare Worker is deployed and its URL is correct. Falling back to hardcoded providers.");
+                        initialProviderName = 'google';
+                    }
+
+                    const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
+                    if (currentProviderCfg) {
+                        setActiveProvider(initialProviderName);
+                        setAvailableModels(currentProviderCfg.models);
+                        setSelectedModel(currentProviderCfg.models[0]?.id || '');
+                    } else {
+                        setActiveProvider('');
+                        setAvailableModels([]);
+                        setSelectedModel('');
+                    }
+
+                    restoreState();
+                };
+                init();
+            }, []);
+
+
+            // Persist state whenever relevant state changes
+            useEffect(() => {
+                persistState({
+                    topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
+                    activeProvider, selectedModel,
+                });
+            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel]);
+
+
+            const handleProviderChange = (e) => {
+                const name = e.target.value;
+                const cfg = LLM_PROVIDERS_CONFIG[name];
+                setActiveProvider(name);
+                setAvailableModels(cfg.models);
+                setSelectedModel(cfg.models[0]?.id || '');
+            };
+
+            const handleNewSearch = () => {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setTopic('');
+                setCreativeBrief('');
+                setReferenceChannels('');
+                setDateFilter('7 Days');
+                setLoading(false);
+                setError(null);
+                setResults(null);
+                setRestored(false);
+                setActiveView('insights');
+                setCopied(false);
+                setPhaseIdx(0);
+                localStorage.removeItem(STORAGE_KEY);
+            };
+
+            const handleSurpriseMe = () => {
+                const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+                setTopic(pick);
+                setCreativeBrief("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
+                setReferenceChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
+            };
+
+            const copyResult = () => {
+                if (!results) return;
+
+                const insights = results.ai_actionable_insights;
+                const rankedClips = insights?.ranked_clip_opportunities || [];
+
+                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
+                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
+                copyText += `--- Actionable Insights ---\n\n`;
+
+                if (insights?.hook_suggestions?.length > 0) {
+                    copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\n`;
+                }
+                if (insights?.hashtag_strategy?.length > 0) {
+                    copyText += `\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\n`;
+                }
+                if (insights?.key_search_phrases_for_discoverability?.length > 0) {
+                    copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
+                }
+                if (insights?.suggested_source_platforms_for_originals?.length > 0) {
+                    copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
+                }
+                if (insights?.repost_analysis_insight) {
+                    copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.title_insights) {
+                    copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.description_hook) {
+                    copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
+                    copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\n`;
+                }
+
+                copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
+                if (rankedClips.length > 0) {
+                    rankedClips.forEach(clip => {
+                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
+                        copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
+                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
+                        if (clip.url_to_potential_original_clip) {
+                            copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
+                        }
+                        if (clip.editorial_repost_analysis) {
+                            copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\n`;
+                        }
+                        copyText += `\n`;
+                    });
+                } else {
+                    copyText += `No ranked clip opportunities found yet.\n`;
+                }
+
+                navigator.clipboard.writeText(copyText).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                });
+            };
+
+            const handleResearch = async () => {
+                if (!topic.trim()) { setError("Enter a topic first."); return; }
+                if (!selectedModel) { setError("Please select an LLM model."); return; }
+
+                setLoading(true);
+                setError(null);
+                setResults(null);
+                setRestored(false);
+                setActiveView('insights');
+                setCopied(false);
+                setPhaseIdx(0);
+
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                intervalRef.current = setInterval(() => {
+                    setPhaseIdx(p => (p + 1) % phases.length);
+                }, 900);
+
+                try {
+                    const payload = {
+                        topic: topic.trim(),
+                        creativeBrief: creativeBrief.trim(),
+                        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
+                        dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
+                        provider: activeProvider,
+                        model: selectedModel,
+                    };
+
+                    // Call the new Worker endpoint
+                    const insights = await callWorkerAPI('/api/generate-insights', payload);
+                    setResults(insights);
+
+                } catch (err) {
+                    console.error("Source Intelligence Engine failed:", err);
+                    setError(err.message || "An unknown error occurred during source intelligence processing.");
+                } finally {
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                    setLoading(false);
+                    setPhaseIdx(0);
+                }
+            };
+
+            const hasResult = !!results;
+
+            return (
+                <div className="shell">
+                    <div className="nav">
+                        <div className="nav-brand">
+                            <span className="nav-mark">✦</span>
+                            <span className="nav-name">Viral Radar</span>
+                        </div>
+                        <span className="nav-badge">Source Intelligence Engine</span>
+                    </div>
+
+                    <div className="hero">
+                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
+                        <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
+                        <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
+                    </div>
+
+                    <RetentionCurve />
+
+                    <div className="console console-input-section"> {/* Combined styles for consistency */}
+                        <div className="console-head">
+                            <span className="cdot" style={{ background: '#ff5f57' }}></span>
+                            <span className="cdot" style={{ background: '#febc2e' }}></span>
+                            <span style={{ background: '#28c840' }}></span>
+                            <span style={{ marginLeft: '6px' }}>research.sh</span>
+                        </div>
+                        <div className="console-body">
+                            <div className="console-prompt">
+                                <span className="caret">›</span>
+                                <input
+                                    type="text"
+                                    value={topic} onChange={e => setTopic(e.target.value)}
+                                    onKeyDown={e => e.key === "Enter" && !loading && handleResearch()}
+                                    placeholder="e.g. Worst Martial Arts Fails"
+                                    disabled={loading}
+                                    className="console-input"
+                                />
+                                {!topic && !loading && <span className="console-cursor"></span>}
+                                <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
+                            </div>
+
+                            <div className="config-row">
+                                <div className="select-wrap">
+                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
+                                    <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
+                                        {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div className="select-wrap">
+                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
+                                    <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
+                                        {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
+                                            <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="select-wrap">
+                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
+                                    <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
+                                        {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="ref-channels-block">
+                                <div className="ref-channels-label">
+                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
+                                </div>
+                                <textarea
+                                    className="ref-channels-input"
+                                    value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
+                                    placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
+                                    disabled={loading}
+                                    rows={3}
+                                />
+                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
+                            </div>
+
+                            <div className="ref-channels-block">
+                                <div className="ref-channels-label">
+                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
+                                </div>
+                                <textarea
+                                    className="ref-channels-input"
+                                    value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
+                                    placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
+                                    disabled={loading}
+                                    rows={2}
+                                />
+                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
+                            </div>
+
+                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
+                                {loading
+                                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                                        <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
+                                        {phases[phaseIdx]}
+                                    </span>
+                                    : "🚀 Get Source Intelligence"}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="agent-strip">
+                        <span className="agent-chip">ResearchPlanner</span>
+                        <span className="agent-chip">SourceHunter</span>
+                        <span className="agent-chip">InsightsGenerator</span>
+                    </div>
+
+                    {error && (
+                        <div className="error-box">
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    {loading && (
+                        <div className="loading-box">
+                            <div className="spinner" style={{ margin: '0 auto' }}></div>
+                            <p>Orchestrating AI Agents & Backend Services...</p>
+                        </div>
+                    )}
+
+                    {hasResult && !loading && (
+                        <div className="results">
+                            <div className="results-topbar">
+                                {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
+                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
+                            </div>
+                            <div className="result-summary-box">
+                                <div>
+                                    <div className="result-summary-title">
+                                        Source Intelligence Report for:
+                                    </div>
+                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
+                                </div>
+                                <div className="result-summary-badges">
+                                    {results.ai_actionable_insights?.overall_opportunity_reasoning && (
+                                        <span className="summary-badge opportunity">
+                                            🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
+                                        </span>
+                                    )}
+                                    {results.ai_actionable_insights?.trend_status && (
+                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
+                                            📈 {results.ai_actionable_insights.trend_status}
+                                        </span>
+                                    )}
+                                    <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
+                                        {copied ? "✔ Copied" : "📋 Copy"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="view-mode-selector">
+                                {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
+                                    <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
+                                        {v.icon} {v.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {activeView === "insights" && results.ai_actionable_insights && (
+                                <div className="insights-section">
+                                    <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
+                                        <ul className="insights-list">
+                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
+                                                <li key={i}>
+                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
+                                                    <div className="insights-item-value">
+                                                        Platform: {clip.suggested_source_platform || 'Any'} |
+                                                        Search Terms: {clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}
+                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
+                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="YouTube Upload Strategy" icon="🚀">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Suggestions:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hashtag Strategy:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Title Insights:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Description Hook:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">SEO Priority Tags:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
+                                            </div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Editorial DNA Summary" icon="🧬">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Clip Length Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Style:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Emotion Focus:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">Source Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Research Constraints Applied" icon="✅">
+                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
+                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
+                                        </ul>
+                                    </InsightsCard>
+
+                                </div>
+                            )}
+
+                            {activeView === "raw_evidence" && results.raw_evidence_found && (
+                                <div className="raw-evidence-section">
+                                    <InsightsCard title="Raw Evidence Found" icon="📚">
+                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
+                                        
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
+                                        <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
+                                        
+                                        {/* Add more platforms as needed */}
+                                    </InsightsCard>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!hasResult && !loading && (
+                        <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
+                            <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
+                            <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
+                            <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
 </body>
 </html>
+            
