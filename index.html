@@ -490,19 +490,6 @@
         // --- src/agents/rankingAgent.js ---
         // Runs the Ranking Agent to generate a 6-Rank content structure and predict retention.
 
-        // FIX: Added createDefaultRankOrder for fallback
-        function createDefaultRankOrder(contentDescription) {
-            const defaultSegments = [
-                { rank: "#6", segment: "Hook", content: `Grab attention quickly with an engaging opener related to "${contentDescription}".` },
-                { rank: "#5", segment: "Interest", content: `Build curiosity and introduce the core concept of "${contentDescription}".` },
-                { rank: "#4", segment: "Context", content: `Provide essential background or setup for "${contentDescription}".` },
-                { rank: "#3", segment: "Escalation", content: `Increase tension or stakes around "${contentDescription}".` },
-                { rank: "#2", segment: "False Winner", content: `Introduce a twist or misleading resolution about "${contentDescription}".` },
-                { rank: "#1", segment: "Payoff", content: `Deliver a satisfying conclusion or the main value of "${contentDescription}".` }
-            ];
-            return defaultSegments;
-        }
-
         async function runRanking({ contentDescription, platform, providerName, model, timeout }) {
           const agentStartTime = Date.now();
           let agentOutput = {
@@ -574,48 +561,44 @@
 
             if (llmResponse.success && llmResponse.data) {
               const llmData = llmResponse.data;
-              let validRankOrder = [];
-              let retention = llmData.retentionPrediction || "Retention prediction unavailable.";
-              let hasErrorInRankParsing = false;
 
+              // Basic validation for rankOrder structure
+              let validatedRankOrder = [];
               if (Array.isArray(llmData.rankOrder) && llmData.rankOrder.length === 6) {
-                  const parsedRanks = llmData.rankOrder.map(rankItem => {
-                      // Validate individual rank item structure
-                      if (rankItem.rank === undefined || rankItem.segment === undefined || rankItem.content === undefined) {
-                          hasErrorInRankParsing = true;
-                          return null; // Invalid item
-                      }
-                      const rankNum = parseInt(rankItem.rank?.replace('#', ''), 10);
-                      if (isNaN(rankNum) || rankNum < 1 || rankNum > 6) { // Also check rank number range
-                          hasErrorInRankParsing = true;
-                          return null; // Invalid rank number
-                      }
-                      return { ...rankItem, rankNum };
-                  }).filter(item => item !== null); // Filter out invalid items
+                // Ensure ranks are correctly parsed and sorted
+                const parsedRanks = llmData.rankOrder.map(rankItem => {
+                  const rankNum = parseInt(rankItem.rank?.replace('#', ''), 10);
+                  return {
+                    ...rankItem,
+                    rankNum: isNaN(rankNum) ? 0 : rankNum
+                  };
+                }).filter(item => item.rankNum > 0);
 
-                  const uniqueRanks = new Set();
-                  validRankOrder = parsedRanks.filter(item => {
-                      if (item.rankNum >= 1 && item.rankNum <= 6 && !uniqueRanks.has(item.rankNum)) {
-                          uniqueRanks.add(item.rankNum);
-                          return true;
-                      }
-                      hasErrorInRankParsing = true; // Mark if rank is out of range or duplicate
-                      return false;
-                  }).sort((a, b) => b.rankNum - a.rankNum).map(({ rankNum, ...rest }) => rest); // Remove temporary rankNum
+                // Sort by rank number descending (for #6 to #1)
+                parsedRanks.sort((a, b) => b.rankNum - a.rankNum);
 
-                  if (validRankOrder.length !== 6 || hasErrorInRankParsing) {
-                      agentOutput.error = "LLM returned a 6-rank structure but it was malformed (missing segments, invalid ranks, or incorrect count). Attempting fallback.";
-                      validRankOrder = createDefaultRankOrder(contentDescription); // Fallback to a default structure
-                      retention = "A generic retention prediction due to LLM response malformation.";
+                // Re-map to remove temporary rankNum and check for exactly 6 unique ranks
+                const uniqueRanks = new Set();
+                validatedRankOrder = parsedRanks.filter(item => {
+                  if (item.rankNum >= 1 && item.rankNum <= 6 && !uniqueRanks.has(item.rankNum)) {
+                    uniqueRanks.add(item.rankNum);
+                    return true;
                   }
+                  return false;
+                }).map(({ rankNum, ...rest }) => rest);
+
+                // If after validation and unique check, we don't have exactly 6, consider it invalid for now.
+                if (validatedRankOrder.length !== 6) {
+                  agentOutput.error = "LLM did not return a valid 6-rank structure. Missing or duplicate ranks.";
+                  validatedRankOrder = [];
+                }
+
               } else {
-                  agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length or format. Attempting fallback.";
-                  validRankOrder = createDefaultRankOrder(contentDescription); // Fallback to a default structure
-                  retention = "A generic retention prediction due to LLM response malformation.";
+                agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length or format.";
               }
 
-              agentOutput.result.rankOrder = validRankOrder;
-              agentOutput.result.retentionPrediction = retention;
+              agentOutput.result.rankOrder = validatedRankOrder;
+              agentOutput.result.retentionPrediction = llmData.retentionPrediction || "Retention prediction unavailable.";
 
               agentOutput.metadata.provider = llmResponse.provider || "Unknown";
               agentOutput.metadata.model = llmResponse.model || "Unknown";
@@ -624,9 +607,7 @@
               agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
 
             } else {
-              agentOutput.error = llmResponse.error || `LLM analysis failed for Ranking Agent. Attempting fallback.`;
-              agentOutput.result.rankOrder = createDefaultRankOrder(contentDescription); // Fallback if LLM call itself failed
-              agentOutput.result.retentionPrediction = "A generic retention prediction due to LLM analysis failure.";
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Ranking Agent with provider ${providerName || 'default'}.`;
               console.error(`Ranking Agent LLM Call Failed: ${agentOutput.error}`);
             }
 
@@ -1026,13 +1007,11 @@
               ]);
 
               // Check for errors from individual agents
-              // FIX: Only throw if the agent has a critical error and doesn't provide a fallback result
-              if (discoveryOutput.error && !discoveryOutput.result?.videoCandidates?.length) throw new Error(`Discovery Agent: ${discoveryOutput.error}`);
-              if (scoringOutput.error && !scoringOutput.result?.finalScore) throw new Error(`Scoring Agent: ${scoringOutput.error}`);
-              if (rankingOutput.error && !rankingOutput.result?.rankOrder?.length) throw new Error(`Ranking Agent: ${rankingOutput.error}`);
-              if (seoOutput.error && !seoOutput.result?.title) throw new Error(`SEO Agent: ${seoOutput.error}`);
-              if (competitorOutput.error && !competitorOutput.result?.competitorPatterns?.length) throw new Error(`Competitor Agent: ${competitorOutput.error}`);
-
+              if (discoveryOutput.error) throw new Error(`Discovery Agent: ${discoveryOutput.error}`);
+              if (scoringOutput.error) throw new Error(`Scoring Agent: ${scoringOutput.error}`);
+              if (rankingOutput.error) throw new Error(`Ranking Agent: ${rankingOutput.error}`);
+              if (seoOutput.error) throw new Error(`SEO Agent: ${seoOutput.error}`);
+              if (competitorOutput.error) throw new Error(`Competitor Agent: ${competitorOutput.error}`);
 
               allAgentResults.discovery = discoveryOutput;
               allAgentResults.scoring = scoringOutput;
@@ -1238,6 +1217,7 @@
           );
         }
 
+        // FIX: Use createRoot for React 18
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
