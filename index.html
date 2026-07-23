@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -235,7 +235,7 @@
         .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
         .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
         .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
         .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
@@ -328,8 +328,9 @@
     </div>
 
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -390,7 +391,7 @@
         // --- API Helper ---
         const DEFAULT_TIMEOUT = 120000; // 2 minutes
         // IMPORTANT: Replace with YOUR Cloudflare Worker URL
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; // This is the ONLY URL the frontend should know about
 
         const LLM_PROVIDERS_CONFIG = {
             openrouter: { name: "OpenRouter", models: [
@@ -458,12 +459,12 @@
 
         function RetentionCurve() {
             return (
-                <div className="retention-curve-wrapper">
-                    <div className="retention-curve-label">Retention</div>
+                <div class="retention-curve-wrapper">
+                    <div class="retention-curve-label">Retention</div>
                     {[...RANK_META].reverse().map(m => (
-                        <div key={m.rank} className="retention-rank-item">
-                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
-                            <div className="retention-bar-inner" style={{
+                        <div key={m.rank} class="retention-rank-item">
+                            <span class="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
+                            <div class="retention-bar-inner" style={{
                                 '--bar-height': `${m.bar * 0.5}px`,
                                 '--item-color': m.color,
                                 '--item-glow': m.glow,
@@ -471,7 +472,7 @@
                                 background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
                                 boxShadow: `0 -3px 10px ${m.glow}`
                             }} />
-                            <span className="retention-rank-label">#{m.rank}</span>
+                            <span class="retention-rank-label">#{m.rank}</span>
                         </div>
                     ))}
                 </div>
@@ -480,8 +481,8 @@
 
         function InsightsCard({ title, icon, children }) {
             return (
-                <div className="insights-card">
-                    <div className="insights-card-title">
+                <div class="insights-card">
+                    <div class="insights-card-title">
                         {icon} {title}
                     </div>
                     {children}
@@ -491,24 +492,24 @@
 
         function EvidenceList({ data, platformType }) {
             if (!data || data.length === 0) {
-                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
+                return <div class="evidence-no-data">No {platformType} evidence found.</div>;
             }
 
             return (
-                <div className="evidence-list">
+                <div class="evidence-list">
                     {data.map((item, i) => (
-                        <div key={i} className="evidence-item">
+                        <div key={i} class="evidence-item">
                             {/* Optional: Add thumbnail if available, for now placeholder */}
-                            {item.thumbnail_url ?
-                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
-                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
+                            {item.thumbnail_url ? 
+                                <img src={item.thumbnail_url} alt="thumbnail" class="evidence-thumb" /> :
+                                <div class="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
                             }
-                            <div className="evidence-info">
-                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
+                            <div class="evidence-info">
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" class="evidence-info-title">
                                     {item.title}
                                 </a>
-                                <div className="evidence-info-meta">
-                                    <span className="evidence-info-platform">{item.platform}</span>
+                                <div class="evidence-info-meta">
+                                    <span class="evidence-info-platform">{item.platform}</span>
                                     {item.channel && ` · ${item.channel}`}
                                     {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
                                     {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
@@ -516,8 +517,8 @@
                                     {item.comments && ` · ${item.comments.toLocaleString()} comments`}
                                     {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
                                 </div>
-                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
-                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
+                                {item.description_snippet && <div class="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
+                                <span class="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
                             </div>
                         </div>
                     ))}
@@ -542,8 +543,6 @@
             const [selectedModel, setSelectedModel] = useState('');
             const [restored, setRestored] = useState(false);
             const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
-
-            // FIX: Added missing state variables
             const [copied, setCopied] = useState(false);
             const [phaseIdx, setPhaseIdx] = useState(0);
 
@@ -585,7 +584,7 @@
                             const providerCfg = LLM_PROVIDERS_CONFIG[parsedState.activeProvider];
                             setAvailableModels(providerCfg.models);
                             if (parsedState.selectedModel && providerCfg.models.some(m => m.id === parsedState.selectedModel)) {
-                                setSelectedModel(parsedState.selectedModel);
+                                setSelectedModel(parsedState.selectedModel); // Previously selected model is still valid, restore it
                             } else {
                                 setSelectedModel(providerCfg.models[0]?.id || '');
                             }
@@ -612,23 +611,18 @@
                         const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
                         if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
                         const data = await response.json();
-
-                        // FIX: Handle missing providers_configured gracefully — default to cloudflare
-                        if (data.providers_configured && typeof data.providers_configured === 'object') {
-                            const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
-                            if (firstConfiguredFromWorker) {
-                                initialProviderName = firstConfiguredFromWorker;
-                            } else {
-                                initialProviderName = 'cloudflare'; // Default to cloudflare if none explicitly configured
-                            }
+                        
+                        const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
+                        if (firstConfiguredFromWorker) {
+                            initialProviderName = firstConfiguredFromWorker;
                         } else {
-                            // Worker doesn't return providers_configured — default to cloudflare (Workers AI)
-                            initialProviderName = 'cloudflare';
+                            setError("No LLM providers are configured in your Cloudflare Worker. Please check your Worker's environment variables.");
+                            initialProviderName = ''; // No providers
                         }
                     } catch (e) {
-                        console.error("Failed to fetch worker capabilities, falling back to defaults:", e);
-                        // FIX: Don't show error for initial fetch, just default to cloudflare and continue
-                        initialProviderName = 'cloudflare';
+                        console.error("Failed to fetch worker capabilities, falling back to hardcoded defaults:", e);
+                        setError("Worker connection error or timeout (10s). Please ensure your Cloudflare Worker is deployed and its URL is correct. Falling back to hardcoded providers.");
+                        initialProviderName = 'google'; // Default fallback
                     }
 
                     const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
@@ -652,9 +646,9 @@
             useEffect(() => {
                 persistState({
                     topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
-                    activeProvider, selectedModel, copied, phaseIdx, // FIX: Added copied and phaseIdx
+                    activeProvider, selectedModel,
                 });
-            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel, copied, phaseIdx]); // FIX: Added copied and phaseIdx dependencies
+            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel]);
 
 
             const handleProviderChange = (e) => {
@@ -728,7 +722,7 @@
                     rankedClips.forEach(clip => {
                         copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
                         copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
-                        copyText += `   Search: ${clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}\n`;
+                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
                         if (clip.url_to_potential_original_clip) {
                             copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
                         }
@@ -791,97 +785,97 @@
             const hasResult = !!results;
 
             return (
-                <div className="shell">
-                    <div className="nav">
-                        <div className="nav-brand">
-                            <span className="nav-mark">✦</span>
-                            <span className="nav-name">Viral Radar</span>
+                <div class="shell">
+                    <div class="nav">
+                        <div class="nav-brand">
+                            <span class="nav-mark">✦</span>
+                            <span class="nav-name">Viral Radar</span>
                         </div>
-                        <span className="nav-badge">Source Intelligence Engine</span>
+                        <span class="nav-badge">Source Intelligence Engine</span>
                     </div>
 
-                    <div className="hero">
-                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
+                    <div class="hero">
+                        <div class="hero-tag"><span class="dot"></span> AI-powered Viral Clip Discovery</div>
                         <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
                         <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
                     </div>
 
                     <RetentionCurve />
 
-                    <div className="console console-input-section"> {/* Combined styles for consistency */}
-                        <div className="console-head">
-                            <span className="cdot" style={{ background: '#ff5f57' }}></span>
-                            <span className="cdot" style={{ background: '#febc2e' }}></span>
-                            <span style={{ background: '#28c840' }}></span>
+                    <div class="console console-input-section"> {/* Combined styles for consistency */}
+                        <div class="console-head">
+                            <span class="cdot" style={{ background: '#ff5f57' }}></span>
+                            <span class="cdot" style={{ background: '#febc2e' }}></span>
+                            <span class="cdot" style={{ background: '#28c840' }}></span>
                             <span style={{ marginLeft: '6px' }}>research.sh</span>
                         </div>
-                        <div className="console-body">
-                            <div className="console-prompt">
-                                <span className="caret">›</span>
+                        <div class="console-body">
+                            <div class="console-prompt">
+                                <span class="caret">›</span>
                                 <input
                                     type="text"
                                     value={topic} onChange={e => setTopic(e.target.value)}
                                     onKeyDown={e => e.key === "Enter" && !loading && handleResearch()}
                                     placeholder="e.g. Worst Martial Arts Fails"
                                     disabled={loading}
-                                    className="console-input"
+                                    class="console-input"
                                 />
-                                {!topic && !loading && <span className="console-cursor"></span>}
-                                <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
+                                {!topic && !loading && <span class="console-cursor"></span>}
+                                <button type="button" class="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
                             </div>
 
-                            <div className="config-row">
-                                <div className="select-wrap">
-                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
+                            <div class="config-row">
+                                <div class="select-wrap">
+                                    <label htmlFor="dateFilter" class="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
                                     <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
                                         {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                 </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
+                                <div class="select-wrap">
+                                    <label htmlFor="llmProvider" class="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
                                     <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
                                         {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
                                             <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
                                         ))}
                                     </select>
                                 </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
+                                <div class="select-wrap">
+                                    <label htmlFor="llmModel" class="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
                                     <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
                                         {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                     </select>
                                 </div>
                             </div>
 
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
+                            <div class="ref-channels-block">
+                                <div class="ref-channels-label">
+                                    <span>◆ Editorial Objective: Creative Brief <span class="ref-optional">(describe your content goals)</span></span>
                                 </div>
                                 <textarea
-                                    className="ref-channels-input"
+                                    class="ref-channels-input"
                                     value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
                                     placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
                                     disabled={loading}
                                     rows={3}
                                 />
-                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
+                                <div class="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
                             </div>
 
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
+                            <div class="ref-channels-block">
+                                <div class="ref-channels-label">
+                                    <span>◆ Editorial Objective: Style DNA Sources <span class="ref-optional">(paste channel links)</span></span>
                                 </div>
                                 <textarea
-                                    className="ref-channels-input"
+                                    class="ref-channels-input"
                                     value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
                                     placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
                                     disabled={loading}
                                     rows={2}
                                 />
-                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
+                                <div class="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
                             </div>
 
-                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
+                            <button class={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
                                 {loading
                                     ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                                         <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
@@ -892,151 +886,138 @@
                         </div>
                     </div>
 
-                    <div className="agent-strip">
-                        <span className="agent-chip">ResearchPlanner</span>
-                        <span className="agent-chip">SourceHunter</span>
-                        <span className="agent-chip">InsightsGenerator</span>
+                    <div class="agent-strip">
+                        <span class="agent-chip">ResearchPlanner</span>
+                        <span class="agent-chip">SourceHunter</span>
+                        <span class="agent-chip">InsightsGenerator</span>
                     </div>
 
                     {error && (
-                        <div className="error-box">
+                        <div class="error-box">
                             ⚠️ {error}
                         </div>
                     )}
 
                     {loading && (
-                        <div className="loading-box">
-                            <div className="spinner" style={{ margin: '0 auto' }}></div>
+                        <div class="loading-box">
+                            <div class="spinner" style={{ margin: '0 auto' }}></div>
                             <p>Orchestrating AI Agents & Backend Services...</p>
                         </div>
                     )}
 
-                    {/* FIX: Ensure robust rendering for results, even if parts are null/undefined */}
                     {hasResult && !loading && (
-                        <div className="results">
-                            <div className="results-topbar">
-                                {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
-                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
+                        <div class="results">
+                            <div class="results-topbar">
+                                {restored ? <span class="restored-tag">↺ restored from your last visit</span> : <span></span>}
+                                <button class="new-search-btn" onClick={handleNewSearch}>New Research</button>
                             </div>
-                            <div className="result-summary-box">
+                            <div class="result-summary-box">
                                 <div>
-                                    <div className="result-summary-title">
+                                    <div class="result-summary-title">
                                         Source Intelligence Report for:
                                     </div>
-                                    <div className="result-summary-topic">{results.editorial_objective?.topic || 'N/A'}</div>
+                                    <div class="result-summary-topic">{results.editorial_objective?.topic}</div>
                                 </div>
-                                <div className="result-summary-badges">
+                                <div class="result-summary-badges">
                                     {results.ai_actionable_insights?.overall_opportunity_reasoning && (
-                                        <span className="summary-badge opportunity">
+                                        <span class="summary-badge opportunity">
                                             🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
                                         </span>
                                     )}
                                     {results.ai_actionable_insights?.trend_status && (
-                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
+                                        <span class="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
                                             📈 {results.ai_actionable_insights.trend_status}
                                         </span>
                                     )}
-                                    <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
+                                    <button onClick={copyResult} class={`copy-result-btn ${copied ? 'copied' : ''}`}>
                                         {copied ? "✔ Copied" : "📋 Copy"}
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="view-mode-selector">
+                            <div class="view-mode-selector">
                                 {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
-                                    <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
+                                    <button key={v.id} onClick={() => setActiveView(v.id)} class={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
                                         {v.icon} {v.label}
                                     </button>
                                 ))}
                             </div>
 
                             {activeView === "insights" && results.ai_actionable_insights && (
-                                <div className="insights-section">
+                                <div class="insights-section">
                                     <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
-                                        <ul className="insights-list">
-                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).length > 0 ?
-                                                (results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
-                                                    <li key={i}>
-                                                        <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea || 'N/A'}</div>
-                                                        <div className="insights-item-value">
-                                                            Platform: {clip.suggested_source_platform || 'Any'} |
-                                                            Search Terms: {(clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', ')}
-                                                            {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
-                                                            {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
-                                                        </div>
-                                                    </li>
-                                                )) : <div className="evidence-no-data">No ranked clip opportunities found yet.</div>
-                                            }
+                                        <ul class="insights-list">
+                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
+                                                <li key={i}>
+                                                    <div class="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
+                                                    <div class="insights-item-value">
+                                                        Platform: {clip.suggested_source_platform || 'Any'} |
+                                                        Search Terms: {clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}
+                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
+                                                        {clip.editorial_repost_analysis && <div class="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
+                                                    </div>
+                                                </li>
+                                            ))}
                                         </ul>
                                     </InsightsCard>
 
                                     <InsightsCard title="YouTube Upload Strategy" icon="🚀">
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Suggestions:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hook_suggestions || []).length > 0 ?
-                                                    (results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>) : <span>N/A</span>
-                                                }
+                                            <div class="insights-item-label">Hook Suggestions:</div>
+                                            <div class="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} class="insights-tag-chip">{s}</span>)}
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hashtag Strategy:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hashtag_strategy || []).length > 0 ?
-                                                    (results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>) : <span>N/A</span>
-                                                }
+                                            <div class="insights-item-label">Hashtag Strategy:</div>
+                                            <div class="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} class="insights-tag-chip">{h}</span>)}
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).length > 0 ?
-                                                    (results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>) : <span>N/A</span>
-                                                }
+                                            <div class="insights-item-label">Key Search Phrases for Discoverability:</div>
+                                            <div class="insights-tags-grid">
+                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} class="insights-tag-chip">{p}</span>)}
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Title Insights:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
+                                            <div class="insights-item-label">SEO Title Insights:</div>
+                                            <div class="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Description Hook:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
+                                            <div class="insights-item-label">SEO Description Hook:</div>
+                                            <div class="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
                                         </div>
                                         <div>
-                                            <div className="insights-item-label">SEO Priority Tags:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).length > 0 ?
-                                                    (results.ai_actionable_insights.seo_elements_for_upload.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>) : <span>N/A</span>
-                                                }
+                                            <div class="insights-item-label">SEO Priority Tags:</div>
+                                            <div class="insights-tags-grid">
+                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} class="insights-tag-chip">{t}</span>)}
                                             </div>
                                         </div>
                                     </InsightsCard>
 
                                     <InsightsCard title="Editorial DNA Summary" icon="🧬">
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Clip Length Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.clip_length || 'N/A'}</div>
+                                            <div class="insights-item-label">Clip Length Preference:</div>
+                                            <div class="insights-item-value">{results.editorial_objective?.editorial_dna?.clip_length || 'N/A'}</div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Style:</div>
-                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.hook_style || 'N/A'}</div>
+                                            <div class="insights-item-label">Hook Style:</div>
+                                            <div class="insights-item-value">{results.editorial_objective?.editorial_dna?.hook_style || 'N/A'}</div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Emotion Focus:</div>
-                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.emotion_focus || 'N/A'}</div>
+                                            <div class="insights-item-label">Emotion Focus:</div>
+                                            <div class="insights-item-value">{results.editorial_objective?.editorial_dna?.emotion_focus || 'N/A'}</div>
                                         </div>
                                         <div>
-                                            <div className="insights-item-label">Source Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.source_preference || 'N/A'}</div>
+                                            <div class="insights-item-label">Source Preference:</div>
+                                            <div class="insights-item-value">{results.editorial_objective?.editorial_dna?.source_preference || 'N/A'}</div>
                                         </div>
                                     </InsightsCard>
 
                                     <InsightsCard title="Research Constraints Applied" icon="✅">
-                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
-                                            {(results.editorial_objective?.research_constraints_applied || []).length > 0 ?
-                                                (results.editorial_objective?.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>) : <div className="evidence-no-data">No research constraints applied.</div>
-                                            }
+                                        <ul class="insights-list" style={{ '--before-content': "'✅'" }}>
+                                            {(results.editorial_objective?.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
                                         </ul>
                                     </InsightsCard>
 
@@ -1044,24 +1025,24 @@
                             )}
 
                             {activeView === "raw_evidence" && results.raw_evidence_found && (
-                                <div className="raw-evidence-section">
+                                <div class="raw-evidence-section">
                                     <InsightsCard title="Raw Evidence Found" icon="📚">
-                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
+                                        <h3 class="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
                                         <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
                                         
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
+                                        <h3 class="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
                                         <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
 
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
+                                        <h3 class="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
                                         <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
 
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
+                                        <h3 class="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
                                         <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
 
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
+                                        <h3 class="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
                                         <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
 
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
+                                        <h3 class="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
                                         <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
                                         
                                         {/* Add more platforms as needed */}
@@ -1072,7 +1053,7 @@
                     )}
 
                     {!hasResult && !loading && (
-                        <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
+                        <div class="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
                             <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
                             <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
                             <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
