@@ -728,7 +728,7 @@
                     rankedClips.forEach(clip => {
                         copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
                         copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
-                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
+                        copyText += `   Search: ${clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}\n`;
                         if (clip.url_to_potential_original_clip) {
                             copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
                         }
@@ -911,6 +911,7 @@
                         </div>
                     )}
 
+                    {/* FIX: Ensure robust rendering for results, even if parts are null/undefined */}
                     {hasResult && !loading && (
                         <div className="results">
                             <div className="results-topbar">
@@ -922,7 +923,7 @@
                                     <div className="result-summary-title">
                                         Source Intelligence Report for:
                                     </div>
-                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
+                                    <div className="result-summary-topic">{results.editorial_objective?.topic || 'N/A'}</div>
                                 </div>
                                 <div className="result-summary-badges">
                                     {results.ai_actionable_insights?.overall_opportunity_reasoning && (
@@ -953,17 +954,19 @@
                                 <div className="insights-section">
                                     <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
                                         <ul className="insights-list">
-                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
-                                                <li key={i}>
-                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
-                                                    <div className="insights-item-value">
-                                                        Platform: {clip.suggested_source_platform || 'Any'} |
-                                                        Search Terms: {clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}
-                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
-                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
-                                                    </div>
-                                                </li>
-                                            ))}
+                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).length > 0 ?
+                                                (results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
+                                                    <li key={i}>
+                                                        <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea || 'N/A'}</div>
+                                                        <div className="insights-item-value">
+                                                            Platform: {clip.suggested_source_platform || 'Any'} |
+                                                            Search Terms: {(clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', ')}
+                                                            {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
+                                                            {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
+                                                        </div>
+                                                    </li>
+                                                )) : <div className="evidence-no-data">No ranked clip opportunities found yet.</div>
+                                            }
                                         </ul>
                                     </InsightsCard>
 
@@ -971,19 +974,25 @@
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Hook Suggestions:</div>
                                             <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
+                                                {(results.ai_actionable_insights.hook_suggestions || []).length > 0 ?
+                                                    (results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>) : <span>N/A</span>
+                                                }
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Hashtag Strategy:</div>
                                             <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
+                                                {(results.ai_actionable_insights.hashtag_strategy || []).length > 0 ?
+                                                    (results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>) : <span>N/A</span>
+                                                }
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
                                             <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
+                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).length > 0 ?
+                                                    (results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>) : <span>N/A</span>
+                                                }
                                             </div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
@@ -997,7 +1006,9 @@
                                         <div>
                                             <div className="insights-item-label">SEO Priority Tags:</div>
                                             <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
+                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).length > 0 ?
+                                                    (results.ai_actionable_insights.seo_elements_for_upload.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>) : <span>N/A</span>
+                                                }
                                             </div>
                                         </div>
                                     </InsightsCard>
@@ -1005,25 +1016,27 @@
                                     <InsightsCard title="Editorial DNA Summary" icon="🧬">
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Clip Length Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
+                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.clip_length || 'N/A'}</div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Hook Style:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
+                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.hook_style || 'N/A'}</div>
                                         </div>
                                         <div style={{ marginBottom: '10px' }}>
                                             <div className="insights-item-label">Emotion Focus:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
+                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.emotion_focus || 'N/A'}</div>
                                         </div>
                                         <div>
                                             <div className="insights-item-label">Source Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
+                                            <div className="insights-item-value">{results.editorial_objective?.editorial_dna?.source_preference || 'N/A'}</div>
                                         </div>
                                     </InsightsCard>
 
                                     <InsightsCard title="Research Constraints Applied" icon="✅">
                                         <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
-                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
+                                            {(results.editorial_objective?.research_constraints_applied || []).length > 0 ?
+                                                (results.editorial_objective?.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>) : <div className="evidence-no-data">No research constraints applied.</div>
+                                            }
                                         </ul>
                                     </InsightsCard>
 
