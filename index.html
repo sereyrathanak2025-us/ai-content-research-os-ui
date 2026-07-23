@@ -3,1072 +3,1221 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Viral Radar — Source Intelligence Engine</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>AI Content Research OS Prototype</title>
+    <!-- React and ReactDOM CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX transformation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        :root {
-            --bg: #0a0b0d;
-            --bg-elevated: #131518;
-            --bg-card: #17191d;
-            --border: #262a30;
-            --border-bright: #3a3f47;
-            --acid: #c6ff3d;
-            --acid-dim: #8fb82c;
-            --coral: #ff5a36;
-            --coral-dim: #b33e26;
-            --text: #f2f3f0;
-            --text-dim: #9a9fa6;
-            --text-faint: #5c6169;
-            --font-display: 'Archivo Black', sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
-            --font-body: 'Work Sans', sans-serif;
-
-            /* Viral Engine specific colors (from viral engine.jsx) */
-            --rank6-color: #FF6B35;
-            --rank5-color: #F7931E;
-            --rank4-color: #FFD700;
-            --rank3-color: #FF4444;
-            --rank2-color: #CC00FF;
-            --rank1-color: #FF0050;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; min-height: 100%; }
+        /* src/assets/index.css - FROZEN */
         body {
-            font-family: var(--font-body);
-            background: var(--bg);
-            color: var(--text);
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
             -webkit-font-smoothing: antialiased;
-            position: relative;
-            overflow-x: hidden;
-        }
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 1;
-            opacity: 0.035;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        }
-        body::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            background-image:
-                linear-gradient(var(--border) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border) 1px, transparent 1px);
-            background-size: 64px 64px;
-            opacity: 0.25;
-            mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 0%, transparent 70%);
-        }
-        #root { position: relative; z-index: 2; }
-        .spinner { border: 3px solid var(--border); border-top: 3px solid var(--acid); border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-        ::selection { background: var(--acid); color: #0a0b0d; }
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
-
-        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
-
-        /* ---------- NAV ---------- */
-        .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
-        .nav-brand { display: flex; align-items: center; gap: 10px; }
-        .nav-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--acid); font-size: 20px; transform: rotate(0deg); animation: none; }
-        .nav-name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
-        .nav-badge { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); background: rgba(198,255,61,0.07); padding: 4px 10px; border-radius: 20px; letter-spacing: 0.05em; }
-
-        /* ---------- HERO ---------- */
-        .hero { padding: 20px 0 44px; text-align: center; }
-        .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border-bright); padding: 6px 14px; border-radius: 20px; margin-bottom: 26px; letter-spacing: 0.03em; }
-        .hero-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1.6s ease-in-out infinite; }
-        .hero h1 { font-family: var(--font-display); font-size: clamp(34px, 6.4vw, 58px); line-height: 1.02; letter-spacing: -0.01em; text-transform: uppercase; margin-bottom: 18px; }
-        .hero h1 span { color: var(--acid); }
-        .hero p { font-size: 16px; color: var(--text-dim); max-width: 480px; margin: 0 auto; line-height: 1.55; }
-
-        /* ---------- CONSOLE INPUT ---------- */
-        .console { margin-top: 36px; background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 4px; box-shadow: 0 0 0 1px rgba(198,255,61,0.03), 0 20px 60px -20px rgba(0,0,0,0.6); }
-        .console-head { display: flex; align-items: center; gap: 7px; padding: 12px 16px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-        .console-head .cdot { width: 8px; height: 8px; border-radius: 50%; }
-        .console-body { padding: 4px 14px 16px; }
-        .console-prompt { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 15px; padding: 6px 4px 16px; }
-        .console-prompt .caret { color: var(--acid); }
-        .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
-        .console-prompt input::placeholder { color: var(--text-faint); }
-        .surprise-btn { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 7px; font-size: 15px; padding: 5px 9px; cursor: pointer; line-height: 1; transition: transform 0.15s ease, border-color 0.15s ease; }
-        .surprise-btn:hover:not(:disabled) { border-color: var(--acid-dim); transform: rotate(-8deg) scale(1.08); }
-        .surprise-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
-
-        .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
-        .ref-channels-block { padding: 10px 4px 14px; border-top: 1px dashed var(--border); margin-top: 2px; }
-        .ref-channels-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); margin-bottom: 7px; letter-spacing: 0.02em; }
-        .ref-optional { color: var(--text-faint); font-weight: 400; }
-        .ref-channels-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 9px 11px; border-radius: 8px; resize: vertical; line-height: 1.5; }
-        .ref-channels-input::placeholder { color: var(--text-faint); }
-        .ref-channels-input:focus { outline: none; border-color: var(--acid-dim); }
-        .ref-channels-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
-        .select-wrap { position: relative; }
-        .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
-        .select-wrap select {
-            width: 100%; appearance: none; background: var(--bg-card); border: 1px solid var(--border);
-            color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; padding: 9px 26px 9px 11px;
-            border-radius: 8px; cursor: pointer;
-        }
-        .select-wrap select:hover { border-color: var(--border-bright); color: var(--text); }
-        .select-wrap select:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .run-btn {
-            width: 100%; background: var(--acid); color: #0a0b0d; border: none; font-family: var(--font-mono);
-            font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px;
-            border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: transform 0.12s ease, box-shadow 0.12s ease;
-        }
-        .run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
-        .run-btn:active:not(:disabled) { transform: translateY(0); }
-        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
-
-        /* ---------- AGENT STRIP ---------- */
-        .agent-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
-        .agent-chip { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; letter-spacing: 0.02em; }
-
-        /* ---------- ERROR ---------- */
-        .error-box { margin-top: 24px; background: rgba(255,90,54,0.08); border: 1px solid var(--coral-dim); color: #ffb199; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-family: var(--font-mono); }
-
-        /* ---------- LOADING ---------- */
-        .loading-box { margin-top: 40px; text-align: center; padding: 40px 0; }
-        .loading-box p { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-top: 16px; letter-spacing: 0.02em; }
-
-        /* ---------- RESULTS ---------- */
-        .results { margin-top: 52px; }
-        .results-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 10px; flex-wrap: wrap; }
-        .restored-tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-        .new-search-btn { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border-bright); padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all 0.12s ease; }
-        .new-search-btn:hover { border-color: var(--coral); color: var(--coral); }
-        .agent-block { margin-bottom: 44px; animation: fadeUp 0.45s ease both; }
-        .agent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-        .agent-title-row { display: flex; align-items: center; gap: 10px; }
-        .agent-index { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
-        .agent-title { font-family: var(--font-display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.01em; }
-        .agent-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-        .agent-meta b { color: var(--text-dim); }
-
-        .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
-        .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
-
-        /* Discovery video cards */
-        .video-grid { display: grid; gap: 10px; }
-        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease; }
-        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.08), 0 8px 24px -12px rgba(198,255,61,0.25); }
-        .video-card.featured { flex-direction: column; margin-bottom: 12px; padding: 14px; background: linear-gradient(160deg, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--acid-dim); position: relative; overflow: hidden; }
-        .video-card.featured::before { content: ''; position: absolute; top: -40%; right: -20%; width: 60%; height: 140%; background: radial-gradient(circle, rgba(198,255,61,0.08), transparent 65%); pointer-events: none; }
-        .video-card.featured:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.15), 0 16px 40px -16px rgba(198,255,61,0.35); }
-        .featured-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--acid); margin-bottom: 10px; display: inline-block; }
-        .featured-body { display: flex; gap: 14px; align-items: center; }
-        .featured-thumb { width: 132px; height: 82px; }
-        .featured-title { font-size: 15px; -webkit-line-clamp: 3; }
-        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
-        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-        .video-sub .views { color: var(--acid); }
-        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
-        .trend-list { list-style: none; margin-top: 6px; }
-        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
-        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
-
-        /* Viral Engine Specific Styles (from viral engine.jsx) */
-        .retention-curve-wrapper {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
-            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
-        }
-        .retention-curve-label {
-            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
-            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
-        }
-        .retention-rank-item {
-            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-        }
-        .retention-percent {
-            font-size: 8px; font-weight: 700;
-        }
-        .retention-bar-inner {
-            width: 100%; border-radius: 3px 3px 0 0;
-            height: var(--bar-height); /* Dynamic height */
-            background: linear-gradient(180deg, var(--item-color), rgba(255,255,255,0.03));
-            box-shadow: 0 -3px 10px var(--item-glow);
-        }
-        .retention-rank-label {
-            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        .mode-selector { display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07); }
-        .mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left; }
-        .mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35); }
-        .mode-btn-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
-        .mode-btn-title.active { color: #FF0050; }
-        .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
-        .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
+        code {
+            font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+                monospace;
+        }
 
-        .console-input-section { background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
-        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 9px; }
-        .console-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: var(--text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
-        .console-input::placeholder { color: var(--text-faint); }
-        .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-        .example-topic-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 600; }
-        .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
-        .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .date-filter-section { margin-bottom: 14px; }
-        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
-        .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .date-filter-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 700; }
-        .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
-        .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
-        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
-        .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
-
-        .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
-
-        .result-summary-box { background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
-        .result-summary-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px; }
-        .result-summary-topic { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
-        .result-summary-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
-        .summary-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
-        .summary-badge.trend { border-color: var(--trend-color)40; color: var(--trend-color); }
-        .summary-badge.opportunity { background: rgba(255,0,80,0.12); border-color: rgba(255,0,80,0.26); color: #FF0050; }
-        .summary-badge.viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
-        .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
-        .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
-
-        .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-        .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
-        .editor-note-value { font-size: 13px; color: rgba(240,240,245,0.7); line-height: 1.4; }
-        .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
-        .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
-        .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .editor-note-value-small { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
-
-        .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
-        .view-mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050; }
-
-        .rank-selector { display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
-        .rank-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; color: rgba(240,240,245,0.28); cursor: pointer; transition: all 0.16s; }
-        .rank-btn.active { color: #fff; }
-        .rank-btn-glow { box-shadow: 0 0 13px; }
-
-        /* Card styles for Insights */
-        .insights-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-        .insights-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--acid); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .insights-list { list-style: none; padding-left: 0; }
-        .insights-list li { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; padding-left: 18px; position: relative; }
-        .insights-list li::before { content: '✨'; position: absolute; left: 0; font-size: 14px; top: 0; }
-        .insights-item-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); text-transform: uppercase; margin-bottom: 4px; }
-        .insights-item-value { font-size: 13px; color: var(--text); line-height: 1.5; }
-        .insights-tags-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .insights-tag-chip { background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--acid); font-weight: 600; }
-        .insights-platform-btn { background: var(--acid)08; border: 1px solid var(--acid)30; color: var(--acid); }
-
-        /* Raw Evidence Card */
-        .evidence-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-        .evidence-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--coral); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .evidence-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-        .evidence-item:last-child { border-bottom: none; }
-        .evidence-thumb { width: 100px; height: 60px; flex-shrink: 0; background: var(--bg-elevated); border-radius: 6px; object-fit: cover; }
-        .evidence-info { flex: 1; min-width: 0; }
-        .evidence-info-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .evidence-info-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
-        .evidence-info-platform { color: var(--acid); }
-        .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
-        .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
-
-
-        /* General utility classes */
-        .flex-row { display: flex; align-items: center; }
-        .flex-col { display: flex; flex-direction: column; }
-        .gap-4 { gap: 4px; }
-        .gap-6 { gap: 6px; }
-        .gap-7 { gap: 7px; }
-        .gap-8 { gap: 8px; }
-        .gap-9 { gap: 9px; }
-        .gap-10 { gap: 10px; }
-        .mt-8 { margin-top: 8px; }
-        .mb-10 { margin-bottom: 10px; }
-        .mb-14 { margin-bottom: 14px; }
-        .mb-16 { margin-bottom: 16px; }
-        .mb-24 { margin-bottom: 24px; }
+        /* Basic Tailwind-like utilities for demonstration */
+        .min-h-screen { min-height: 100vh; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .p-4 { padding: 1rem; }
+        .font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+        .max-w-4xl { max-width: 56rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .bg-white { background-color: #ffffff; }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .rounded-lg { border-radius: 0.5rem; }
+        .p-6 { padding: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+        .font-bold { font-weight: 700; }
+        .text-gray-800 { color: #1f2937; }
+        .mb-6 { margin-bottom: 1.5rem; }
         .text-center { text-align: center; }
-        .hidden { display: none !important; }
+        .mb-4 { margin-bottom: 1rem; }
+        .space-y-4 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 1rem; }
+        .block { display: block; }
+        .text-gray-700 { color: #374151; }
+        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+        .appearance-none { appearance: none; }
+        .border { border-width: 1px; border-color: #e5e7eb; }
+        .rounded { border-radius: 0.25rem; }
+        .w-full { width: 100%; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .leading-tight { line-height: 1.25; }
+        .focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
+        .focus\:shadow-outline:focus { box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5); } /* Blue outline */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .flex-1 { flex: 1 1 0%; }
+        .sm\:flex-row { flex-direction: row; }
+        .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) { margin-left: 1rem; }
+        .sm\:space-y-0 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+        .text-white { color: #ffffff; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .rounded { border-radius: 0.25rem; }
+        .opacity-50 { opacity: 0.5; }
+        .cursor-not-allowed { cursor: not-allowed; }
+        .text-center { text-align: center; }
+        .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+        .text-blue-500 { color: #3b82f6; }
 
-        @media (max-width: 560px) {
-            .config-row { grid-template-columns: 1fr; }
-            .evidence-thumb { width: 80px; height: 50px; }
+        /* Loader specific styles */
+        .loader {
+            border-top-color: #3b82f6; /* Blue for the loading indicator */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .h-12 { height: 3rem; }
+        .w-12 { width: 3rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+
+        /* Error alert styles */
+        .bg-red-100 { background-color: #fee2e2; }
+        .border-red-400 { border-color: #f87171; }
+        .text-red-700 { color: #b91c1c; }
+        .relative { position: relative; }
+        .block { display: block; }
+        .sm\:inline { display: inline; }
+
+        /* Results section */
+        .mt-8 { margin-top: 2rem; }
+        .space-y-8 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 2rem; }
+        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        .border-b { border-bottom-width: 1px; border-color: #e5e7eb; }
+        .pb-2 { padding-bottom: 0.5rem; }
+        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+        .font-semibold { font-weight: 600; }
+        .text-gray-700 { color: #374151; }
+        .list-disc { list-style-type: disc; }
+        .list-inside { list-style-position: inside; }
+        .text-gray-600 { color: #4b5563; }
+        .space-y-3 > *:not([hidden]) ~ *:not([hidden]) { margin-top: 0.75rem; }
+        .bg-gray-50 { background-color: #f9fafb; }
+        .p-3 { padding: 0.75rem; }
+        .rounded-md { border-radius: 0.375rem; }
+        .border-gray-200 { border-color: #e5e7eb; }
+        .font-medium { font-weight: 500; }
+        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+        .grid { display: grid; }
+        .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gap-2 { gap: 0.5rem; }
+        .mt-4 { margin-top: 1rem; }
+        .pt-4 { padding-top: 1rem; }
+        .border-t { border-top-width: 1px; border-color: #e5e7eb; }
+        .text-gray-500 { color: #6b7280; }
+        .bg-red-50 { background-color: #fef2f2; }
+        .border-red-300 { border-color: #fca5a5; }
+        .text-red-600 { color: #dc2626; }
+
+        /* Mobile UI (basic example, extend in index.css for full responsiveness) */
+        @media (max-width: 640px) {
+            .mobile-ui .flex-col.sm\:flex-row {
+                flex-direction: column;
+            }
+            .mobile-ui .sm\:space-x-4 > *:not([hidden]) ~ *:not([hidden]) {
+                margin-left: 0;
+                margin-top: 1rem; /* Adjust as needed for vertical spacing */
+            }
+            .mobile-ui .sm\:space-y-0 > *:not([hidden]) ~ *:not([hidden]) {
+                margin-top: 1rem; /* Ensure vertical spacing */
+            }
         }
     </style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
-            <div class="spinner" style="margin:0 auto 16px;"></div>
-            Booting Viral Radar…
-        </div>
-    </div>
-
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        // --- src/providers/llmRouter.js ---
+        // This file abstracts communication with various LLM providers, now via a Cloudflare Worker proxy.
 
-        // --- Constants (Global) ---
-        const RANK_META = [
-            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
-            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
-            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
-            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
-            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
-            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
-        ];
+        // FIX: Increased timeout
+        const DEFAULT_TIMEOUT = 60000; // 60 seconds
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev"; // Base URL of the Cloudflare Worker
 
-        const EXAMPLE_TOPICS = [
-            "Worst Martial Arts Fails", "Dumbest MMA Moments",
-            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
-            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
-            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
-        ];
-
-        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
-
-        const PLATFORM_CFG = {
-            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
-                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-                shortsUrl: (q) => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}` },
-            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
-                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
-                tagUrl: (t) => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}` },
-            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
-                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
-                subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
-            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
-                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`,
-                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}` },
-            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
-                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
-                tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
-            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
-                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
-            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
-                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` }, // Search public channels
+        // LLM Provider configurations for UI display. Actual routing is done by the Worker.
+        // FIX: Updated to match providers_configured from worker's GET / endpoint
+        const providersConfig = {
+            cloudflare: { // Assuming Cloudflare is a target provider for the worker, renamed from genericAPI
+                name: "Cloudflare Workers AI",
+                models: [
+                    { id: "@cf/meta/llama-3.1-8b-instruct-fast", name: "Llama 3.1 (Cloudflare)" },
+                    { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", name: "Llama 3.3 (Cloudflare)" },
+                    { id: "@cf/zai-org/glm-4.7-flash", name: "GLM 4.7 Flash (Cloudflare)" },
+                    { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }
+                ]
+            },
+            openrouter: {
+                name: "OpenRouter",
+                models: [
+                    { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
+                    { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
+                    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
+                ]
+            },
+            google: {
+                name: "Google AI Studio",
+                models: [
+                    { id: "gemini-pro", name: "Gemini Pro" },
+                    { id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }
+                ]
+            },
+            github: {
+                name: "GitHub Models",
+                models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]
+            },
+            huggingface: {
+                name: "HuggingFace",
+                models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]
+            },
         };
 
-        const SURPRISE_NICHES = [
-            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
-            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
-            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
-            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
-            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
-            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
-            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
-        ];
+        let currentProviderName = "cloudflare"; // FIX: Default provider now 'cloudflare'
 
-        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
+        // AIProvider Interface - Now routes all calls through the Cloudflare Worker proxy
+        const AIProvider = {
+            async analyze(prompt, options = {}) {
+                const { providerName, outputSchema, model } = options;
+                // FIX: Frontend now calls /api/complete for all LLM interactions
+                const workerUrl = `${WORKER_BASE_URL}/api/complete`;
 
-        // --- API Helper ---
-        const DEFAULT_TIMEOUT = 120000; // 2 minutes
-        // IMPORTANT: Replace with YOUR Cloudflare Worker URL
-        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+                const controller = new AbortController();
+                const signal = controller.signal;
+                const timeout = options.timeout || DEFAULT_TIMEOUT;
+                const timer = setTimeout(() => controller.abort(), timeout);
+                const startTime = Date.now();
 
-        const LLM_PROVIDERS_CONFIG = {
-            openrouter: { name: "OpenRouter", models: [
-                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
-                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-            ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
-            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
-            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
-            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
-        };
+                let errorMessage = null;
+                let rawData = null;
+                let success = false;
+                let usedProvider = providerName;
+                let usedModel = model;
 
-        async function callWorkerAPI(endpoint, payload, options = {}) {
-            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
-            const controller = new AbortController();
-            const signal = controller.signal;
-            const timeout = options.timeout || DEFAULT_TIMEOUT;
-            const timer = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const res = await fetch(workerUrl, {
+                try {
+                  const resp = await fetch(workerUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({ prompt, provider: providerName, model: model }), // Pass provider and model to worker
                     signal: signal
-                });
-                clearTimeout(timer);
+                  });
+                  rawData = await resp.json();
+                  clearTimeout(timer);
 
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
-                }
-                return data;
-            } catch (err) {
-                clearTimeout(timer);
-                console.error("Error fetching from worker:", err);
-                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
-            }
-        }
-
-        // --- UI Components ---
-        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
-
-        function PlatformBtn({ platform, label, url, small = false }) {
-            const c = PLATFORM_CFG[platform];
-            if (!c) {
-                console.warn(`Platform config not found for: ${platform}`);
-                return <button className={small ? 'platform-btn-small' : 'platform-btn'} disabled>{label}</button>;
-            }
-            return (
-                <button onClick={() => openLink(url)} style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    background: c.bg, border: `1px solid ${c.border}`,
-                    borderRadius: 7, padding: small ? "4px 9px" : "5px 11px",
-                    fontSize: small ? 10 : 11, fontWeight: 700, color: c.color,
-                    cursor: "pointer", whiteSpace: "nowrap",
-                }}>
-                    <span style={{ fontSize: small ? 9 : 10 }}>{c.icon}</span>{label}
-                    <span style={{ fontSize: 8, opacity: 0.55 }}>↗</span>
-                </button>
-            );
-        }
-
-        function RetentionCurve() {
-            return (
-                <div className="retention-curve-wrapper">
-                    <div className="retention-curve-label">Retention</div>
-                    {[...RANK_META].reverse().map(m => (
-                        <div key={m.rank} className="retention-rank-item">
-                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
-                            <div className="retention-bar-inner" style={{
-                                '--bar-height': `${m.bar * 0.5}px`,
-                                '--item-color': m.color,
-                                '--item-glow': m.glow,
-                                height: `${m.bar * 0.5}px`,
-                                background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
-                                boxShadow: `0 -3px 10px ${m.glow}`
-                            }} />
-                            <span className="retention-rank-label">#{m.rank}</span>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-        function InsightsCard({ title, icon, children }) {
-            return (
-                <div className="insights-card">
-                    <div className="insights-card-title">
-                        {icon} {title}
-                    </div>
-                    {children}
-                </div>
-            );
-        }
-
-        function EvidenceList({ data, platformType }) {
-            if (!data || data.length === 0) {
-                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
-            }
-
-            return (
-                <div className="evidence-list">
-                    {data.map((item, i) => (
-                        <div key={i} className="evidence-item">
-                            {/* Optional: Add thumbnail if available, for now placeholder */}
-                            {item.thumbnail_url ?
-                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
-                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
-                            }
-                            <div className="evidence-info">
-                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
-                                    {item.title}
-                                </a>
-                                <div className="evidence-info-meta">
-                                    <span className="evidence-info-platform">{item.platform}</span>
-                                    {item.channel && ` · ${item.channel}`}
-                                    {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
-                                    {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
-                                    {item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`}
-                                    {item.comments && ` · ${item.comments.toLocaleString()} comments`}
-                                    {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
-                                </div>
-                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
-                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-
-
-        function App() {
-            const [topic, setTopic] = useState('');
-            const [creativeBrief, setCreativeBrief] = useState('');
-            const [referenceChannels, setReferenceChannels] = useState('');
-            const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState(null);
-            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
-            const [activeProvider, setActiveProvider] = useState(() => {
-                const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
-                return firstConfigured || 'google';
-            });
-            const [availableModels, setAvailableModels] = useState([]);
-            const [selectedModel, setSelectedModel] = useState('');
-            const [restored, setRestored] = useState(false);
-            const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
-
-            // FIX: Added missing state variables
-            const [copied, setCopied] = useState(false);
-            const [phaseIdx, setPhaseIdx] = useState(0);
-
-            const intervalRef = useRef(null);
-
-            const phases = [
-                "Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…",
-                "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…",
-            ];
-
-            const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
-
-            // Helper to persist state to localStorage
-            const persistState = (newState) => {
-                try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-                } catch (e) {
-                    console.error("Failed to save state to localStorage:", e);
-                }
-            };
-
-            // Helper to restore state from localStorage
-            const restoreState = () => {
-                try {
-                    const savedState = localStorage.getItem(STORAGE_KEY);
-                    if (savedState) {
-                        const parsedState = JSON.parse(savedState);
-                        setTopic(parsedState.topic || '');
-                        setCreativeBrief(parsedState.creativeBrief || '');
-                        setReferenceChannels(parsedState.referenceChannels || '');
-                        setDateFilter(parsedState.dateFilter || '7 Days');
-                        setResults(parsedState.results || null);
-                        setRestored(!!parsedState.results);
-                        setActiveView(parsedState.activeView || 'insights');
-
-                        // Restore LLM provider and model
-                        if (parsedState.activeProvider && LLM_PROVIDERS_CONFIG[parsedState.activeProvider]) {
-                            setActiveProvider(parsedState.activeProvider);
-                            const providerCfg = LLM_PROVIDERS_CONFIG[parsedState.activeProvider];
-                            setAvailableModels(providerCfg.models);
-                            if (parsedState.selectedModel && providerCfg.models.some(m => m.id === parsedState.selectedModel)) {
-                                setSelectedModel(parsedState.selectedModel);
-                            } else {
-                                setSelectedModel(providerCfg.models[0]?.id || '');
-                            }
-                        } else {
-                             const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
-                             if (firstConfigured) {
-                                 setActiveProvider(firstConfigured);
-                                 setAvailableModels(LLM_PROVIDERS_CONFIG[firstConfigured].models);
-                                 setSelectedModel(LLM_PROVIDERS_CONFIG[firstConfigured].models[0]?.id || '');
-                             }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Failed to restore state from localStorage:", e);
-                }
-            };
-
-            // Initial fetch for worker capabilities and restore state
-            useEffect(() => {
-                const init = async () => {
-                    let initialProviderName = activeProvider;
-
-                    try {
-                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
-                        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
-                        const data = await response.json();
-
-                        // FIX: Handle missing providers_configured gracefully — default to cloudflare
-                        if (data.providers_configured && typeof data.providers_configured === 'object') {
-                            const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
-                            if (firstConfiguredFromWorker) {
-                                initialProviderName = firstConfiguredFromWorker;
-                            } else {
-                                initialProviderName = 'cloudflare'; // Default to cloudflare if none explicitly configured
-                            }
-                        } else {
-                            // Worker doesn't return providers_configured — default to cloudflare (Workers AI)
-                            initialProviderName = 'cloudflare';
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch worker capabilities, falling back to defaults:", e);
-                        // FIX: Don't show error for initial fetch, just default to cloudflare and continue
-                        initialProviderName = 'cloudflare';
-                    }
-
-                    const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
-                    if (currentProviderCfg) {
-                        setActiveProvider(initialProviderName);
-                        setAvailableModels(currentProviderCfg.models);
-                        setSelectedModel(currentProviderCfg.models[0]?.id || '');
-                    } else {
-                        setActiveProvider('');
-                        setAvailableModels([]);
-                        setSelectedModel('');
-                    }
-
-                    restoreState();
-                };
-                init();
-            }, []);
-
-
-            // Persist state whenever relevant state changes
-            useEffect(() => {
-                persistState({
-                    topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
-                    activeProvider, selectedModel, copied, phaseIdx, // FIX: Added copied and phaseIdx
-                });
-            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel, copied, phaseIdx]); // FIX: Added copied and phaseIdx dependencies
-
-
-            const handleProviderChange = (e) => {
-                const name = e.target.value;
-                const cfg = LLM_PROVIDERS_CONFIG[name];
-                setActiveProvider(name);
-                setAvailableModels(cfg.models);
-                setSelectedModel(cfg.models[0]?.id || '');
-            };
-
-            const handleNewSearch = () => {
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                setTopic('');
-                setCreativeBrief('');
-                setReferenceChannels('');
-                setDateFilter('7 Days');
-                setLoading(false);
-                setError(null);
-                setResults(null);
-                setRestored(false);
-                setActiveView('insights');
-                setCopied(false);
-                setPhaseIdx(0);
-                localStorage.removeItem(STORAGE_KEY);
-            };
-
-            const handleSurpriseMe = () => {
-                const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
-                setTopic(pick);
-                setCreativeBrief("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
-                setReferenceChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
-            };
-
-            const copyResult = () => {
-                if (!results) return;
-
-                const insights = results.ai_actionable_insights;
-                const rankedClips = insights?.ranked_clip_opportunities || [];
-
-                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
-                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
-                copyText += `--- Actionable Insights ---\n\n`;
-
-                if (insights?.hook_suggestions?.length > 0) {
-                    copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\n`;
-                }
-                if (insights?.hashtag_strategy?.length > 0) {
-                    copyText += `\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\n`;
-                }
-                if (insights?.key_search_phrases_for_discoverability?.length > 0) {
-                    copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
-                }
-                if (insights?.suggested_source_platforms_for_originals?.length > 0) {
-                    copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
-                }
-                if (insights?.repost_analysis_insight) {
-                    copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.title_insights) {
-                    copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.description_hook) {
-                    copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\n`;
-                }
-                if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
-                    copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\n`;
-                }
-
-                copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
-                if (rankedClips.length > 0) {
-                    rankedClips.forEach(clip => {
-                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
-                        copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
-                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
-                        if (clip.url_to_potential_original_clip) {
-                            copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
-                        }
-                        if (clip.editorial_repost_analysis) {
-                            copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\n`;
-                        }
-                        copyText += `\n`;
-                    });
-                } else {
-                    copyText += `No ranked clip opportunities found yet.\n`;
-                }
-
-                navigator.clipboard.writeText(copyText).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                });
-            };
-
-            const handleResearch = async () => {
-                if (!topic.trim()) { setError("Enter a topic first."); return; }
-                if (!selectedModel) { setError("Please select an LLM model."); return; }
-
-                setLoading(true);
-                setError(null);
-                setResults(null);
-                setRestored(false);
-                setActiveView('insights');
-                setCopied(false);
-                setPhaseIdx(0);
-
-                if (intervalRef.current) clearInterval(intervalRef.current);
-                intervalRef.current = setInterval(() => {
-                    setPhaseIdx(p => (p + 1) % phases.length);
-                }, 900);
-
-                try {
-                    const payload = {
-                        topic: topic.trim(),
-                        creativeBrief: creativeBrief.trim(),
-                        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
-                        dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
-                        provider: activeProvider,
-                        model: selectedModel,
-                    };
-
-                    // Call the new Worker endpoint
-                    const insights = await callWorkerAPI('/api/generate-insights', payload);
-                    setResults(insights);
+                  if (!resp.ok) {
+                    errorMessage = rawData.error || `Worker request failed with status ${resp.status}`;
+                  } else {
+                    success = true;
+                    usedProvider = rawData.provider_used || providerName;
+                    usedModel = rawData.model_used || model;
+                  }
 
                 } catch (err) {
-                    console.error("Source Intelligence Engine failed:", err);
-                    setError(err.message || "An unknown error occurred during source intelligence processing.");
-                } finally {
-                    if (intervalRef.current) clearInterval(intervalRef.current);
-                    setLoading(false);
-                    setPhaseIdx(0);
+                  clearTimeout(timer);
+                  errorMessage = err.name === 'AbortError' ? `Request timed out after ${timeout}ms.` : err.message;
                 }
-            };
 
-            const hasResult = !!results;
+                const latency = Date.now() - startTime;
+                const timestamp = new Date().toISOString();
 
-            return (
-                <div className="shell">
-                    <div className="nav">
-                        <div className="nav-brand">
-                            <span className="nav-mark">✦</span>
-                            <span className="nav-name">Viral Radar</span>
-                        </div>
-                        <span className="nav-badge">Source Intelligence Engine</span>
-                    </div>
+                if (!success) {
+                  return { success: false, error: errorMessage, provider: usedProvider, model: usedModel, metadata: { latency, timestamp } };
+                }
 
-                    <div className="hero">
-                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
-                        <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
-                        <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
-                    </div>
+                try {
+                  // The worker's /api/complete endpoint should return clean JSON text directly
+                  const parsed = outputSchema ? JSON.parse(rawData.text.replace(/```json|```/g, "").trim()) : rawData.text;
+                  return { success: true, data: parsed, provider: usedProvider, model: usedModel, metadata: { latency, timestamp } };
+                } catch (e) {
+                  return { success: false, error: `Invalid JSON from LLM: ${e.message}. Raw response: ${rawData.text}`, provider: usedProvider, model: usedModel, metadata: { latency, timestamp } };
+                }
+            },
 
-                    <RetentionCurve />
+            setProvider(name) {
+                if (providersConfig[name]) {
+                    currentProviderName = name;
+                    return true;
+                }
+                console.warn(`Provider "${name}" not found in client config.`);
+                return false;
+            },
 
-                    <div className="console console-input-section"> {/* Combined styles for consistency */}
-                        <div className="console-head">
-                            <span className="cdot" style={{ background: '#ff5f57' }}></span>
-                            <span className="cdot" style={{ background: '#febc2e' }}></span>
-                            <span style={{ background: '#28c840' }}></span>
-                            <span style={{ marginLeft: '6px' }}>research.sh</span>
-                        </div>
-                        <div className="console-body">
-                            <div className="console-prompt">
-                                <span className="caret">›</span>
-                                <input
-                                    type="text"
-                                    value={topic} onChange={e => setTopic(e.target.value)}
-                                    onKeyDown={e => e.key === "Enter" && !loading && handleResearch()}
-                                    placeholder="e.g. Worst Martial Arts Fails"
-                                    disabled={loading}
-                                    className="console-input"
-                                />
-                                {!topic && !loading && <span className="console-cursor"></span>}
-                                <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
-                            </div>
+            getCurrentProviderName() {
+                return currentProviderName;
+            },
 
-                            <div className="config-row">
-                                <div className="select-wrap">
-                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
-                                    <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
-                                        {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
-                                    <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
-                                        {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
-                                            <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="select-wrap">
-                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
-                                    <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
-                                        {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                    </select>
-                                </div>
-                            </div>
+            // FIX: listProviders now also fetches from worker for actual configured providers
+            async listProviders() {
+                try {
+                    const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(5000) }); // Short timeout for config fetch
+                    if (response.ok) {
+                        const data = await response.json();
+                        const activeProviders = {};
+                        for (const key in data.providers_configured) {
+                            if (data.providers_configured[key] && providersConfig[key]) {
+                                activeProviders[key] = providersConfig[key];
+                            }
+                        }
+                        // If no providers are configured in worker but present in client config, use client config as fallback
+                        if (Object.keys(activeProviders).length === 0 && Object.keys(providersConfig).length > 0) {
+                            console.warn("No providers configured in worker, falling back to client-side default providers config.");
+                            return providersConfig;
+                        }
+                        return activeProviders;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch worker provider config, falling back to client-side default:", e);
+                }
+                return providersConfig; // Fallback to client-side defined providersConfig
+            }
+        };
 
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
-                                </div>
-                                <textarea
-                                    className="ref-channels-input"
-                                    value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
-                                    placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
-                                    disabled={loading}
-                                    rows={3}
-                                />
-                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
-                            </div>
+        // --- src/agents/discoveryAgent.js ---
+        // Runs the Discovery Agent to find viral content opportunities.
 
-                            <div className="ref-channels-block">
-                                <div className="ref-channels-label">
-                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
-                                </div>
-                                <textarea
-                                    className="ref-channels-input"
-                                    value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
-                                    placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
-                                    disabled={loading}
-                                    rows={2}
-                                />
-                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
-                            </div>
+        async function runDiscovery({ task, platform, providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          let agentOutput = {
+            agent: "DiscoveryAgent",
+            version: "1.0.0",
+            capability: [
+              "viral discovery",
+              "trend analysis",
+              "keyword extraction"
+            ],
+            result: {
+              videoCandidates: [],
+              trendSignals: [],
+              keywords: []
+            },
+            metadata: {
+              provider: "N/A",
+              model: "N/A",
+              latency: 0,
+              timestamp: new Date().toISOString()
+            },
+            error: null
+          };
 
-                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
-                                {loading
-                                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                                        <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
-                                        {phases[phaseIdx]}
-                                    </span>
-                                    : "🚀 Get Source Intelligence"}
-                            </button>
-                        </div>
-                    </div>
+          try {
+            const prompt = `Based on the topic "${task}" for platform "${platform}", identify potential viral video opportunities. Provide a list of video candidates, key trend signals, and relevant SEO keywords. Ensure the output is concise and actionable for content creation.`;
 
-                    <div className="agent-strip">
-                        <span className="agent-chip">ResearchPlanner</span>
-                        <span className="agent-chip">SourceHunter</span>
-                        <span className="agent-chip">InsightsGenerator</span>
-                    </div>
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName,
+              model,
+              timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  videoCandidates: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "List of viral video ideas or titles"
+                  },
+                  trendSignals: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Key trends and insights related to the topic"
+                  },
+                  keywords: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Relevant SEO keywords for the content"
+                  }
+                },
+                required: ["videoCandidates", "trendSignals", "keywords"]
+              }
+            });
 
-                    {error && (
-                        <div className="error-box">
-                            ⚠️ {error}
-                        </div>
-                    )}
+            if (llmResponse.success) {
+              const llmData = llmResponse.data;
+              agentOutput.result.videoCandidates = Array.isArray(llmData?.videoCandidates) ? llmData.videoCandidates : [];
+              agentOutput.result.trendSignals = Array.isArray(llmData?.trendSignals) ? llmData.trendSignals : [];
+              agentOutput.result.keywords = Array.isArray(llmData?.keywords) ? llmData.keywords : [];
 
-                    {loading && (
-                        <div className="loading-box">
-                            <div className="spinner" style={{ margin: '0 auto' }}></div>
-                            <p>Orchestrating AI Agents & Backend Services...</p>
-                        </div>
-                    )}
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+              agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
 
-                    {hasResult && !loading && (
-                        <div className="results">
-                            <div className="results-topbar">
-                                {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
-                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
-                            </div>
-                            <div className="result-summary-box">
-                                <div>
-                                    <div className="result-summary-title">
-                                        Source Intelligence Report for:
-                                    </div>
-                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
-                                </div>
-                                <div className="result-summary-badges">
-                                    {results.ai_actionable_insights?.overall_opportunity_reasoning && (
-                                        <span className="summary-badge opportunity">
-                                            🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
-                                        </span>
-                                    )}
-                                    {results.ai_actionable_insights?.trend_status && (
-                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
-                                            📈 {results.ai_actionable_insights.trend_status}
-                                        </span>
-                                    )}
-                                    <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
-                                        {copied ? "✔ Copied" : "📋 Copy"}
-                                    </button>
-                                </div>
-                            </div>
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Discovery Agent with provider ${providerName || 'default'}.`;
+              console.error(`Discovery Agent LLM Call Failed: ${agentOutput.error}`);
+            }
 
-                            <div className="view-mode-selector">
-                                {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
-                                    <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
-                                        {v.icon} {v.label}
-                                    </button>
-                                ))}
-                            </div>
+          } catch (err) {
+            agentOutput.error = `Discovery Agent execution error: ${err.message}`;
+            console.error(`Discovery Agent Error:`, err);
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
 
-                            {activeView === "insights" && results.ai_actionable_insights && (
-                                <div className="insights-section">
-                                    <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
-                                        <ul className="insights-list">
-                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
-                                                <li key={i}>
-                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
-                                                    <div className="insights-item-value">
-                                                        Platform: {clip.suggested_source_platform || 'Any'} |
-                                                        Search Terms: {clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}
-                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
-                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="YouTube Upload Strategy" icon="🚀">
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Suggestions:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hashtag Strategy:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
-                                            </div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Title Insights:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">SEO Description Hook:</div>
-                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
-                                        </div>
-                                        <div>
-                                            <div className="insights-item-label">SEO Priority Tags:</div>
-                                            <div className="insights-tags-grid">
-                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
-                                            </div>
-                                        </div>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="Editorial DNA Summary" icon="🧬">
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Clip Length Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Hook Style:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
-                                        </div>
-                                        <div style={{ marginBottom: '10px' }}>
-                                            <div className="insights-item-label">Emotion Focus:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
-                                        </div>
-                                        <div>
-                                            <div className="insights-item-label">Source Preference:</div>
-                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
-                                        </div>
-                                    </InsightsCard>
-
-                                    <InsightsCard title="Research Constraints Applied" icon="✅">
-                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
-                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
-                                        </ul>
-                                    </InsightsCard>
-
-                                </div>
-                            )}
-
-                            {activeView === "raw_evidence" && results.raw_evidence_found && (
-                                <div className="raw-evidence-section">
-                                    <InsightsCard title="Raw Evidence Found" icon="📚">
-                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
-                                        
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
-                                        <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
-                                        <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
-                                        <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
-
-                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
-                                        <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
-                                        
-                                        {/* Add more platforms as needed */}
-                                    </InsightsCard>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {!hasResult && !loading && (
-                        <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
-                            <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
-                            <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
-                            <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
-                        </div>
-                    )}
-                </div>
-            );
+          return agentOutput;
         }
 
+        // --- src/agents/scoringAgent.js ---
+        // Runs the Scoring Agent to calculate content quality scores.
+
+        async function runScoring({ contentDescription, platform, providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          const scoringWeights = {
+            viral: 0.25,
+            emotion: 0.20,
+            trend: 0.15,
+            hook: 0.15,
+            replay: 0.10,
+            rarity: 0.10,
+            competition: 0.05
+          };
+
+          let agentOutput = {
+            agent: "ScoringAgent",
+            version: "1.0.0",
+            capability: [
+              "viral scoring",
+              "content evaluation",
+              "retention analysis"
+            ],
+            result: {
+              viralScore: 0,
+              emotionScore: 0,
+              trendScore: 0,
+              hookScore: 0,
+              replayScore: 0,
+              rarityScore: 0,
+              competitionScore: 0,
+              finalScore: 0,
+              reasoning: "Scores not calculated due to an error or incomplete data."
+            },
+            metadata: {
+              provider: "N/A",
+              model: "N/A",
+              latency: 0,
+              timestamp: new Date().toISOString()
+            },
+            error: null
+          };
+
+          try {
+            const prompt = `Analyze the content idea "${contentDescription}" for platform "${platform || 'general'}" and provide individual scores (0-100) for its virality, emotional impact, trend relevance, hook effectiveness, replay value, rarity/uniqueness, and competitive landscape. Also provide a brief reasoning for these scores.`;
+
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName,
+              model,
+              timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  viralScore: { type: "integer", minimum: 0, maximum: 100 },
+                  emotionScore: { type: "integer", minimum: 0, maximum: 100 },
+                  trendScore: { type: "integer", minimum: 0, maximum: 100 },
+                  hookScore: { type: "integer", minimum: 0, maximum: 100 },
+                  replayScore: { type: "integer", minimum: 0, maximum: 100 },
+                  rarityScore: { type: "integer", minimum: 0, maximum: 100 },
+                  competitionScore: { type: "integer", minimum: 0, maximum: 100 },
+                  reasoning: { type: "string" }
+                },
+                required: ["viralScore", "emotionScore", "trendScore", "hookScore", "replayScore", "rarityScore", "competitionScore", "reasoning"]
+              }
+            });
+
+            if (llmResponse.success && llmResponse.data) {
+              const llmData = llmResponse.data;
+
+              // Validate and assign scores, defaulting to 0 if missing or out of range
+              const getValidScore = (score) => Math.min(100, Math.max(0, parseInt(score, 10) || 0));
+
+              agentOutput.result.viralScore = getValidScore(llmData.viralScore);
+              agentOutput.result.emotionScore = getValidScore(llmData.emotionScore);
+              agentOutput.result.trendScore = getValidScore(llmData.trendScore);
+              agentOutput.result.hookScore = getValidScore(llmData.hookScore);
+              agentOutput.result.replayScore = getValidScore(llmData.replayScore);
+              agentOutput.result.rarityScore = getValidScore(llmData.rarityScore);
+              agentOutput.result.competitionScore = getValidScore(llmData.competitionScore);
+              agentOutput.result.reasoning = llmData.reasoning || "No specific reasoning provided by LLM.";
+
+              // Calculate finalScore using weighted formula
+              agentOutput.result.finalScore = Math.round(
+                (agentOutput.result.viralScore * scoringWeights.viral) +
+                (agentOutput.result.emotionScore * scoringWeights.emotion) +
+                (agentOutput.result.trendScore * scoringWeights.trend) +
+                (agentOutput.result.hookScore * scoringWeights.hook) +
+                (agentOutput.result.replayScore * scoringWeights.replay) +
+                (agentOutput.result.rarityScore * scoringWeights.rarity) +
+                (agentOutput.result.competitionScore * scoringWeights.competition)
+              );
+
+              // Populate metadata from LLM response
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+              agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
+
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Scoring Agent with provider ${providerName || 'default'}.`;
+              console.error(`Scoring Agent LLM Call Failed: ${agentOutput.error}`);
+            }
+
+          } catch (err) {
+            agentOutput.error = `Scoring Agent execution error: ${err.message}`;
+            console.error(`Scoring Agent Error:`, err);
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
+
+          return agentOutput;
+        }
+
+        // --- src/agents/rankingAgent.js ---
+        // Runs the Ranking Agent to generate a 6-Rank content structure and predict retention.
+
+        async function runRanking({ contentDescription, platform, providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          let agentOutput = {
+            agent: "RankingAgent",
+            version: "1.0.0",
+            capability: [
+              "content ranking",
+              "retention prediction",
+              "narrative structuring",
+              "6-rank viral framework",
+              "retention optimization"
+            ],
+            result: {
+              rankOrder: [],
+              retentionPrediction: "No ranking performed due to an error or incomplete data."
+            },
+            metadata: {
+              provider: "N/A",
+              model: "N/A",
+              latency: 0,
+              timestamp: new Date().toISOString()
+            },
+            error: null
+          };
+
+          try {
+            const prompt = `Given the content idea: "${contentDescription}" (targeting ${platform || 'general platforms'}), create a 6-rank narrative structure for optimal viewer retention. The structure should go from #6 (Hook) to #1 (Payoff), defining each segment's purpose. Also, provide a brief prediction about overall content retention.
+
+            Use the following ranks and segments:
+            #6: Hook (Initial grab)
+            #5: Interest (Build curiosity)
+            #4: Context (Provide background)
+            #3: Escalation (Increase tension/stakes)
+            #2: False Winner (Introduce a twist or misleading resolution)
+            #1: Payoff (Satisfying conclusion/main value)
+
+            Provide the output in a structured JSON format with segments and a retention prediction.`;
+
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName,
+              model,
+              timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  rankOrder: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        rank: { type: "string", pattern: "^#([1-6])$" },
+                        segment: { type: "string" },
+                        content: { type: "string" }
+                      },
+                      required: ["rank", "segment", "content"]
+                    },
+                    minItems: 6,
+                    maxItems: 6,
+                    description: "Ordered array of 6 rank segments from #6 to #1"
+                  },
+                  retentionPrediction: {
+                    type: "string",
+                    description: "A textual prediction about content retention based on the structure."
+                  }
+                },
+                required: ["rankOrder", "retentionPrediction"]
+              }
+            });
+
+            if (llmResponse.success && llmResponse.data) {
+              const llmData = llmResponse.data;
+
+              // Basic validation for rankOrder structure
+              let validatedRankOrder = [];
+              if (Array.isArray(llmData.rankOrder) && llmData.rankOrder.length === 6) {
+                // Ensure ranks are correctly parsed and sorted
+                const parsedRanks = llmData.rankOrder.map(rankItem => {
+                  const rankNum = parseInt(rankItem.rank?.replace('#', ''), 10);
+                  return {
+                    ...rankItem,
+                    rankNum: isNaN(rankNum) ? 0 : rankNum
+                  };
+                }).filter(item => item.rankNum > 0);
+
+                // Sort by rank number descending (for #6 to #1)
+                parsedRanks.sort((a, b) => b.rankNum - a.rankNum);
+
+                // Re-map to remove temporary rankNum and check for exactly 6 unique ranks
+                const uniqueRanks = new Set();
+                validatedRankOrder = parsedRanks.filter(item => {
+                  if (item.rankNum >= 1 && item.rankNum <= 6 && !uniqueRanks.has(item.rankNum)) {
+                    uniqueRanks.add(item.rankNum);
+                    return true;
+                  }
+                  return false;
+                }).map(({ rankNum, ...rest }) => rest);
+
+                // If after validation and unique check, we don't have exactly 6, consider it invalid for now.
+                if (validatedRankOrder.length !== 6) {
+                  agentOutput.error = "LLM did not return a valid 6-rank structure. Missing or duplicate ranks.";
+                  validatedRankOrder = [];
+                }
+
+              } else {
+                agentOutput.error = "LLM did not return a valid 6-rank structure. Incorrect array length or format.";
+              }
+
+              agentOutput.result.rankOrder = validatedRankOrder;
+              agentOutput.result.retentionPrediction = llmData.retentionPrediction || "Retention prediction unavailable.";
+
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+              agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
+
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Ranking Agent with provider ${providerName || 'default'}.`;
+              console.error(`Ranking Agent LLM Call Failed: ${agentOutput.error}`);
+            }
+
+          } catch (err) {
+            agentOutput.error = `Ranking Agent execution error: ${err.message}`;
+            console.error(`Ranking Agent Error:`, err);
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
+
+          return agentOutput;
+        }
+
+        // --- src/agents/seoAgent.js ---
+        // Runs the SEO Agent to generate optimized titles, descriptions, keywords, and hashtags.
+
+        async function runSeo({ contentDescription, platform, language = 'en', providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          let agentOutput = {
+            agent: "SEOAgent",
+            version: "1.0.0",
+            capability: [
+              "seo generation",
+              "keyword optimization",
+              "content discoverability"
+            ],
+            result: {
+              title: "Optimized Content Title",
+              description: "Optimized content description for discoverability.",
+              keywords: [],
+              hashtags: [],
+              generated: false,
+              source: "fallback"
+            },
+            metadata: {
+              provider: "N/A",
+              model: "N/A",
+              latency: 0,
+              timestamp: new Date().toISOString()
+            },
+            error: null
+          };
+
+          try {
+            const prompt = `Generate an SEO optimized title (under 60 chars), a meta description (under 160 chars), 5-10 relevant keywords, and 3-5 relevant hashtags for the following content idea: "${contentDescription}"
+            Target platform: ${platform || 'general'}. Language: ${language}.
+            Ensure titles are catchy and descriptions are informative. Keywords should be high-value.`;
+
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName,
+              model,
+              timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", description: "SEO optimized title (max 60 characters)", maxLength: 60 },
+                  description: { type: "string", description: "SEO optimized meta description (max 160 characters)", maxLength: 160 },
+                  keywords: {
+                    type: "array",
+                    items: { type: "string" },
+                    minItems: 5,
+                    maxItems: 10,
+                    description: "List of relevant SEO keywords"
+                  },
+                  hashtags: {
+                    type: "array",
+                    items: { type: "string", pattern: "^#.*" },
+                    minItems: 3,
+                    maxItems: 5,
+                    description: "List of relevant hashtags"
+                  }
+                },
+                required: ["title", "description", "keywords", "hashtags"]
+              }
+            });
+
+            if (llmResponse.success && llmResponse.data) {
+              const llmData = llmResponse.data;
+
+              agentOutput.result.title = llmData.title ? llmData.title.substring(0, 60) : agentOutput.result.title;
+              agentOutput.result.description = llmData.description ? llmData.description.substring(0, 160) : agentOutput.result.description;
+              agentOutput.result.keywords = Array.isArray(llmData.keywords) ? llmData.keywords.slice(0, 10) : agentOutput.result.keywords;
+              agentOutput.result.hashtags = Array.isArray(llmData.hashtags) ? llmData.hashtags.filter(tag => tag.startsWith('#')).slice(0, 5) : agentOutput.result.hashtags;
+
+              agentOutput.result.generated = true;
+              agentOutput.result.source = "llm";
+
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+              agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
+
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for SEO Agent with provider ${providerName || 'default'}. Using fallback content.`;
+              console.error(`SEO Agent LLM Call Failed: ${agentOutput.error}`);
+            }
+
+          } catch (err) {
+            agentOutput.error = `SEO Agent execution error: ${err.message}. Using fallback content.`;
+            console.error(`SEO Agent Error:`, err);
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
+
+          return agentOutput;
+        }
+
+        // --- src/agents/competitorAgent.js ---
+        // Runs the Competitor Analysis Agent to analyze competitor patterns.
+
+        async function runCompetitorAnalysis({ topic, platform, providerName, model, timeout }) {
+          const agentStartTime = Date.now();
+          let agentOutput = {
+            agent: "CompetitorAgent",
+            version: "1.0.0",
+            capability: [
+              "competitor analysis",
+              "pattern extraction",
+              "winning format identification",
+              "content gap analysis"
+            ],
+            result: {
+              competitorPatterns: [],
+              contentGaps: [],
+              winningFormatsSummary: []
+            },
+            metadata: {
+              provider: "N/A",
+              model: "N/A",
+              latency: 0,
+              timestamp: new Date().toISOString()
+            },
+            error: null
+          };
+
+          try {
+            const prompt = `Perform a competitor analysis for content related to the topic: "${topic}" on platform "${platform || 'general'}.
+            Identify key competitor patterns, successful content formats, and potential content gaps or underserved niches.
+            Provide analysis for at least 3 distinct competitor patterns.`;
+
+            const llmResponse = await AIProvider.analyze(prompt, {
+              providerName,
+              model,
+              timeout,
+              outputSchema: {
+                type: "object",
+                properties: {
+                  competitorPatterns: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string", description: "Name or type of competitor/pattern" },
+                        strategy: { type: "string", description: "Their content or posting strategy" },
+                        winningFormats: { type: "string", description: "Formats that perform well for them" },
+                        keywords: { type: "array", items: { type: "string" }, description: "Keywords they frequently target" }
+                      },
+                      required: ["name", "strategy", "winningFormats"]
+                    },
+                    minItems: 3,
+                    description: "Detailed analysis of competitor patterns"
+                  },
+                  contentGaps: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Identified content gaps or underserved niches"
+                  },
+                  winningFormatsSummary: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Summary of overall winning content formats"
+                  }
+                },
+                required: ["competitorPatterns", "contentGaps", "winningFormatsSummary"]
+              }
+            });
+
+            if (llmResponse.success && llmResponse.data) {
+              const llmData = llmResponse.data;
+
+              agentOutput.result.competitorPatterns = Array.isArray(llmData.competitorPatterns) ? llmData.competitorPatterns : [];
+              agentOutput.result.contentGaps = Array.isArray(llmData.contentGaps) ? llmData.contentGaps : [];
+              agentOutput.result.winningFormatsSummary = Array.isArray(llmData.winningFormatsSummary) ? llmData.winningFormatsSummary : [];
+
+              agentOutput.metadata.provider = llmResponse.provider || "Unknown";
+              agentOutput.metadata.model = llmResponse.model || "Unknown";
+              agentOutput.metadata.latency = llmResponse.metadata?.latency || (Date.now() - agentStartTime);
+              agentOutput.metadata.timestamp = llmResponse.metadata?.timestamp || new Date().toISOString();
+              agentOutput.metadata.capabilities = llmResponse.metadata?.capabilities || [];
+
+            } else {
+              agentOutput.error = llmResponse.error || `LLM analysis failed for Competitor Agent with provider ${providerName || 'default'}.`;
+              console.error(`Competitor Agent LLM Call Failed: ${agentOutput.error}`);
+            }
+
+          } catch (err) {
+            agentOutput.error = `Competitor Agent execution error: ${err.message}`;
+            console.error(`Competitor Agent Error:`, err);
+          } finally {
+            agentOutput.metadata.latency = Date.now() - agentStartTime;
+          }
+
+          return agentOutput;
+        }
+
+        // --- src/router/agentRouter.js ---
+        // The central Agent Router for the Multi AI Agent System.
+
+        const AgentRegistry = {
+          discovery: {
+            agentFunction: runDiscovery,
+            version: "1.0.0",
+            capability: ["viral discovery", "trend analysis", "keyword extraction"]
+          },
+          scoring: {
+            agentFunction: runScoring,
+            version: "1.0.0",
+            capability: ["viral scoring", "content evaluation", "retention analysis"]
+          },
+          ranking: {
+            agentFunction: runRanking,
+            version: "1.0.0",
+            capability: ["content ranking", "retention prediction", "narrative structuring", "6-rank viral framework", "retention optimization"]
+          },
+          seo: {
+            agentFunction: runSeo,
+            version: "1.0.0",
+            capability: ["seo generation", "keyword optimization", "content discoverability"]
+          },
+          competitor: {
+            agentFunction: runCompetitorAnalysis,
+            version: "1.0.0",
+            capability: ["competitor analysis", "pattern extraction", "winning format identification", "content gap analysis"]
+          }
+        };
+
+        const AgentRouter = {
+          async routeTask(task, agentType, options = {}) {
+            const startTime = Date.now();
+            const agentConfig = AgentRegistry[agentType.toLowerCase()];
+
+            let agentResult = {
+              agent: agentType,
+              version: agentConfig?.version || "N/A",
+              capability: agentConfig?.capability || [],
+              task: task,
+              result: null,
+              error: null,
+              metadata: {
+                totalLatency: 0,
+                success: false,
+                timestamp: new Date().toISOString()
+              }
+            };
+
+            if (!agentConfig || typeof agentConfig.agentFunction !== 'function') {
+              agentResult.error = `Agent type "${agentType}" not found or not properly configured in AgentRegistry.`;
+              console.error(agentResult.error);
+              return agentResult;
+            }
+
+            try {
+              const individualAgentOutput = await agentConfig.agentFunction({
+                contentDescription: task,
+                task,
+                platform: options.platform,
+                providerName: options.providerName,
+                model: options.model,
+                timeout: options.timeout
+              });
+
+              agentResult.result = individualAgentOutput.result;
+              agentResult.error = individualAgentOutput.error;
+              agentResult.metadata = {
+                ...agentResult.metadata,
+                ...individualAgentOutput.metadata,
+                success: !individualAgentOutput.error
+              };
+              agentResult.agent = individualAgentOutput.agent;
+              agentResult.version = individualAgentOutput.version;
+              agentResult.capability = individualAgentOutput.capability;
+
+
+            } catch (err) {
+              console.error(`Error during ${agentType} agent execution:`, err.message);
+              agentResult.error = err.message;
+              agentResult.metadata.success = false;
+            } finally {
+              agentResult.metadata.totalLatency = Date.now() - startTime;
+            }
+
+            return agentResult;
+          },
+
+          listAgentTypes() {
+            return Object.keys(AgentRegistry).map(key => ({
+              type: key,
+              version: AgentRegistry[key].version,
+              capability: AgentRegistry[key].capability
+            }));
+          }
+        };
+
+
+        // --- src/App.jsx ---
+        const { useState, useEffect } = React; // Destructure React for use in Babel-transformed script
+
+        function App() {
+          const [topic, setTopic] = useState('');
+          const [platform, setPlatform] = useState('YouTube');
+          const [loading, setLoading] = useState(false);
+          const [error, setError] = useState(null);
+          const [results, setResults] = useState(null);
+          const [activeProvider, setActiveProvider] = useState(AIProvider.getCurrentProviderName());
+          const [allProvidersConfig, setAllProvidersConfig] = useState(providersConfig); // Store full providers config
+          const [availableModels, setAvailableModels] = useState([]);
+          const [selectedModel, setSelectedModel] = useState('');
+
+          useEffect(() => {
+            const fetchAndSetProviderConfig = async () => {
+              const fetchedConfig = await AIProvider.listProviders(); // Fetch configured providers from worker
+              setAllProvidersConfig(fetchedConfig);
+
+              // Prioritize configured providers, then fallback to client-side default if worker has none active
+              let initialProviderName = AIProvider.getCurrentProviderName();
+              if (!fetchedConfig[initialProviderName] && Object.keys(fetchedConfig).length > 0) {
+                 initialProviderName = Object.keys(fetchedConfig)[0]; // Pick first available from worker
+              } else if (Object.keys(fetchedConfig).length === 0) {
+                 initialProviderName = Object.keys(providersConfig)[0]; // Fallback to client-side hardcoded if worker returns none
+                 console.warn("No LLM providers configured in worker, defaulting to client-side first provider.");
+              }
+              
+              const currentProvider = fetchedConfig[initialProviderName] || providersConfig[initialProviderName];
+
+              if (currentProvider) {
+                AIProvider.setProvider(initialProviderName);
+                setActiveProvider(initialProviderName);
+                setAvailableModels(currentProvider.models || []);
+                setSelectedModel(currentProvider.models?.[0]?.id || '');
+              } else {
+                setError("No LLM providers are configured or available. Please check your Worker's bindings and API keys.");
+                setActiveProvider('');
+                setAvailableModels([]);
+                setSelectedModel('');
+              }
+            };
+            fetchAndSetProviderConfig();
+          }, []);
+
+          const handleProviderChange = (e) => {
+            const newProviderName = e.target.value;
+            AIProvider.setProvider(newProviderName);
+            const newProviderConfig = allProvidersConfig[newProviderName]; // Use the fetched config
+            setActiveProvider(newProviderName);
+            setAvailableModels(newProviderConfig?.models || []);
+            setSelectedModel(newProviderConfig?.models?.[0]?.id || '');
+          };
+
+          const handleModelChange = (e) => {
+            setSelectedModel(e.target.value);
+          };
+
+          const handleResearch = async () => {
+            setLoading(true);
+            setError(null);
+            setResults(null);
+
+            if (!topic.trim()) {
+              setError("Please enter a topic to research.");
+              setLoading(false);
+              return;
+            }
+            if (!selectedModel) {
+              setError("Please select an LLM model.");
+              setLoading(false);
+              return;
+            }
+            if (!activeProvider || !allProvidersConfig[activeProvider]) {
+                setError("Selected LLM Provider is not configured or available.");
+                setLoading(false);
+                return;
+            }
+
+
+            try {
+              const options = { platform, providerName: activeProvider, model: selectedModel, timeout: DEFAULT_TIMEOUT };
+              const allAgentResults = {};
+
+              // FIX: Run all agents in parallel using Promise.all
+              const [discoveryOutput, scoringOutput, rankingOutput, seoOutput, competitorOutput] = await Promise.all([
+                  AgentRouter.routeTask(topic, 'discovery', options),
+                  AgentRouter.routeTask(topic, 'scoring', options),
+                  AgentRouter.routeTask(topic, 'ranking', options),
+                  AgentRouter.routeTask(topic, 'seo', options),
+                  AgentRouter.routeTask(topic, 'competitor', options)
+              ]);
+
+              // Check for errors from individual agents
+              if (discoveryOutput.error) throw new Error(`Discovery Agent: ${discoveryOutput.error}`);
+              if (scoringOutput.error) throw new Error(`Scoring Agent: ${scoringOutput.error}`);
+              if (rankingOutput.error) throw new Error(`Ranking Agent: ${rankingOutput.error}`);
+              if (seoOutput.error) throw new Error(`SEO Agent: ${seoOutput.error}`);
+              if (competitorOutput.error) throw new Error(`Competitor Agent: ${competitorOutput.error}`);
+
+              allAgentResults.discovery = discoveryOutput;
+              allAgentResults.scoring = scoringOutput;
+              allAgentResults.ranking = rankingOutput;
+              allAgentResults.seo = seoOutput;
+              allAgentResults.competitor = competitorOutput;
+              
+              setResults(allAgentResults);
+
+            } catch (err) {
+              console.error("Orchestration error:", err);
+              setError(err.message || "An unknown error occurred during content research.");
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          return (
+            <div className="min-h-screen bg-gray-100 p-4 font-sans mobile-ui">
+              <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
+                <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">AI Content Research OS</h1>
+
+                <div className="mb-6 space-y-4">
+                  <div>
+                    <label htmlFor="topic" className="block text-gray-700 text-sm font-bold mb-2">
+                      Content Topic / Idea:
+                    </label>
+                    <input
+                      type="text"
+                      id="topic"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="e.g., 'How to grow a YouTube channel fast'"
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div className="flex-1">
+                      <label htmlFor="platform" className="block text-gray-700 text-sm font-bold mb-2">
+                        Target Platform:
+                      </label>
+                      <select
+                        id="platform"
+                        value={platform}
+                        onChange={(e) => setPlatform(e.target.value)}
+                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        disabled={loading}
+                      >
+                        <option value="YouTube">YouTube</option>
+                        <option value="TikTok">TikTok</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="Reddit">Reddit</option>
+                        <option value="Facebook">Facebook</option>
+                      </select>
+                    </div>
+
+                    <div className="flex-1">
+                      <label htmlFor="provider" className="block text-gray-700 text-sm font-bold mb-2">
+                        LLM Provider:
+                      </label>
+                      <select
+                        id="provider"
+                        value={activeProvider}
+                        onChange={handleProviderChange}
+                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        disabled={loading || Object.keys(allProvidersConfig).length === 0}
+                      >
+                        {Object.keys(allProvidersConfig).map(key => (
+                          <option key={key} value={key}>{allProvidersConfig[key].name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex-1">
+                      <label htmlFor="model" className="block text-gray-700 text-sm font-bold mb-2">
+                        LLM Model:
+                      </label>
+                      <select
+                        id="model"
+                        value={selectedModel}
+                        onChange={handleModelChange}
+                        className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        disabled={loading || availableModels.length === 0}
+                      >
+                        {availableModels.map(model => (
+                          <option key={model.id} value={model.id}>{model.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleResearch}
+                    className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={loading || !selectedModel}
+                  >
+                    {loading ? 'Researching...' : 'Generate Content Research'}
+                  </button>
+                </div>
+
+                {loading && (
+                  <div className="text-center py-4">
+                    <p className="text-blue-500">Running AI Agents...</p>
+                    <div className="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto"></div>
+                  </div>
+                )}
+                {error && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                    <strong className="font-bold">Error! </strong>
+                    <span className="block sm:inline">{error}</span>
+                  </div>
+                )}
+
+                {results && (
+                  <div className="mt-8 space-y-8">
+                    <h2 className="text-2xl font-bold text-gray-800 border-b pb-2 mb-4">Research Results</h2>
+
+                    <AgentResultCard agentName="Discovery Agent" output={results.discovery}>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Viral Opportunities:</h3>
+                      <ul className="list-disc list-inside text-gray-600 mb-2">
+                        {results.discovery.result?.videoCandidates?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Trend Signals:</h3>
+                      <ul className="list-disc list-inside text-gray-600 mb-2">
+                        {results.discovery.result?.trendSignals?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Keywords:</h3>
+                      <ul className="list-disc list-inside text-gray-600">
+                        {results.discovery.result?.keywords?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                    </AgentResultCard>
+
+                    <AgentResultCard agentName="Scoring Agent" output={results.scoring}>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Content Score: {results.scoring.result?.finalScore || 'N/A'} / 100</h3>
+                      <p className="text-gray-600 mb-2">Reasoning: {results.scoring.result?.reasoning}</p>
+                      <div className="grid grid-cols-2 gap-2 text-gray-600">
+                        <p>Viral: {results.scoring.result?.viralScore || 'N/A'}</p>
+                        <p>Emotion: {results.scoring.result?.emotionScore || 'N/A'}</p>
+                        <p>Trend: {results.scoring.result?.trendScore || 'N/A'}</p>
+                        <p>Hook: {results.scoring.result?.hookScore || 'N/A'}</p>
+                        <p>Replay: {results.scoring.result?.replayScore || 'N/A'}</p>
+                        <p>Rarity: {results.scoring.result?.rarityScore || 'N/A'}</p>
+                        <p>Competition: {results.scoring.result?.competitionScore || 'N/A'}</p>
+                      </div>
+                    </AgentResultCard>
+
+                    <AgentResultCard agentName="Ranking Agent (6-Rank Structure)" output={results.ranking}>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Retention Prediction:</h3>
+                      <p className="text-gray-600 mb-4">{results.ranking.result?.retentionPrediction}</p>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">6-Rank Structure:</h3>
+                      <div className="space-y-3">
+                        {results.ranking.result?.rankOrder?.map((rank, i) => (
+                          <div key={i} className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                            <p className="font-medium text-gray-800">{rank.rank}: {rank.segment}</p>
+                            <p className="text-sm text-gray-600">{rank.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </AgentResultCard>
+
+                    <AgentResultCard agentName="SEO Agent" output={results.seo}>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Title:</h3>
+                      <p className="text-gray-600 mb-2">{results.seo.result?.title}</p>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Description:</h3>
+                      <p className="text-gray-600 mb-2">{results.seo.result?.description}</p>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Keywords:</h3>
+                      <ul className="list-disc list-inside text-gray-600 mb-2">
+                        {results.seo.result?.keywords?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Hashtags:</h3>
+                      <ul className="list-disc list-inside text-gray-600">
+                        {results.seo.result?.hashtags?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                    </AgentResultCard>
+
+                    <AgentResultCard agentName="Competitor Analysis Agent (Predator Mode)" output={results.competitor}>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Competitor Patterns:</h3>
+                      <div className="space-y-3 mb-4">
+                        {results.competitor.result?.competitorPatterns?.map((pattern, i) => (
+                          <div key={i} className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                            <p className="font-medium text-gray-800">Competitor: {pattern.name}</p>
+                            <p className="text-sm text-gray-600">Strategy: {pattern.strategy}</p>
+                            <p className="text-sm text-gray-600">Winning Formats: {pattern.winningFormats}</p>
+                            <p className="text-sm text-gray-600">Keywords: {pattern.keywords?.join(', ')}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Content Gaps:</h3>
+                      <ul className="list-disc list-inside text-gray-600 mb-2">
+                        {results.competitor.result?.contentGaps?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                      <h3 className="text-xl font-semibold mb-2 text-gray-700">Winning Formats Summary:</h3>
+                      <ul className="list-disc list-inside text-gray-600">
+                        {results.competitor.result?.winningFormatsSummary?.map((item, i) => <li key={i}>{item}</li>)}
+                      </ul>
+                    </AgentResultCard>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // FIX: Use createRoot for React 18
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
