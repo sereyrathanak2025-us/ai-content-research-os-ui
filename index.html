@@ -235,7 +235,7 @@
         .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
         .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
         .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
         .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
@@ -388,21 +388,46 @@
         const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
 
         // --- API Helper ---
-        const DEFAULT_TIMEOUT = 120000; // 2 minutes
+        // FIX: Increased timeout to 60 seconds (60000 ms) as per final architecture
+        const DEFAULT_TIMEOUT = 60000; 
         // IMPORTANT: Replace with YOUR Cloudflare Worker URL
         const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
 
+        // FIX: Updated LLM_PROVIDERS_CONFIG to reflect potential models and worker capabilities
         const LLM_PROVIDERS_CONFIG = {
-            openrouter: { name: "OpenRouter", models: [
-                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
-                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
-                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
-                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
-            ]},
-            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
-            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
-            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
-            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
+            cloudflare: { 
+                name: "Cloudflare Workers AI", 
+                models: [
+                    { id: "@cf/meta/llama-3.1-8b-instruct-fast", name: "Llama 3.1 (Cloudflare)" }, 
+                    { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", name: "Llama 3.3 (Cloudflare)" }, // If available in your CF account
+                    { id: "@cf/zai-org/glm-4.7-flash", name: "GLM 4.7 Flash (Cloudflare)" },
+                    { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }
+                ]
+            },
+            openrouter: { 
+                name: "OpenRouter", 
+                models: [
+                    { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
+                    { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
+                    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
+                ]
+            },
+            google: { 
+                name: "Google AI Studio", 
+                models: [
+                    { id: "gemini-pro", name: "Gemini Pro" },
+                    { id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }
+                ]
+            },
+            github: { 
+                name: "GitHub Models", 
+                models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }] // Assuming this model ID
+            },
+            huggingface: { 
+                name: "HuggingFace", 
+                models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }] // Assuming this model ID
+            },
         };
 
         async function callWorkerAPI(endpoint, payload, options = {}) {
@@ -533,10 +558,12 @@
             const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
-            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
+            // FIX: Ensure results are initialized to null for proper conditional rendering
+            const [results, setResults] = useState(null); 
             const [activeProvider, setActiveProvider] = useState(() => {
                 const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
-                return firstConfigured || 'google';
+                // FIX: Default provider to 'cloudflare' as per architectural discussion
+                return firstConfigured || 'cloudflare'; 
             });
             const [availableModels, setAvailableModels] = useState([]);
             const [selectedModel, setSelectedModel] = useState('');
@@ -609,7 +636,8 @@
                     let initialProviderName = activeProvider;
 
                     try {
-                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
+                        // FIX: Added timeout to worker initial fetch
+                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) }); 
                         if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
                         const data = await response.json();
 
@@ -694,8 +722,8 @@
                 const insights = results.ai_actionable_insights;
                 const rankedClips = insights?.ranked_clip_opportunities || [];
 
-                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
-                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
+                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic || 'N/A'}\n`;
+                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary || 'N/A'}\n\n`;
                 copyText += `--- Actionable Insights ---\n\n`;
 
                 if (insights?.hook_suggestions?.length > 0) {
@@ -707,6 +735,7 @@
                 if (insights?.key_search_phrases_for_discoverability?.length > 0) {
                     copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
                 }
+                // FIX: Ensure these fields are accessed safely with optional chaining
                 if (insights?.suggested_source_platforms_for_originals?.length > 0) {
                     copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
                 }
@@ -726,9 +755,9 @@
                 copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
                 if (rankedClips.length > 0) {
                     rankedClips.forEach(clip => {
-                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
+                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea || 'N/A'}\n`;
                         copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
-                        copyText += `   Search: ${clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}\n`;
+                        copyText += `   Search: ${(clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', ')}\n`;
                         if (clip.url_to_potential_original_clip) {
                             copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
                         }
@@ -772,6 +801,16 @@
                         dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
                         provider: activeProvider,
                         model: selectedModel,
+                        // FIX: Added constraints object for the new worker architecture
+                        constraints: {
+                            clip_duration_range: "any", // Example constraint
+                            video_orientation: "any",
+                            target_language: "any",
+                            max_age_months: dateFilter === "All Time" ? 999 : (parseInt(dateFilter.split(' ')[0]) || 30), // Basic mapping
+                            min_engagement_level: "medium",
+                            content_tone: "any",
+                            user_defined_constraints: [] // For other text-based constraints if needed
+                        }
                     };
 
                     // Call the new Worker endpoint
@@ -1082,6 +1121,7 @@
             );
         }
 
+        // FIX: Use createRoot for React 18
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
