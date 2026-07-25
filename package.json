@@ -1,5 +1,5 @@
 {
-  "name": "viral-discovery",
+  "name": "ai-content-research-os-ui",
   "version": "1.0.0",
   "private": true,
   "description": "Viral Radar - static frontend for AI Content Research OS. No bundler/framework; index.html is served as-is.",
