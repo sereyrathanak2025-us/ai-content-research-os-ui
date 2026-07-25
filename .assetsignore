@@ -1,0 +1,20 @@
+# Cloudflare Workers Assets ignore file
+# Prevents dev-only files (especially node_modules, which contains the
+# 122 MiB wrangler/workerd binary) from being uploaded as static assets.
+# This is what was causing: "Asset too large" during `wrangler deploy`.
+
+node_modules
+.git
+.github
+.wrangler
+.gitignore
+.assetsignore
+package.json
+package-lock.json
+bun.lockb
+bun.lock
+wrangler.jsonc
+wrangler.toml
+*.md
+.env
+.env.*
