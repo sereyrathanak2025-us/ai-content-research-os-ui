@@ -1,1 +1,14 @@
-"scripts": { "build": "echo done" }
+{
+  "name": "viral-discovery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Viral Radar - static frontend for AI Content Research OS. No bundler/framework; index.html is served as-is.",
+  "scripts": {
+    "build": "echo 'No build step required — static index.html is served as-is.'",
+    "dev": "echo 'Open index.html directly, or serve it with any static file server.'"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
