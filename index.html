@@ -1,671 +1,1075 @@
-// Viral Radar Worker — Cloudflare Only (No Python Backend)
-// Single file: serves frontend + API + full pipeline
-// Deploy: npx wrangler deploy
-// Bindings: AI (Workers AI) — required
-// Secrets: YOUTUBE_API_KEY — required for real clips
-// Optional: OPENROUTER_API_KEY, GEMINI_API_KEY
-
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
-
-function json(data, status) {
-  return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", ...CORS } });
-}
-
-function cleanJson(text) {
-  let t = (typeof text === "string" ? text : JSON.stringify(text)).trim();
-  t = t.replace(/^```json/, "").replace(/^```/, "").replace(/```$/, "").trim();
-  const s = t.indexOf("{"), e = t.lastIndexOf("}");
-  if (s !== -1 && e !== -1 && e > s) t = t.slice(s, e + 1);
-  return t;
-}
-
-// ─── LLM Caller ─────────
-async function callLLM(prompt, provider, model, env) {
-  let responseText = "";
-  const systemMsg = "You are a viral content research analyst. Always respond with valid JSON only, no markdown, no extra text.";
-  const messages = [{ role: "system", content: systemMsg }, { role: "user", content: prompt }];
-
-  try {
-    if (provider === "cloudflare") {
-      if (!env.AI) throw new Error("Workers AI binding not configured.");
-      const cfModels = [model, "@cf/meta/llama-3.1-8b-instruct-fast", "@cf/zai-org/glm-4.7-flash"];
-      for (const cfModel of cfModels) {
-        try {
-          const resp = await env.AI.run(cfModel, { messages, max_tokens: 2000, response_format: { type: "json_object" } });
-          if (resp && resp.response) {
-            responseText = typeof resp.response === "string" ? resp.response : JSON.stringify(resp.response);
-            if (responseText.trim()) return { text: responseText, model: cfModel };
-          }
-        } catch (e) { console.warn("Model " + cfModel + " failed: " + e.message); }
-      }
-      throw new Error("All Cloudflare models failed.");
-    }
-
-    if (provider === "openrouter") {
-      if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
-      const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": "Bearer " + env.OPENROUTER_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages, max_tokens: 2000, response_format: { type: "json_object" } })
-      });
-      if (!orResp.ok) throw new Error("OpenRouter failed: " + orResp.status);
-      const orData = await orResp.json();
-      responseText = orData.choices?.[0]?.message?.content || "";
-    } else if (provider === "google") {
-      if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured.");
-      const geminiBody = {
-        contents: messages.map(m => ({ role: m.role === "system" ? "user" : m.role, parts: [{ text: m.content }] })),
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2000 }
-      };
-      const gResp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody)
-      });
-      if (!gResp.ok) throw new Error("Gemini failed: " + gResp.status);
-      const gData = await gResp.json();
-      responseText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    } else {
-      throw new Error("Unsupported provider: " + provider);
-    }
-
-    if (!responseText.trim()) throw new Error("Empty LLM response.");
-    return { text: responseText, model };
-  } catch (e) {
-    throw new Error("LLM call failed (" + provider + "/" + model + "): " + e.message);
-  }
-}
-
-// ─── YouTube Search ─────────
-async function searchYouTube(query, env, maxResults, daysAgo) {
-  if (!env.YOUTUBE_API_KEY) return [];
-  maxResults = maxResults || 10;
-  daysAgo = daysAgo || 30;
-  const publishedAfter = new Date(Date.now() - daysAgo * 86400000).toISOString();
-  const params = new URLSearchParams({ part: "snippet", q: query, key: env.YOUTUBE_API_KEY, maxResults: String(maxResults), type: "video", order: "viewCount", publishedAfter });
-  try {
-    const searchResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + params);
-    if (!searchResp.ok) return [];
-    const searchData = await searchResp.json();
-    const ids = searchData.items.map(i => i.id.videoId).filter(Boolean).join(",");
-    if (!ids) return [];
-    const detResp = await fetch("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=" + ids + "&key=" + env.YOUTUBE_API_KEY);
-    if (!detResp.ok) return [];
-    const detData = await detResp.json();
-    return (detData.items || []).map(v => ({
-      id: v.id, url: "https://www.youtube.com/watch?v=" + v.id, title: v.snippet.title,
-      platform: "YouTube", channel: v.snippet.channelTitle,
-      thumbnail_url: v.snippet.thumbnails?.medium?.url || "",
-      tags: v.snippet.tags || [], description_snippet: (v.snippet.description || "").slice(0, 300),
-      views_approx: parseInt(v.statistics.viewCount || "0", 10),
-      likes_approx: parseInt(v.statistics.likeCount || "0", 10),
-      comments: parseInt(v.statistics.commentCount || "0", 10),
-      published_at: v.snippet.publishedAt, source_type: "YouTube_API"
-    }));
-  } catch (e) { console.warn("YT API: " + e.message); return []; }
-}
-
-// ─── Reference Channel Analysis ─────────
-async function analyzeRefChannels(channelUrls, env) {
-  if (!env.YOUTUBE_API_KEY || !channelUrls || channelUrls.length === 0) return null;
-  const dna = { detected_patterns: [], clip_length: "Unknown", channels_analyzed: [] };
-  for (const url of channelUrls) {
-    const handleMatch = url.match(/@([\w-]+)/);
-    const idMatch = url.match(/channel\/([\w-]+)/);
-    const handle = handleMatch ? handleMatch[1] : idMatch ? idMatch[1] : null;
-    if (!handle) continue;
-    try {
-      const chParams = new URLSearchParams({ part: "snippet", q: handle, key: env.YOUTUBE_API_KEY, type: "channel", maxResults: "1" });
-      const chResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + chParams);
-      if (!chResp.ok) continue;
-      const chData = await chResp.json();
-      const channelId = chData.items?.[0]?.id?.channelId;
-      if (!channelId) continue;
-      const vidParams = new URLSearchParams({ part: "snippet", channelId, key: env.YOUTUBE_API_KEY, maxResults: "5", order: "date", type: "video" });
-      const vidResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + vidParams);
-      if (!vidResp.ok) continue;
-      const vidData = await vidResp.json();
-      const videoIds = (vidData.items || []).map(v => v.id.videoId).filter(Boolean).join(",");
-      if (!videoIds) continue;
-      const detParams = new URLSearchParams({ part: "snippet,statistics,contentDetails", id: videoIds, key: env.YOUTUBE_API_KEY });
-      const detResp = await fetch("https://www.googleapis.com/youtube/v3/videos?" + detParams);
-      if (!detResp.ok) continue;
-      const detData = await detResp.json();
-      const videos = (detData.items || []).map(v => ({
-        title: v.snippet.title, duration: v.contentDetails.duration,
-        views: parseInt(v.statistics.viewCount || "0", 10), tags: v.snippet.tags || []
-      }));
-      dna.channels_analyzed.push({ handle, recent_videos: videos });
-      if (videos.length > 0) {
-        const titles = videos.map(v => v.title.toLowerCase());
-        if (titles.some(t => t.includes("rank") || t.includes("top") || t.includes("worst") || t.includes("best"))) dna.detected_patterns.push("Countdown/ranking format");
-        if (titles.some(t => t.includes("fail") || t.includes("funny") || t.includes("shocking"))) dna.detected_patterns.push("Fail/funny content");
-        if (titles.some(t => t.includes("compilation"))) dna.detected_patterns.push("Uses compilations");
-        else dna.detected_patterns.push("Likely original clips");
-        const durations = videos.map(v => {
-          const m = v.duration?.match(/PT(\d+)M(\d+)S/);
-          if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
-          const s = v.duration?.match(/PT(\d+)S/);
-          if (s) return parseInt(s[1]);
-          return 0;
-        }).filter(d => d > 0);
-        if (durations.length > 0) {
-          const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
-          dna.clip_length = avg < 60 ? "Short (< 1 min)" : avg < 300 ? "Medium (1-5 min)" : "Long (> 5 min)";
-        }
-      }
-    } catch (e) { console.warn("Channel: " + handle + " " + e.message); }
-  }
-  dna.detected_patterns = [...new Set(dna.detected_patterns)];
-  if (dna.detected_patterns.length === 0) dna.detected_patterns = ["Unable to detect patterns"];
-  return dna;
-}
-
-// ─── Deterministic Analysis (in-Worker, replaces Python backend) ─────────
-function deterministicAnalysis(clips) {
-  const seen = new Map();
-  const processed = clips.map(c => {
-    const key = c.title.toLowerCase().trim();
-    let isOriginal = true;
-    let repostAnalysis = [];
-    if (seen.has(key)) {
-      isOriginal = false;
-      const original = seen.get(key);
-      repostAnalysis.push("Likely repost of: " + original.title);
-    } else {
-      seen.set(key, c);
-    }
-    let score = 0;
-    if (c.source_type === "YouTube_API") score += 100;
-    score += (c.views_approx / 1000000) * 10;
-    score += (c.likes_approx / 10000) * 5;
-    return {
-      clip: c,
-      is_likely_original_candidate: isOriginal,
-      repost_analysis_text: repostAnalysis.join(". ") || "No reposts identified.",
-      originality_confidence_score_backend: Math.min(100, score / 10)
-    };
-  });
-  processed.sort((a, b) => {
-    if (a.is_likely_original_candidate !== b.is_likely_original_candidate)
-      return b.is_likely_original_candidate - a.is_likely_original_candidate;
-    return b.originality_confidence_score_backend - a.originality_confidence_score_backend;
-  });
-  const totalClips = clips.length;
-  let trendStatus = "Stable";
-  if (totalClips >= 15) trendStatus = "Exploding";
-  else if (totalClips >= 8) trendStatus = "Growing";
-  else if (totalClips <= 2) trendStatus = "Declining";
-  const ranked = processed.map((pc, i) => ({
-    title: pc.clip.title, platform: pc.clip.platform, creator: pc.clip.channel,
-    rank_score: pc.originality_confidence_score_backend, rank_position: i + 1
-  }));
-  return { processed_clips_for_ai: processed, ranked_clips_by_backend: ranked, overall_trend_status: trendStatus };
-}
-
-// ─── Build Analysis Prompt ─────────
-function buildAnalysisPrompt(topic, topClips, nicheProfile, editorialDna, creativeBrief, detFacts) {
-  const parts = [];
-  parts.push('You are an expert viral content editor for ranking videos.');
-  parts.push('Topic: "' + topic + '".');
-  if (creativeBrief) parts.push('Creative Brief: "' + creativeBrief + '".');
-  parts.push("Real YouTube clips found: " + JSON.stringify(topClips) + ".");
-  parts.push("Niche: " + JSON.stringify(nicheProfile) + ".");
-  parts.push("DNA: " + JSON.stringify(editorialDna) + ".");
-  if (detFacts) {
-    parts.push("=== DETERMINISTIC FACTS (use these, do not contradict) ===");
-    parts.push("Trend status: " + detFacts.overall_trend_status);
-    if (detFacts.processed_clips_for_ai?.length > 0) {
-      const summary = detFacts.processed_clips_for_ai.slice(0, 20).map(pc => ({
-        title: pc.clip?.title || "", url: pc.clip?.url || "",
-        is_original: pc.is_likely_original_candidate,
-        repost_analysis: pc.repost_analysis_text,
-        confidence: pc.originality_confidence_score_backend
-      }));
-      parts.push("Processed clips: " + JSON.stringify(summary));
-    }
-    if (detFacts.ranked_clips_by_backend?.length > 0) {
-      parts.push("Backend ranking: " + JSON.stringify(detFacts.ranked_clips_by_backend.slice(0, 20)));
-    }
-    parts.push("=== END DETERMINISTIC FACTS ===");
-  }
-  parts.push("Generate actionable insights. Return ONLY JSON with this exact structure:");
-  const tmpl = [
-    '{"overall_opportunity_reasoning":"brief explanation",',
-    '"trend_status":"Growing",',
-    '"hook_suggestions":["hook1","hook2","hook3"],',
-    '"hashtag_strategy":["tag1","tag2","tag3","tag4","tag5"],',
-    '"key_search_phrases":["phrase1","phrase2","phrase3"],',
-    '"seo_elements_for_upload":{"title_insights":"SEO title","description_hook":"SEO desc","tags_to_prioritize":["tag1","tag2","tag3"]},',
-    '"ranked_clip_opportunities":['
-  ];
-  for (let r = 6; r >= 1; r--) {
-    tmpl.push('{"rank":' + r + ',"moment_idea":"clip moment description","suggested_source_platform":"YouTube","human_editor_search_terms":["term1","term2"],"url_to_potential_original_clip":"use a real URL from clips above","editorial_repost_analysis":"why this clip works"}' + (r > 1 ? ',' : ''));
-  }
-  tmpl.push(']}');
-  parts.push(tmpl.join(""));
-  parts.push("Include exactly 6 items (rank 6 down to 1). Use REAL urls from clips above. Focus on funny/shocking/fail moments.");
-  return parts.join(" ");
-}
-
-// ─── Orchestration ─────────
-async function orchestrate(topic, creativeBrief, refChannels, provider, model, env) {
-  const pipeline = {};
-  const refs = (refChannels || []).filter(c => c.trim());
-
-  // STEP 1: Research Planner
-  pipeline.step1 = { status: "running", label: "Research Planner", message: "Generating search queries" };
-  const plannerPrompt = 'You are a viral content research planner. Topic: "' + topic + '". Brief: "' + (creativeBrief || "") + '". Generate 5 YouTube search queries to find REAL original video clips. Return ONLY JSON: {"queries":["q1","q2","q3","q4","q5"],"niche_profile":["req1","req2"],"editorial_dna_guess":{"clip_length":"5-20s","hook_style":"immediate shock","emotion_focus":"humor/shock","source_preference":"original clips not compilations"}}';
-  let plannerData;
-  try {
-    const llmResult = await callLLM(plannerPrompt, provider, model, env);
-    plannerData = JSON.parse(cleanJson(llmResult.text));
-    pipeline.step1.status = "completed";
-    pipeline.step1.message = "Generated " + (plannerData.queries?.length || 0) + " search queries";
-  } catch (e) {
-    pipeline.step1.status = "failed";
-    pipeline.step1.message = e.message;
-    return { pipeline, editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: {}, research_constraints_applied: [] }, raw_evidence_found: null, ai_actionable_insights: null, ref_channel_analysis: null, error: "Step 1 failed: " + e.message };
-  }
-
-  // STEP 2: Style DNA
-  pipeline.step2 = { status: "running", label: "Style DNA Analyzer", message: "Analyzing reference channels" };
-  let editorialDna = plannerData.editorial_dna_guess || {};
-  let refAnalysis = null;
-  if (refs.length > 0) {
-    try {
-      refAnalysis = await analyzeRefChannels(refs, env);
-      if (refAnalysis) {
-        if (refAnalysis.clip_length !== "Unknown") editorialDna.clip_length = refAnalysis.clip_length;
-        if (refAnalysis.detected_patterns) editorialDna.detected_patterns = refAnalysis.detected_patterns;
-        pipeline.step2.status = "completed";
-        pipeline.step2.message = "Analyzed " + refAnalysis.channels_analyzed.length + " channels";
-      } else {
-        pipeline.step2.status = "completed";
-        pipeline.step2.message = "No YouTube API key";
-      }
-    } catch (e) {
-      pipeline.step2.status = "completed";
-      pipeline.step2.message = "Using LLM guess: " + e.message;
-    }
-  } else {
-    pipeline.step2.status = "completed";
-    pipeline.step2.message = "No reference channels provided";
-  }
-
-  // STEP 3: Source Hunter
-  pipeline.step3 = { status: "running", label: "Source Hunter", message: "Searching YouTube for real clips" };
-  const queries = plannerData.queries || [topic];
-  let allClips = [];
-  for (const q of queries) {
-    const results = await searchYouTube(q, env, 10, 30);
-    allClips = allClips.concat(results);
-  }
-  const seenIds = new Set();
-  const ytClips = allClips.filter(c => {
-    if (seenIds.has(c.id)) return false;
-    seenIds.add(c.id);
-    return true;
-  });
-  ytClips.sort((a, b) => b.views_approx - a.views_approx);
-  pipeline.step3.status = ytClips.length > 0 ? "completed" : "failed";
-  pipeline.step3.message = ytClips.length > 0 ? "Found " + ytClips.length + " YouTube clips" : "No clips found (YOUTUBE_API_KEY may not be set)";
-
-  const evidence = {
-    youtube_clips: ytClips, total_youtube: ytClips.length,
-    tiktok_clips: [], reddit_posts: [], instagram_reels: [], facebook_posts: [],
-    platform_search_links: {
-      tiktok: { url: "https://www.tiktok.com/search?q=" + encodeURIComponent(queries[0] || topic), platform: "TikTok" },
-      reddit: { url: "https://www.reddit.com/search/?q=" + encodeURIComponent(queries[0] || topic) + "&sort=top&t=week", platform: "Reddit" }
-    }
-  };
-
-  if (ytClips.length === 0) {
-    pipeline.step4 = { status: "skipped", label: "Editorial Analysis", message: "No evidence to analyze" };
-    return { pipeline, editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] }, raw_evidence_found: evidence, ai_actionable_insights: null, ref_channel_analysis: refAnalysis, error: "No source evidence found. Ensure YOUTUBE_API_KEY is set." };
-  }
-
-  // STEP 3.5: Deterministic Analysis
-  pipeline.step3_5 = { status: "running", label: "Deterministic Analysis", message: "Dedup, original ID, ranking" };
-  let detFacts = null;
-  try {
-    detFacts = deterministicAnalysis(ytClips);
-    pipeline.step3_5.status = "completed";
-    pipeline.step3_5.message = detFacts.processed_clips_for_ai.length + " clips processed, trend: " + detFacts.overall_trend_status;
-  } catch (e) {
-    pipeline.step3_5.status = "failed";
-    pipeline.step3_5.message = e.message;
-  }
-
-  // STEP 4: Editorial Analysis
-  pipeline.step4 = { status: "running", label: "Editorial Analysis", message: "Generating insights from real clips" };
-  const topClips = ytClips.slice(0, 20).map(c => ({ title: c.title, url: c.url, channel: c.channel, views: c.views_approx, thumbnail_url: c.thumbnail_url }));
-  const analysisPrompt = buildAnalysisPrompt(topic, topClips, plannerData.niche_profile || [], editorialDna, creativeBrief, detFacts);
-
-  try {
-    const llmResult2 = await callLLM(analysisPrompt, provider, model, env);
-    const data = JSON.parse(cleanJson(llmResult2.text));
-    pipeline.step4.status = "completed";
-    pipeline.step4.message = "Insights generated successfully";
-
-    const finalTrendStatus = detFacts?.overall_trend_status || data.trend_status || "Stable";
-
-    return {
-      pipeline,
-      editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] },
-      raw_evidence_found: evidence,
-      ai_actionable_insights: {
-        overall_opportunity_reasoning: data.overall_opportunity_reasoning || "",
-        trend_status: finalTrendStatus,
-        hook_suggestions: data.hook_suggestions || [],
-        hashtag_strategy: data.hashtag_strategy || [],
-        key_search_phrases_for_discoverability: data.key_search_phrases || [],
-        seo_elements_for_upload: data.seo_elements_for_upload || { title_insights: "", description_hook: "", tags_to_prioritize: [] },
-        ranked_clip_opportunities: data.ranked_clip_opportunities || []
-      },
-      ref_channel_analysis: refAnalysis,
-      deterministic_facts: detFacts
-    };
-  } catch (e) {
-    pipeline.step4.status = "failed";
-    pipeline.step4.message = e.message;
-    return {
-      pipeline,
-      editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] },
-      raw_evidence_found: evidence,
-      ai_actionable_insights: {
-        overall_opportunity_reasoning: "AI analysis failed, showing raw clips",
-        trend_status: detFacts?.overall_trend_status || "Stable",
-        hook_suggestions: [], hashtag_strategy: [], key_search_phrases_for_discoverability: [],
-        seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
-        ranked_clip_opportunities: ytClips.slice(0, 6).map((c, i) => ({
-          rank: 6 - i, moment_idea: c.title, suggested_source_platform: "YouTube",
-          human_editor_search_terms: [topic], url_to_potential_original_clip: c.url,
-          editorial_repost_analysis: "High view count clip found via YouTube API"
-        }))
-      },
-      ref_channel_analysis: refAnalysis,
-      deterministic_facts: detFacts,
-      error: "Step 4 failed: " + e.message
-    };
-  }
-}
-
-// ─── Frontend HTML ─────────
-const FRONTEND_HTML = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Content Research OS</title>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;background:#f3f4f6;color:#1f2937}
-.container{max-width:56rem;margin:0 auto;padding:1rem}
-.card{background:#fff;border-radius:.5rem;box-shadow:0 10px 15px -3px rgba(0,0,0,.1);padding:1.5rem;margin-bottom:1.5rem}
-h1{font-size:1.875rem;font-weight:700;text-align:center;margin-bottom:1.5rem}
-label{display:block;font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.5rem}
-input,textarea,select{width:100%;padding:.5rem .75rem;border:1px solid #e5e7eb;border-radius:.25rem;font-size:.875rem;outline:none}
-input:focus,textarea:focus,select:focus{box-shadow:0 0 0 3px rgba(66,153,225,.5);border-color:#3b82f6}
-textarea{resize:vertical;min-height:60px}
-.form-group{margin-bottom:1rem}
-.row{display:flex;gap:1rem;flex-wrap:wrap}
-.row>div{flex:1;min-width:200px}
-select{appearance:none;background:#f9fafb;cursor:pointer}
-.btn{width:100%;padding:1rem;border:none;border-radius:.25rem;background:#2563eb;color:#fff;font-weight:500;font-size:1rem;cursor:pointer;transition:.2s}
-.btn:hover{background:#1d4ed8}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.status-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;padding:.75rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:.375rem}
-.badge{font-size:.75rem;padding:.25rem .5rem;border-radius:.25rem;border:1px solid}
-.badge-ok{background:#ecfdf5;border-color:#6ee7b7;color:#059669}
-.badge-no{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
-.loader{border:4px solid #e5e7eb;border-top:4px solid #3b82f6;border-radius:50%;width:3rem;height:3rem;animation:spin 1s linear infinite;margin:2rem auto}
-@keyframes spin{to{transform:rotate(360deg)}}
-.error{background:#fee2e2;border:1px solid #f87171;color:#b91c1c;padding:.75rem 1rem;border-radius:.25rem;margin:1rem 0}
-.section{margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid #e5e7eb}
-.section h2{font-size:1.25rem;font-weight:600;margin-bottom:1rem}
-.pipeline-step{display:flex;align-items:center;gap:.5rem;padding:.25rem 0}
-.dot{width:.625rem;height:.625rem;border-radius:50%;flex-shrink:0}
-.dot-completed{background:#10b981}.dot-running{background:#3b82f6;animation:pulse 1s infinite}.dot-failed{background:#ef4444}.dot-skipped{background:#9ca3af}
-@keyframes pulse{50%{opacity:.4}}
-.step-label{font-size:.875rem;font-weight:500;color:#374151}
-.step-msg{font-size:.875rem;color:#6b7280;flex:1}
-.step-status{font-size:.75rem;font-weight:500}
-.st-completed{color:#059669}.st-running{color:#3b82f6}.st-failed{color:#dc2626}.st-skipped{color:#9ca3af}
-.clip-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:.375rem;padding:.75rem;margin-bottom:.5rem;display:flex;gap:.75rem}
-.clip-card img{width:120px;height:67px;object-fit:cover;border-radius:.25rem;flex-shrink:0}
-.clip-title{font-size:.875rem;font-weight:500;color:#374151;margin-bottom:.25rem}
-.clip-meta{font-size:.75rem;color:#6b7280;margin-bottom:.25rem}
-.clip-link{font-size:.75rem;color:#3b82f6;text-decoration:none}
-.clip-link:hover{text-decoration:underline}
-.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:50%;font-weight:700;font-size:.875rem;color:#fff;flex-shrink:0}
-.rank-6{background:#FF6B35}.rank-5{background:#F7931E}.rank-4{background:#FFD700;color:#1f2937}.rank-3{background:#FF4444}.rank-2{background:#CC00FF}.rank-1{background:#FF0050}
-.rank-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:.375rem;padding:.75rem;margin-bottom:.5rem}
-.rank-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
-.orig-badge{font-size:.75rem;padding:.125rem .5rem;border-radius:.25rem;border:1px solid}
-.orig-yes{background:#ecfdf5;border-color:#6ee7b7;color:#059669}
-.orig-no{background:#fffbeb;border-color:#fcd34d;color:#b45309}
-.tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
-.tag{font-size:.75rem;padding:.25rem .5rem;border-radius:.25rem;background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8}
-.info-box{background:#eff6ff;border:1px solid #93c5fd;border-radius:.375rem;padding:.75rem;margin-bottom:.75rem}
-.info-label{font-size:.875rem;font-weight:500;color:#1d4ed8;margin-bottom:.25rem}
-.info-text{font-size:.875rem;color:#4b5563}
-ul{list-style:disc inside;font-size:.875rem;color:#4b5563}
-ul li{margin-bottom:.25rem}
-@media(max-width:640px){.row>div{min-width:100%}}
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viral Radar — Source Intelligence Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0b0d;
+            --bg-elevated: #131518;
+            --bg-card: #17191d;
+            --border: #262a30;
+            --border-bright: #3a3f47;
+            --acid: #c6ff3d;
+            --acid-dim: #8fb82c;
+            --coral: #ff5a36;
+            --coral-dim: #b33e26;
+            --text: #f2f3f0;
+            --text-dim: #9a9fa6;
+            --text-faint: #5c6169;
+            --font-display: 'Archivo Black', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-body: 'Work Sans', sans-serif;
+
+            /* Viral Engine specific colors (from viral engine.jsx) */
+            --rank6-color: #FF6B35;
+            --rank5-color: #F7931E;
+            --rank4-color: #FFD700;
+            --rank3-color: #FF4444;
+            --rank2-color: #CC00FF;
+            --rank1-color: #FF0050;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100%; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.035;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 64px 64px;
+            opacity: 0.25;
+            mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, black 0%, transparent 70%);
+        }
+        #root { position: relative; z-index: 2; }
+        .spinner { border: 3px solid var(--border); border-top: 3px solid var(--acid); border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes blink { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        ::selection { background: var(--acid); color: #0a0b0d; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
+
+        .shell { max-width: 940px; margin: 0 auto; padding: 0 16px 80px; }
+
+        /* ---------- NAV ---------- */
+        .nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; }
+        .nav-brand { display: flex; align-items: center; gap: 10px; }
+        .nav-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--acid); font-size: 20px; transform: rotate(0deg); animation: none; }
+        .nav-name { font-family: var(--font-mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .nav-badge { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); background: rgba(198,255,61,0.07); padding: 4px 10px; border-radius: 20px; letter-spacing: 0.05em; }
+
+        /* ---------- HERO ---------- */
+        .hero { padding: 20px 0 44px; text-align: center; }
+        .hero-tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); border: 1px solid var(--border-bright); padding: 6px 14px; border-radius: 20px; margin-bottom: 26px; letter-spacing: 0.03em; }
+        .hero-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1.6s ease-in-out infinite; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(34px, 6.4vw, 58px); line-height: 1.02; letter-spacing: -0.01em; text-transform: uppercase; margin-bottom: 18px; }
+        .hero h1 span { color: var(--acid); }
+        .hero p { font-size: 16px; color: var(--text-dim); max-width: 480px; margin: 0 auto; line-height: 1.55; }
+
+        /* ---------- CONSOLE INPUT ---------- */
+        .console { margin-top: 36px; background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 4px; box-shadow: 0 0 0 1px rgba(198,255,61,0.03), 0 20px 60px -20px rgba(0,0,0,0.6); }
+        .console-head { display: flex; align-items: center; gap: 7px; padding: 12px 16px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+        .console-head .cdot { width: 8px; height: 8px; border-radius: 50%; }
+        .console-body { padding: 4px 14px 16px; }
+        .console-prompt { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 15px; padding: 6px 4px 16px; }
+        .console-prompt .caret { color: var(--acid); }
+        .console-prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--font-mono); font-size: 15px; }
+        .console-prompt input::placeholder { color: var(--text-faint); }
+        .surprise-btn { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 7px; font-size: 15px; padding: 5px 9px; cursor: pointer; line-height: 1; transition: transform 0.15s ease, border-color 0.15s ease; }
+        .surprise-btn:hover:not(:disabled) { border-color: var(--acid-dim); transform: rotate(-8deg) scale(1.08); }
+        .surprise-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .console-cursor { display: inline-block; width: 8px; height: 17px; background: var(--acid); animation: blink 1s step-end infinite; margin-left: -4px; }
+
+        .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 4px 10px; }
+        .ref-channels-block { padding: 10px 4px 14px; border-top: 1px dashed var(--border); margin-top: 2px; }
+        .ref-channels-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); margin-bottom: 7px; letter-spacing: 0.02em; }
+        .ref-optional { color: var(--text-faint); font-weight: 400; }
+        .ref-channels-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 9px 11px; border-radius: 8px; resize: vertical; line-height: 1.5; }
+        .ref-channels-input::placeholder { color: var(--text-faint); }
+        .ref-channels-input:focus { outline: none; border-color: var(--acid-dim); }
+        .ref-channels-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+        .select-wrap { position: relative; }
+        .select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 10px; pointer-events: none; }
+        .select-wrap select {
+            width: 100%; appearance: none; background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; padding: 9px 26px 9px 11px;
+            border-radius: 8px; cursor: pointer;
+        }
+        .select-wrap select:hover { border-color: var(--border-bright); color: var(--text); }
+        .select-wrap select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .run-btn {
+            width: 100%; background: var(--acid); color: #0a0b0d; border: none; font-family: var(--font-mono);
+            font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px;
+            border-radius: 9px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
+        .run-btn:active:not(:disabled) { transform: translateY(0); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+
+        /* ---------- AGENT STRIP ---------- */
+        .agent-strip { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+        .agent-chip { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); padding: 6px 12px; border-radius: 20px; letter-spacing: 0.02em; }
+
+        /* ---------- ERROR ---------- */
+        .error-box { margin-top: 24px; background: rgba(255,90,54,0.08); border: 1px solid var(--coral-dim); color: #ffb199; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-family: var(--font-mono); }
+
+        /* ---------- LOADING ---------- */
+        .loading-box { margin-top: 40px; text-align: center; padding: 40px 0; }
+        .loading-box p { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin-top: 16px; letter-spacing: 0.02em; }
+
+        /* ---------- RESULTS ---------- */
+        .results { margin-top: 52px; }
+        .results-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 10px; flex-wrap: wrap; }
+        .restored-tag { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+        .new-search-btn { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border-bright); padding: 7px 14px; border-radius: 20px; cursor: pointer; transition: all 0.12s ease; }
+        .new-search-btn:hover { border-color: var(--coral); color: var(--coral); }
+        .agent-block { margin-bottom: 44px; animation: fadeUp 0.45s ease both; }
+        .agent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        .agent-title-row { display: flex; align-items: center; gap: 10px; }
+        .agent-index { font-family: var(--font-mono); font-size: 11px; color: var(--acid); border: 1px solid var(--acid-dim); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
+        .agent-title { font-family: var(--font-display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.01em; }
+        .agent-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .agent-meta b { color: var(--text-dim); }
+
+        .err-panel { background: rgba(255,90,54,0.06); border: 1px solid var(--coral-dim); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: #ffb199; font-family: var(--font-mono); }
+        .empty-panel { background: var(--bg-card); border: 1px dashed var(--border-bright); border-radius: 10px; padding: 16px; font-size: 13px; color: var(--text-faint); font-family: var(--font-mono); }
+
+        /* Discovery video cards */
+        .video-grid { display: grid; gap: 10px; }
+        .video-card { display: flex; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-decoration: none; color: inherit; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease; }
+        .video-card:hover { border-color: var(--acid-dim); transform: translateX(2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.08), 0 8px 24px -12px rgba(198,255,61,0.25); }
+        .video-card.featured { flex-direction: column; margin-bottom: 12px; padding: 14px; background: linear-gradient(160deg, var(--bg-card), var(--bg-elevated)); border: 1px solid var(--acid-dim); position: relative; overflow: hidden; }
+        .video-card.featured::before { content: ''; position: absolute; top: -40%; right: -20%; width: 60%; height: 140%; background: radial-gradient(circle, rgba(198,255,61,0.08), transparent 65%); pointer-events: none; }
+        .video-card.featured:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(198,255,61,0.15), 0 16px 40px -16px rgba(198,255,61,0.35); }
+        .featured-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--acid); margin-bottom: 10px; display: inline-block; }
+        .featured-body { display: flex; gap: 14px; align-items: center; }
+        .featured-thumb { width: 132px; height: 82px; }
+        .featured-title { font-size: 15px; -webkit-line-clamp: 3; }
+        .video-thumb { width: 96px; height: 60px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--bg-elevated); }
+        .video-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .video-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .video-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+        .video-sub .views { color: var(--acid); }
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        .tag-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .kw-chip { font-family: var(--font-mono); font-size: 11px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 10px; border-radius: 6px; }
+        .trend-list { list-style: none; margin-top: 6px; }
+        .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
+        .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
+
+        /* Viral Engine Specific Styles (from viral engine.jsx) */
+        .retention-curve-wrapper {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
+            margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
+        }
+        .retention-curve-label {
+            font-size: 9px; color: rgba(240,240,245,0.22); letter-spacing: 0.11em; text-transform: uppercase;
+            writing-mode: vertical-rl; transform: rotate(180deg); margin-right: 3px; padding-bottom: 4px;
+        }
+        .retention-rank-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .retention-percent {
+            font-size: 8px; font-weight: 700;
+        }
+        .retention-bar-inner {
+            width: 100%; border-radius: 3px 3px 0 0;
+            height: var(--bar-height); /* Dynamic height */
+            background: linear-gradient(180deg, var(--item-color), rgba(255,255,255,0.03));
+            box-shadow: 0 -3px 10px var(--item-glow);
+        }
+        .retention-rank-label {
+            font-size: 9px; color: rgba(240,240,245,0.28); font-weight: 700;
+        }
+
+        .mode-selector { display: flex; gap: 6px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 13px; border: 1px solid rgba(255,255,255,0.07); }
+        .mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 11px 14px; cursor: pointer; transition: all 0.16s; text-align: left; }
+        .mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.35); }
+        .mode-btn-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+        .mode-btn-title.active { color: #FF0050; }
+        .mode-btn-title.inactive { color: rgba(240,240,245,0.45); }
+        .mode-btn-subtitle { font-size: 10px; color: rgba(240,240,245,0.28); }
+
+        .console-input-section { background: var(--bg-elevated); border: 1px solid var(--border-bright); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+        .console-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 9px; }
+        .console-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; font-size: 14px; color: var(--text); outline: none; box-sizing: border-box; margin-bottom: 12px; }
+        .console-input::placeholder { color: var(--text-faint); }
+        .example-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+        .example-topic-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 600; }
+        .example-topic-btn.active { background: rgba(255,0,80,0.16); border: 1px solid rgba(255,0,80,0.4); color: #FF0050; }
+        .example-topic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .date-filter-section { margin-bottom: 14px; }
+        .date-filter-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
+        .date-filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+        .date-filter-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 11px; font-size: 10px; color: var(--text-faint); cursor: pointer; font-weight: 700; }
+        .date-filter-btn.active { background: rgba(204,0,255,0.16); border: 1px solid rgba(204,0,255,0.4); color: #CC00FF; }
+        .date-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .generate-btn { width: 100%; background: var(--acid); color: var(--bg); border: none; font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; padding: 15px; border-radius: 9px; cursor: pointer; margin-top: 4px; transition: transform 0.12s ease, box-shadow 0.12s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .generate-btn.loading { background: rgba(198,255,61,0.22); box-shadow: none; cursor: not-allowed; color: var(--acid); }
+        .generate-btn.disabled { opacity: 0.35; cursor: not-allowed; background: var(--border-bright); color: var(--text-dim); }
+        .generate-btn:hover:not(.loading):not(.disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(198,255,61,0.5); }
+
+        .retry-msg { margin-top: 10px; background: rgba(255,165,0,0.09); border: 1px solid rgba(255,165,0,0.25); border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #FFA500; text-align: center; }
+
+        .result-summary-box { background: rgba(255,0,80,0.06); border: 1px solid rgba(255,0,80,0.16); border-radius: 13px; padding: 16px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; }
+        .result-summary-title { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #FF0050; text-transform: uppercase; margin-bottom: 2px; }
+        .result-summary-topic { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+        .result-summary-badges { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+        .summary-badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 7px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+        .summary-badge.trend { border-color: var(--trend-color)40; color: var(--trend-color); }
+        .summary-badge.opportunity { background: rgba(255,0,80,0.12); border-color: rgba(255,0,80,0.26); color: #FF0050; }
+        .summary-badge.viral-potential { background: rgba(255,0,80,0.12); border: 1px solid rgba(255,0,80,0.26); color: #FF0050; }
+        .copy-result-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; padding: 4px 11px; font-size: 10px; font-weight: 700; color: rgba(240,240,245,0.55); cursor: pointer; }
+        .copy-result-btn.copied { background: rgba(0,200,100,0.12); border-color: rgba(0,200,100,0.26); color: #00C864; }
+
+        .editor-intelligence-box { background: rgba(204,0,255,0.06); border: 1px solid rgba(204,0,255,0.18); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+        .editor-intelligence-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; color: #CC00FF; text-transform: uppercase; margin-bottom: 12px; }
+        .editor-note-value { font-size: 13px; color: rgba(240,240,245,0.7); line-height: 1.4; }
+        .editor-notes-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
+        .editor-note-item { flex: 1; min-width: 150px; background: rgba(255,255,255,0.03); border: 1px solid rgba(204,0,255,0.12); border-radius: 8px; padding: 10px 12px; }
+        .editor-note-label { font-size: 8px; font-weight: 700; color: #CC00FF; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+        .editor-note-value-small { font-size: 11px; color: rgba(240,240,245,0.7); line-height: 1.4; }
+
+        .view-mode-selector { display: flex; gap: 5px; margin-bottom: 16px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+        .view-mode-btn { flex: 1; background: transparent; border: 1px solid transparent; border-radius: 9px; padding: 9px 10px; font-size: 11px; font-weight: 700; color: rgba(240,240,245,0.36); cursor: pointer; transition: all 0.15s; }
+        .view-mode-btn.active { background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.32); color: #FF0050; }
+
+        .rank-selector { display: flex; gap: 5px; margin-bottom: 14px; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+        .rank-btn { flex: 1; background: transparent; border: none; border-radius: 9px; padding: 7px 3px; font-size: 12px; font-weight: 800; color: rgba(240,240,245,0.28); cursor: pointer; transition: all 0.16s; }
+        .rank-btn.active { color: #fff; }
+        .rank-btn-glow { box-shadow: 0 0 13px; }
+
+        /* Card styles for Insights */
+        .insights-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .insights-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--acid); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .insights-list { list-style: none; padding-left: 0; }
+        .insights-list li { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; padding-left: 18px; position: relative; }
+        .insights-list li::before { content: '✨'; position: absolute; left: 0; font-size: 14px; top: 0; }
+        .insights-item-label { font-family: var(--font-mono); font-size: 11px; color: var(--acid-dim); text-transform: uppercase; margin-bottom: 4px; }
+        .insights-item-value { font-size: 13px; color: var(--text); line-height: 1.5; }
+        .insights-tags-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .insights-tag-chip { background: rgba(198,255,61,0.08); border: 1px solid var(--acid-dim); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--acid); font-weight: 600; }
+        .insights-platform-btn { background: var(--acid)08; border: 1px solid var(--acid)30; color: var(--acid); }
+
+        /* Raw Evidence Card */
+        .evidence-card { background: var(--bg-card); border: 1px solid var(--border-bright); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .evidence-card-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--coral); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .evidence-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .evidence-item:last-child { border-bottom: none; }
+        .evidence-thumb { width: 100px; height: 60px; flex-shrink: 0; background: var(--bg-elevated); border-radius: 6px; object-fit: cover; }
+        .evidence-info { flex: 1; min-width: 0; }
+        .evidence-info-title { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .evidence-info-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+        .evidence-info-platform { color: var(--acid); }
+        .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
+        .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
+
+
+        /* General utility classes */
+        .flex-row { display: flex; align-items: center; }
+        .flex-col { display: flex; flex-direction: column; }
+        .gap-4 { gap: 4px; }
+        .gap-6 { gap: 6px; }
+        .gap-7 { gap: 7px; }
+        .gap-8 { gap: 8px; }
+        .gap-9 { gap: 9px; }
+        .gap-10 { gap: 10px; }
+        .mt-8 { margin-top: 8px; }
+        .mb-10 { margin-bottom: 10px; }
+        .mb-14 { margin-bottom: 14px; }
+        .mb-16 { margin-bottom: 16px; }
+        .mb-24 { margin-bottom: 24px; }
+        .text-center { text-align: center; }
+        .hidden { display: none !important; }
+
+        @media (max-width: 560px) {
+            .config-row { grid-template-columns: 1fr; }
+            .evidence-thumb { width: 80px; height: 50px; }
+        }
+    </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect}=React;
-const BASE="";
-const PROVIDERS={cloudflare:{name:"Cloudflare Workers AI",models:[{id:"@cf/meta/llama-3.1-8b-instruct-fast",name:"Llama 3.1 8B Fast"},{id:"@cf/meta/llama-3.3-70b-instruct-fp8-fast",name:"Llama 3.3 70B Fast"},{id:"@cf/zai-org/glm-4.7-flash",name:"GLM 4.7 Flash"}]},openrouter:{name:"OpenRouter",models:[{id:"openai/gpt-4o",name:"GPT-4o"},{id:"google/gemini-pro",name:"Gemini Pro"}]},google:{name:"Google AI",models:[{id:"gemini-1.5-flash",name:"Gemini 1.5 Flash"},{id:"gemini-pro",name:"Gemini Pro"}]}};
+    <div id="root">
+        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
+            <div class="spinner" style="margin:0 auto 16px;"></div>
+            Booting Viral Radar…
+        </div>
+    </div>
 
-function App(){
-  const[topic,setTopic]=useState("");
-  const[brief,setBrief]=useState("");
-  const[refs,setRefs]=useState("");
-  const[loading,setLoading]=useState(false);
-  const[error,setError]=useState(null);
-  const[result,setResult]=useState(null);
-  const[provider,setProvider]=useState("cloudflare");
-  const[model,setModel]=useState("@cf/meta/llama-3.1-8b-instruct-fast");
-  const[status,setStatus]=useState(null);
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
-  useEffect(()=>{
-    fetch(BASE+"/api/status").then(r=>r.json()).then(d=>setStatus(d)).catch(()=>setStatus({error:"unavailable"}));
-  },[]);
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-  const run=async()=>{
-    if(!topic.trim()){setError("Please enter a topic.");return;}
-    setLoading(true);setError(null);setResult(null);
-    const refArr=refs.split(",").map(c=>c.trim()).filter(c=>c);
-    try{
-      const resp=await fetch(BASE+"/api/generate-insights",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({topic:topic.trim(),creativeBrief:brief.trim(),referenceChannels:refArr,provider,model})
-      });
-      const data=await resp.json();
-      setResult(data);
-      if(data.error&&!data.ai_actionable_insights)setError(data.error);
-    }catch(e){setError(e.message);}finally{setLoading(false);}
-  };
+        // --- Constants (Global) ---
+        const RANK_META = [
+            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
+            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
+            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
+            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
+            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
+            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
+        ];
 
-  const onProviderChange=(p)=>{
-    setProvider(p);
-    const ms=PROVIDERS[p]?.models||[];
-    if(ms.length)setModel(ms[0].id);
-  };
+        const EXAMPLE_TOPICS = [
+            "Worst Martial Arts Fails", "Dumbest MMA Moments",
+            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
+            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
+            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
+        ];
 
-  const ins=result?.ai_actionable_insights;
-  const ev=result?.raw_evidence_found;
-  const pipe=result?.pipeline;
-  const det=result?.deterministic_facts;
+        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
 
-  return React.createElement("div",{className:"container"},
-    React.createElement("div",{className:"card"},
-      React.createElement("h1",null,"AI Content Research OS"),
-      status&&React.createElement("div",{className:"status-bar"},
-        status.bindings&&Object.entries(status.bindings).map(([k,v])=>React.createElement("span",{key:k,className:"badge "+(v?"badge-ok":"badge-no")},k+": "+(v?"\u2713":"\u2717")))
-      ),
-      React.createElement("div",{className:"form-group"},
-        React.createElement("label",null,"Research Topic *"),
-        React.createElement("input",{type:"text",value:topic,onChange:e=>setTopic(e.target.value),onKeyDown:e=>{if(e.key==="Enter"&&!loading)run();},placeholder:"e.g., ranking worst decisions caught on camera",disabled:loading})
-      ),
-      React.createElement("div",{className:"form-group"},
-        React.createElement("label",null,"Creative Brief (optional)"),
-        React.createElement("textarea",{value:brief,onChange:e=>setBrief(e.target.value),placeholder:"e.g., Generate a ranked #6-#1 countdown of real, shocking/funny moments...",rows:3,disabled:loading})
-      ),
-      React.createElement("div",{className:"form-group"},
-        React.createElement("label",null,"Reference Channels (comma-separated, optional)"),
-        React.createElement("input",{type:"text",value:refs,onChange:e=>setRefs(e.target.value),placeholder:"https://youtube.com/@channel1, https://youtube.com/@channel2",disabled:loading})
-      ),
-      React.createElement("div",{className:"row"},
-        React.createElement("div",null,
-          React.createElement("label",null,"LLM Provider"),
-          React.createElement("select",{value:provider,onChange:e=>onProviderChange(e.target.value),disabled:loading},
-            Object.entries(PROVIDERS).map(([k,c])=>React.createElement("option",{key:k,value:k},c.name))
-          )
-        ),
-        React.createElement("div",null,
-          React.createElement("label",null,"Model"),
-          React.createElement("select",{value:model,onChange:e=>setModel(e.target.value),disabled:loading},
-            (PROVIDERS[provider]?.models||[]).map(m=>React.createElement("option",{key:m.id,value:m.id},m.name))
-          )
-        )
-      ),
-      React.createElement("div",{className:"form-group"},
-        React.createElement("button",{className:"btn",onClick:run,disabled:loading||!topic.trim()},loading?"Researching...":"Start Full Research")
-      )
-    ),
-    loading&&React.createElement("div",{className:"card"},
-      React.createElement("div",{className:"loader"}),
-      React.createElement("p",{style:{textAlign:"center",color:"#6b7280",fontSize:".875rem"}},"Running 5-step pipeline: Planner \u2192 Style DNA \u2192 Source Hunter \u2192 Deterministic Analysis \u2192 Editorial Analysis")
-    ),
-    error&&React.createElement("div",{className:"error"},React.createElement("strong",null,"Error: ")," ",error),
-    result&&!loading&&React.createElement("div",null,
-      pipe&&React.createElement("div",{className:"card section"},
-        React.createElement("h2",null,"\u2699\ufe0f Pipeline Status"),
-        Object.entries(pipe).map(([k,s])=>React.createElement("div",{key:k,className:"pipeline-step"},
-          React.createElement("span",{className:"dot dot-"+s.status}),
-          React.createElement("span",{className:"step-label"},s.label||k),
-          React.createElement("span",{className:"step-msg"},s.message),
-          React.createElement("span",{className:"step-status st-"+s.status},"["+s.status+"]")
-        ))
-      ),
-      det&&React.createElement("div",{className:"card section"},
-        React.createElement("h2",null,"\u{1F52C} Deterministic Analysis"),
-        React.createElement("p",{className:"info-text",style:{marginBottom:".5rem"}},"Trend: ",React.createElement("strong",null,det.overall_trend_status)),
-        det.processed_clips_for_ai?.length>0&&React.createElement("div",null,
-          React.createElement("p",{className:"step-label",style:{marginTop:".5rem"}},"Processed Clips ("+det.processed_clips_for_ai.length+")"),
-          det.processed_clips_for_ai.slice(0,10).map((pc,i)=>React.createElement("div",{key:i,className:"rank-card"},
-            React.createElement("div",{className:"rank-header"},
-              React.createElement("span",{className:"orig-badge "+(pc.is_likely_original_candidate?"orig-yes":"orig-no")},pc.is_likely_original_candidate?"\u2713 Original":"\u21BB Repost"),
-              React.createElement("span",{className:"clip-title"},pc.clip?.title||"Unknown")
-            ),
-            React.createElement("div",{className:"clip-meta"},pc.repost_analysis_text),
-            React.createElement("div",{className:"clip-meta"},"Confidence: "+(pc.originality_confidence_score_backend||0).toFixed(1)+"%")
-          ))
-        )
-      ),
-      ins&&React.createElement("div",{className:"card section"},
-        React.createElement("h2",null,"\u2728 Source Intelligence Report"),
-        ins.overall_opportunity_reasoning&&React.createElement("div",{className:"info-box"},
-          React.createElement("div",{className:"info-label"},"Overall Opportunity"),
-          React.createElement("div",{className:"info-text"},ins.overall_opportunity_reasoning)
-        ),
-        ins.trend_status&&React.createElement("p",{className:"info-text",style:{marginBottom:".5rem"}},"Trend: ",React.createElement("strong",null,ins.trend_status)),
-        ins.hook_suggestions?.length>0&&React.createElement("div",{style:{marginBottom:".75rem"}},
-          React.createElement("p",{className:"step-label"},"Hook Suggestions"),React.createElement("ul",null,ins.hook_suggestions.map((h,i)=>React.createElement("li",{key:i},h)))
-        ),
-        ins.hashtag_strategy?.length>0&&React.createElement("div",{className:"tags",style:{marginBottom:".75rem"}},
-          ins.hashtag_strategy.map((t,i)=>React.createElement("span",{key:i,className:"tag"},"#"+t))
-        ),
-        ins.key_search_phrases_for_discoverability?.length>0&&React.createElement("div",{style:{marginBottom:".75rem"}},
-          React.createElement("p",{className:"step-label"},"Key Search Phrases"),React.createElement("ul",null,ins.key_search_phrases_for_discoverability.map((p,i)=>React.createElement("li",{key:i},p)))
-        ),
-        ins.ranked_clip_opportunities?.length>0?React.createElement("div",null,
-          React.createElement("p",{className:"step-label",style:{fontWeight:700,marginBottom:".5rem"}},"\u{1F3C6} Ranked Clip Opportunities (#"+ins.ranked_clip_opportunities.length+" \u2192 #1)"),
-          ins.ranked_clip_opportunities.map((c,i)=>React.createElement("div",{key:i,className:"rank-card"},
-            React.createElement("div",{className:"rank-header"},
-              React.createElement("span",{className:"rank-badge rank-"+(c.rank||(i+1))},c.rank||(i+1)),
-              React.createElement("span",{className:"clip-title"},c.moment_idea)
-            ),
-            React.createElement("div",{className:"clip-meta"},"Platform: "+(c.suggested_source_platform||"YouTube")),
-            c.human_editor_search_terms?.length>0&&React.createElement("div",{className:"clip-meta"},"Search: "+c.human_editor_search_terms.join(", ")),
-            c.url_to_potential_original_clip&&React.createElement("a",{href:c.url_to_potential_original_clip,target:"_blank",rel:"noopener noreferrer",className:"clip-link"},c.url_to_potential_original_clip),
-            c.editorial_repost_analysis&&React.createElement("div",{className:"clip-meta",style:{marginTop:".25rem"}},c.editorial_repost_analysis)
-          ))
-        ):React.createElement("div",{className:"info-box"},
-          React.createElement("div",{className:"info-text"},"\u26a0 No ranked clip opportunities found. Ensure YOUTUBE_API_KEY is set.")
-        )
-      ),
-      ev?.youtube_clips?.length>0&&React.createElement("div",{className:"card section"},
-        React.createElement("h2",null,"\u{1F4F9} Raw Evidence \u2014 YouTube Clips ("+ev.total_youtube+" found)"),
-        ev.youtube_clips.slice(0,10).map((c,i)=>React.createElement("div",{key:i,className:"clip-card"},
-          c.thumbnail_url&&React.createElement("img",{src:c.thumbnail_url,alt:c.title}),
-          React.createElement("div",null,
-            React.createElement("div",{className:"clip-title"},c.title),
-            React.createElement("div",{className:"clip-meta"},c.channel," \u2022 ",(c.views_approx||0).toLocaleString()," views"),
-            React.createElement("a",{href:c.url,target:"_blank",rel:"noopener noreferrer",className:"clip-link"},"Watch \u2192")
-          )
-        ))
-      )
-    )
-  );
-}
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
-<\/script>
+        const PLATFORM_CFG = {
+            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
+                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+                shortsUrl: (q) => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}` },
+            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
+                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
+                tagUrl: (t) => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}` },
+            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
+                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
+                subUrl: (s) => `https://www.reddit.com/r/${s}/top/?t=all` },
+            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
+                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`,
+                tagUrl: (t) => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}` },
+            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
+                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
+                tagUrl: (t) => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}` },
+            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
+                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
+            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
+                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` }, // Search public channels
+        };
+
+        const SURPRISE_NICHES = [
+            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
+            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
+            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
+            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
+            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
+            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
+            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
+        ];
+
+        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
+
+        // --- API Helper ---
+        const DEFAULT_TIMEOUT = 120000; // 2 minutes
+        // IMPORTANT: Replace with YOUR Cloudflare Worker URL
+        const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+
+        const LLM_PROVIDERS_CONFIG = {
+            openrouter: { name: "OpenRouter", models: [
+                { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (OpenRouter)" },
+                { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                { id: "google/gemini-pro", name: "Gemini Pro (OpenRouter)" },
+                { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }
+            ]},
+            google: { name: "Google AI Studio", models: [{ id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }, { id: "gemini-pro", name: "Gemini Pro" }]},
+            cloudflare: { name: "Cloudflare Workers AI", models: [{ id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 (Cloudflare)" }, { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }]},
+            github: { name: "GitHub Models", models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]},
+            huggingface: { name: "HuggingFace", models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]},
+        };
+
+        async function callWorkerAPI(endpoint, payload, options = {}) {
+            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
+            const controller = new AbortController();
+            const signal = controller.signal;
+            const timeout = options.timeout || DEFAULT_TIMEOUT;
+            const timer = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const res = await fetch(workerUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                    signal: signal
+                });
+                clearTimeout(timer);
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
+                }
+                return data;
+            } catch (err) {
+                clearTimeout(timer);
+                console.error("Error fetching from worker:", err);
+                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
+            }
+        }
+
+        // --- UI Components ---
+        function openLink(url) { window.open(url, "_blank", "noopener,noreferrer"); }
+
+        function PlatformBtn({ platform, label, url, small = false }) {
+            const c = PLATFORM_CFG[platform];
+            if (!c) {
+                console.warn(`Platform config not found for: ${platform}`);
+                return <button className={small ? 'platform-btn-small' : 'platform-btn'} disabled>{label}</button>;
+            }
+            return (
+                <button onClick={() => openLink(url)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    background: c.bg, border: `1px solid ${c.border}`,
+                    borderRadius: 7, padding: small ? "4px 9px" : "5px 11px",
+                    fontSize: small ? 10 : 11, fontWeight: 700, color: c.color,
+                    cursor: "pointer", whiteSpace: "nowrap",
+                }}>
+                    <span style={{ fontSize: small ? 9 : 10 }}>{c.icon}</span>{label}
+                    <span style={{ fontSize: 8, opacity: 0.55 }}>↗</span>
+                </button>
+            );
+        }
+
+        function RetentionCurve() {
+            return (
+                <div className="retention-curve-wrapper">
+                    <div className="retention-curve-label">Retention</div>
+                    {[...RANK_META].reverse().map(m => (
+                        <div key={m.rank} className="retention-rank-item">
+                            <span className="retention-percent" style={{ color: m.color }}>{m.bar}%</span>
+                            <div className="retention-bar-inner" style={{
+                                '--bar-height': `${m.bar * 0.5}px`,
+                                '--item-color': m.color,
+                                '--item-glow': m.glow,
+                                height: `${m.bar * 0.5}px`,
+                                background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
+                                boxShadow: `0 -3px 10px ${m.glow}`
+                            }} />
+                            <span className="retention-rank-label">#{m.rank}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function InsightsCard({ title, icon, children }) {
+            return (
+                <div className="insights-card">
+                    <div className="insights-card-title">
+                        {icon} {title}
+                    </div>
+                    {children}
+                </div>
+            );
+        }
+
+        function EvidenceList({ data, platformType }) {
+            if (!data || data.length === 0) {
+                return <div className="evidence-no-data">No {platformType} evidence found.</div>;
+            }
+
+            return (
+                <div className="evidence-list">
+                    {data.map((item, i) => (
+                        <div key={i} className="evidence-item">
+                            {/* Optional: Add thumbnail if available, for now placeholder */}
+                            {item.thumbnail_url ?
+                                <img src={item.thumbnail_url} alt="thumbnail" className="evidence-thumb" /> :
+                                <div className="evidence-thumb" style={{ backgroundColor: '#262a30' }} />
+                            }
+                            <div className="evidence-info">
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="evidence-info-title">
+                                    {item.title}
+                                </a>
+                                <div className="evidence-info-meta">
+                                    <span className="evidence-info-platform">{item.platform}</span>
+                                    {item.channel && ` · ${item.channel}`}
+                                    {item.views_approx && ` · ${item.views_approx.toLocaleString()} views`}
+                                    {item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`}
+                                    {item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`}
+                                    {item.comments && ` · ${item.comments.toLocaleString()} comments`}
+                                    {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
+                                </div>
+                                {item.description_snippet && <div className="text-sm text-gray-600 mt-1">{item.description_snippet}</div>}
+                                <span className="evidence-info-source-type">{item.source_type?.replace(/_/g, ' ')}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+
+        function App() {
+            const [topic, setTopic] = useState('');
+            const [creativeBrief, setCreativeBrief] = useState('');
+            const [referenceChannels, setReferenceChannels] = useState('');
+            const [dateFilter, setDateFilter] = useState('7 Days'); // Keeping for now, might be removed if backend handles dates
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [results, setResults] = useState(null); // This will hold the full "Evidence Contract" JSON
+            const [activeProvider, setActiveProvider] = useState(() => {
+                const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                return firstConfigured || 'google';
+            });
+            const [availableModels, setAvailableModels] = useState([]);
+            const [selectedModel, setSelectedModel] = useState('');
+            const [restored, setRestored] = useState(false);
+            const [activeView, setActiveView] = useState("insights"); // 'insights' or 'raw_evidence'
+
+            // FIX: Added missing state variables
+            const [copied, setCopied] = useState(false);
+            const [phaseIdx, setPhaseIdx] = useState(0);
+
+            const intervalRef = useRef(null);
+
+            const phases = [
+                "Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…",
+                "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…",
+            ];
+
+            const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
+
+            // Helper to persist state to localStorage
+            const persistState = (newState) => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+                } catch (e) {
+                    console.error("Failed to save state to localStorage:", e);
+                }
+            };
+
+            // Helper to restore state from localStorage
+            const restoreState = () => {
+                try {
+                    const savedState = localStorage.getItem(STORAGE_KEY);
+                    if (savedState) {
+                        const parsedState = JSON.parse(savedState);
+                        setTopic(parsedState.topic || '');
+                        setCreativeBrief(parsedState.creativeBrief || '');
+                        setReferenceChannels(parsedState.referenceChannels || '');
+                        setDateFilter(parsedState.dateFilter || '7 Days');
+                        setResults(parsedState.results || null);
+                        setRestored(!!parsedState.results);
+                        setActiveView(parsedState.activeView || 'insights');
+
+                        // Restore LLM provider and model
+                        if (parsedState.activeProvider && LLM_PROVIDERS_CONFIG[parsedState.activeProvider]) {
+                            setActiveProvider(parsedState.activeProvider);
+                            const providerCfg = LLM_PROVIDERS_CONFIG[parsedState.activeProvider];
+                            setAvailableModels(providerCfg.models);
+                            if (parsedState.selectedModel && providerCfg.models.some(m => m.id === parsedState.selectedModel)) {
+                                setSelectedModel(parsedState.selectedModel);
+                            } else {
+                                setSelectedModel(providerCfg.models[0]?.id || '');
+                            }
+                        } else {
+                             const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => LLM_PROVIDERS_CONFIG[key]);
+                             if (firstConfigured) {
+                                 setActiveProvider(firstConfigured);
+                                 setAvailableModels(LLM_PROVIDERS_CONFIG[firstConfigured].models);
+                                 setSelectedModel(LLM_PROVIDERS_CONFIG[firstConfigured].models[0]?.id || '');
+                             }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to restore state from localStorage:", e);
+                }
+            };
+
+            // Initial fetch for worker capabilities and restore state
+            useEffect(() => {
+                const init = async () => {
+                    let initialProviderName = activeProvider;
+
+                    try {
+                        const response = await fetch(`${WORKER_BASE_URL}/`, { signal: AbortSignal.timeout(10000) });
+                        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
+                        const data = await response.json();
+
+                        // FIX: Handle missing providers_configured gracefully — default to cloudflare
+                        if (data.providers_configured && typeof data.providers_configured === 'object') {
+                            const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
+                            if (firstConfiguredFromWorker) {
+                                initialProviderName = firstConfiguredFromWorker;
+                            } else {
+                                initialProviderName = 'cloudflare'; // Default to cloudflare if none explicitly configured
+                            }
+                        } else {
+                            // Worker doesn't return providers_configured — default to cloudflare (Workers AI)
+                            initialProviderName = 'cloudflare';
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch worker capabilities, falling back to defaults:", e);
+                        // FIX: Don't show error for initial fetch, just default to cloudflare and continue
+                        initialProviderName = 'cloudflare';
+                    }
+
+                    const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
+                    if (currentProviderCfg) {
+                        setActiveProvider(initialProviderName);
+                        setAvailableModels(currentProviderCfg.models);
+                        setSelectedModel(currentProviderCfg.models[0]?.id || '');
+                    } else {
+                        setActiveProvider('');
+                        setAvailableModels([]);
+                        setSelectedModel('');
+                    }
+
+                    restoreState();
+                };
+                init();
+            }, []);
+
+
+            // Persist state whenever relevant state changes
+            useEffect(() => {
+                persistState({
+                    topic, creativeBrief, referenceChannels, dateFilter, results, activeView,
+                    activeProvider, selectedModel, copied, phaseIdx, // FIX: Added copied and phaseIdx
+                });
+            }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel, copied, phaseIdx]); // FIX: Added copied and phaseIdx dependencies
+
+
+            const handleProviderChange = (e) => {
+                const name = e.target.value;
+                const cfg = LLM_PROVIDERS_CONFIG[name];
+                setActiveProvider(name);
+                setAvailableModels(cfg.models);
+                setSelectedModel(cfg.models[0]?.id || '');
+            };
+
+            const handleNewSearch = () => {
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                setTopic('');
+                setCreativeBrief('');
+                setReferenceChannels('');
+                setDateFilter('7 Days');
+                setLoading(false);
+                setError(null);
+                setResults(null);
+                setRestored(false);
+                setActiveView('insights');
+                setCopied(false);
+                setPhaseIdx(0);
+                localStorage.removeItem(STORAGE_KEY);
+            };
+
+            const handleSurpriseMe = () => {
+                const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+                setTopic(pick);
+                setCreativeBrief("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
+                setReferenceChannels("youtube.com/@oogway_ranks\nyoutube.com/@polarranks");
+            };
+
+            const copyResult = () => {
+                if (!results) return;
+
+                const insights = results.ai_actionable_insights;
+                const rankedClips = insights?.ranked_clip_opportunities || [];
+
+                let copyText = `✨ Source Intelligence Report for: ${results.editorial_objective?.topic}\n`;
+                copyText += `Creative Brief: ${results.editorial_objective?.creative_brief_summary}\n\n`;
+                copyText += `--- Actionable Insights ---\n\n`;
+
+                if (insights?.hook_suggestions?.length > 0) {
+                    copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\n`;
+                }
+                if (insights?.hashtag_strategy?.length > 0) {
+                    copyText += `\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\n`;
+                }
+                if (insights?.key_search_phrases_for_discoverability?.length > 0) {
+                    copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\n`;
+                }
+                if (insights?.suggested_source_platforms_for_originals?.length > 0) {
+                    copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\n`;
+                }
+                if (insights?.repost_analysis_insight) {
+                    copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.title_insights) {
+                    copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.description_hook) {
+                    copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\n`;
+                }
+                if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
+                    copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\n`;
+                }
+
+                copyText += `\n--- Ranked Clip Opportunities ---\n\n`;
+                if (rankedClips.length > 0) {
+                    rankedClips.forEach(clip => {
+                        copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea}\n`;
+                        copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\n`;
+                        copyText += `   Search: ${clip.human_editor_search_terms.map(t => `"${t}"`).join(', ')}\n`;
+                        if (clip.url_to_potential_original_clip) {
+                            copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\n`;
+                        }
+                        if (clip.editorial_repost_analysis) {
+                            copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\n`;
+                        }
+                        copyText += `\n`;
+                    });
+                } else {
+                    copyText += `No ranked clip opportunities found yet.\n`;
+                }
+
+                navigator.clipboard.writeText(copyText).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                });
+            };
+
+            const handleResearch = async () => {
+                if (!topic.trim()) { setError("Enter a topic first."); return; }
+                if (!selectedModel) { setError("Please select an LLM model."); return; }
+
+                setLoading(true);
+                setError(null);
+                setResults(null);
+                setRestored(false);
+                setActiveView('insights');
+                setCopied(false);
+                setPhaseIdx(0);
+
+                if (intervalRef.current) clearInterval(intervalRef.current);
+                intervalRef.current = setInterval(() => {
+                    setPhaseIdx(p => (p + 1) % phases.length);
+                }, 900);
+
+                try {
+                    const payload = {
+                        topic: topic.trim(),
+                        creativeBrief: creativeBrief.trim(),
+                        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
+                        dateFilter: dateFilter, // Keep for now, but backend determines actual date scope
+                        provider: activeProvider,
+                        model: selectedModel,
+                    };
+
+                    // Call the new Worker endpoint
+                    const insights = await callWorkerAPI('/api/generate-insights', payload);
+                    setResults(insights);
+
+                } catch (err) {
+                    console.error("Source Intelligence Engine failed:", err);
+                    setError(err.message || "An unknown error occurred during source intelligence processing.");
+                } finally {
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                    setLoading(false);
+                    setPhaseIdx(0);
+                }
+            };
+
+            const hasResult = !!results;
+
+            return (
+                <div className="shell">
+                    <div className="nav">
+                        <div className="nav-brand">
+                            <span className="nav-mark">✦</span>
+                            <span className="nav-name">Viral Radar</span>
+                        </div>
+                        <span className="nav-badge">Source Intelligence Engine</span>
+                    </div>
+
+                    <div className="hero">
+                        <div className="hero-tag"><span className="dot"></span> AI-powered Viral Clip Discovery</div>
+                        <h1>Uncover the <span>Original</span><br />Viral Moments.</h1>
+                        <p>Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.</p>
+                    </div>
+
+                    <RetentionCurve />
+
+                    <div className="console console-input-section"> {/* Combined styles for consistency */}
+                        <div className="console-head">
+                            <span className="cdot" style={{ background: '#ff5f57' }}></span>
+                            <span className="cdot" style={{ background: '#febc2e' }}></span>
+                            <span style={{ background: '#28c840' }}></span>
+                            <span style={{ marginLeft: '6px' }}>research.sh</span>
+                        </div>
+                        <div className="console-body">
+                            <div className="console-prompt">
+                                <span className="caret">›</span>
+                                <input
+                                    type="text"
+                                    value={topic} onChange={e => setTopic(e.target.value)}
+                                    onKeyDown={e => e.key === "Enter" && !loading && handleResearch()}
+                                    placeholder="e.g. Worst Martial Arts Fails"
+                                    disabled={loading}
+                                    className="console-input"
+                                />
+                                {!topic && !loading && <span className="console-cursor"></span>}
+                                <button type="button" className="surprise-btn" onClick={handleSurpriseMe} disabled={loading} title="Suggest a niche">🎲</button>
+                            </div>
+
+                            <div className="config-row">
+                                <div className="select-wrap">
+                                    <label htmlFor="dateFilter" className="ref-channels-label" style={{ marginBottom: '4px' }}>Date Window</label>
+                                    <select id="dateFilter" value={dateFilter} onChange={e => setDateFilter(e.target.value)} disabled={loading}>
+                                        {DATE_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div className="select-wrap">
+                                    <label htmlFor="llmProvider" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Provider</label>
+                                    <select id="llmProvider" value={activeProvider} onChange={handleProviderChange} disabled={loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0}>
+                                        {Object.keys(LLM_PROVIDERS_CONFIG).map(key => (
+                                            <option key={key} value={key}>{LLM_PROVIDERS_CONFIG[key].name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="select-wrap">
+                                    <label htmlFor="llmModel" className="ref-channels-label" style={{ marginBottom: '4px' }}>AI Model</label>
+                                    <select id="llmModel" value={selectedModel} onChange={e => setSelectedModel(e.target.value)} disabled={loading || !availableModels.length}>
+                                        {availableModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="ref-channels-block">
+                                <div className="ref-channels-label">
+                                    <span>◆ Editorial Objective: Creative Brief <span className="ref-optional">(describe your content goals)</span></span>
+                                </div>
+                                <textarea
+                                    className="ref-channels-input"
+                                    value={creativeBrief} onChange={e => setCreativeBrief(e.target.value)}
+                                    placeholder="e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format."
+                                    disabled={loading}
+                                    rows={3}
+                                />
+                                <div className="ref-channels-hint">This is read as direct instructions – it tells the AI what "good" looks like for your niche and guides the research plan.</div>
+                            </div>
+
+                            <div className="ref-channels-block">
+                                <div className="ref-channels-label">
+                                    <span>◆ Editorial Objective: Style DNA Sources <span className="ref-optional">(paste channel links)</span></span>
+                                </div>
+                                <textarea
+                                    className="ref-channels-input"
+                                    value={referenceChannels} onChange={e => setReferenceChannels(e.target.value)}
+                                    placeholder="youtube.com/@oogway_ranks\nyoutube.com/@polarranks\nyoutube.com/@mrpurifiedwater"
+                                    disabled={loading}
+                                    rows={2}
+                                />
+                                <div className="ref-channels-hint">The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.</div>
+                            </div>
+
+                            <button className={`run-btn ${loading ? 'loading' : ''}`} onClick={handleResearch} disabled={loading || !topic.trim() || !selectedModel}>
+                                {loading
+                                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                                        <span style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}>⚡</span>
+                                        {phases[phaseIdx]}
+                                    </span>
+                                    : "🚀 Get Source Intelligence"}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="agent-strip">
+                        <span className="agent-chip">ResearchPlanner</span>
+                        <span className="agent-chip">SourceHunter</span>
+                        <span className="agent-chip">InsightsGenerator</span>
+                    </div>
+
+                    {error && (
+                        <div className="error-box">
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    {loading && (
+                        <div className="loading-box">
+                            <div className="spinner" style={{ margin: '0 auto' }}></div>
+                            <p>Orchestrating AI Agents & Backend Services...</p>
+                        </div>
+                    )}
+
+                    {hasResult && !loading && (
+                        <div className="results">
+                            <div className="results-topbar">
+                                {restored ? <span className="restored-tag">↺ restored from your last visit</span> : <span></span>}
+                                <button className="new-search-btn" onClick={handleNewSearch}>New Research</button>
+                            </div>
+                            <div className="result-summary-box">
+                                <div>
+                                    <div className="result-summary-title">
+                                        Source Intelligence Report for:
+                                    </div>
+                                    <div className="result-summary-topic">{results.editorial_objective?.topic}</div>
+                                </div>
+                                <div className="result-summary-badges">
+                                    {results.ai_actionable_insights?.overall_opportunity_reasoning && (
+                                        <span className="summary-badge opportunity">
+                                            🚀 {results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity
+                                        </span>
+                                    )}
+                                    {results.ai_actionable_insights?.trend_status && (
+                                        <span className="summary-badge trend" style={{ borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40', color: TREND_COLOR[results.ai_actionable_insights.trend_status] }}>
+                                            📈 {results.ai_actionable_insights.trend_status}
+                                        </span>
+                                    )}
+                                    <button onClick={copyResult} className={`copy-result-btn ${copied ? 'copied' : ''}`}>
+                                        {copied ? "✔ Copied" : "📋 Copy"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="view-mode-selector">
+                                {[{ id: "insights", icon: "✨", label: "AI Insights" }, { id: "raw_evidence", icon: "📚", label: "Raw Evidence" }].map(v => (
+                                    <button key={v.id} onClick={() => setActiveView(v.id)} className={`view-mode-btn ${activeView === v.id ? 'active' : ''}`}>
+                                        {v.icon} {v.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {activeView === "insights" && results.ai_actionable_insights && (
+                                <div className="insights-section">
+                                    <InsightsCard title="Ranked Clip Opportunities" icon="🎯">
+                                        <ul className="insights-list">
+                                            {(results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => (
+                                                <li key={i}>
+                                                    <div className="insights-item-label">Rank #{clip.rank || (6 - i)}: {clip.moment_idea}</div>
+                                                    <div className="insights-item-value">
+                                                        Platform: {clip.suggested_source_platform || 'Any'} |
+                                                        Search Terms: {clip.human_editor_search_terms?.map(t => `"${t}"`).join(', ')}
+                                                        {clip.url_to_potential_original_clip && <a href={clip.url_to_potential_original_clip} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '10px', color: 'var(--acid)' }}>View Clip ↗</a>}
+                                                        {clip.editorial_repost_analysis && <div className="text-sm text-gray-500 mt-1">{clip.editorial_repost_analysis}</div>}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="YouTube Upload Strategy" icon="🚀">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Suggestions:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hook_suggestions || []).map((s, i) => <span key={i} className="insights-tag-chip">{s}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hashtag Strategy:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => <span key={i} className="insights-tag-chip">{h}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Key Search Phrases for Discoverability:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => <span key={i} className="insights-tag-chip">{p}</span>)}
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Title Insights:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">SEO Description Hook:</div>
+                                            <div className="insights-item-value">{results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">SEO Priority Tags:</div>
+                                            <div className="insights-tags-grid">
+                                                {(results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).map((t, i) => <span key={i} className="insights-tag-chip">{t}</span>)}
+                                            </div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Editorial DNA Summary" icon="🧬">
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Clip Length Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.clip_length || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Hook Style:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.hook_style || 'N/A'}</div>
+                                        </div>
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <div className="insights-item-label">Emotion Focus:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.emotion_focus || 'N/A'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="insights-item-label">Source Preference:</div>
+                                            <div className="insights-item-value">{results.editorial_objective.editorial_dna?.source_preference || 'N/A'}</div>
+                                        </div>
+                                    </InsightsCard>
+
+                                    <InsightsCard title="Research Constraints Applied" icon="✅">
+                                        <ul className="insights-list" style={{ '--before-content': "'✅'" }}>
+                                            {(results.editorial_objective.research_constraints_applied || []).map((c, i) => <li key={i} style={{ '--before-content': "'✅'" }}>{c}</li>)}
+                                        </ul>
+                                    </InsightsCard>
+
+                                </div>
+                            )}
+
+                            {activeView === "raw_evidence" && results.raw_evidence_found && (
+                                <div className="raw-evidence-section">
+                                    <InsightsCard title="Raw Evidence Found" icon="📚">
+                                        <h3 className="insights-item-label" style={{ marginBottom: '8px' }}>YouTube Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.youtube_clips} platformType="YouTube" />
+                                        
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>TikTok Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.tiktok_clips} platformType="TikTok" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Reddit Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.reddit_posts} platformType="Reddit" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Instagram Reels</h3>
+                                        <EvidenceList data={results.raw_evidence_found.instagram_reels} platformType="Instagram" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Facebook Posts</h3>
+                                        <EvidenceList data={results.raw_evidence_found.facebook_posts} platformType="Facebook" />
+
+                                        <h3 className="insights-item-label" style={{ marginTop: '20px', marginBottom: '8px' }}>Telegram Clips</h3>
+                                        <EvidenceList data={results.raw_evidence_found.telegram_clips} platformType="Telegram" />
+                                        
+                                        {/* Add more platforms as needed */}
+                                    </InsightsCard>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!hasResult && !loading && (
+                        <div className="text-center" style={{ padding: "55px 20px", color: "rgba(240,240,245,0.16)" }}>
+                            <div style={{ fontSize: 42, marginBottom: 9 }}>🚀</div>
+                            <div style={{ fontSize: 18 }}>Start your Source Intelligence Research!</div>
+                            <p style={{ marginTop: 10, fontSize: 13 }}>Enter an objective above to get actionable insights and discover original viral clips.</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
 </body>
-</html>`;
-
-// ─── Worker Entry Point ─────────
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-
-    // GET / — serve frontend
-    if (url.pathname === "/" && request.method === "GET") {
-      return new Response(FRONTEND_HTML, { headers: { "Content-Type": "text/html; charset=utf-8", ...CORS } });
-    }
-
-    // GET /api/status — JSON status
-    if (url.pathname === "/api/status" && request.method === "GET") {
-      return json({
-        status: "ok",
-        providers_configured: { cloudflare: Boolean(env.AI), openrouter: Boolean(env.OPENROUTER_API_KEY), google: Boolean(env.GEMINI_API_KEY) },
-        bindings: { ai: Boolean(env.AI), youtube: Boolean(env.YOUTUBE_API_KEY) }
-      });
-    }
-
-    // POST /api/complete — generic LLM call
-    if (url.pathname === "/api/complete" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
-      if (!body.prompt || !body.provider || !body.model) return json({ error: "Missing prompt, provider, or model" }, 400);
-      try {
-        const result = await callLLM(body.prompt, body.provider, body.model, env);
-        return json({ text: result.text, model_used: result.model });
-      } catch (e) { return json({ error: e.message }, 500); }
-    }
-
-    // POST /api/generate-insights — full orchestration
-    if (url.pathname === "/api/generate-insights" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
-      const { topic, creativeBrief, referenceChannels, provider: p, model: m } = body;
-      if (!topic) return json({ error: "Missing topic" }, 400);
-      try {
-        const result = await orchestrate(topic, creativeBrief || "", referenceChannels || [], p || "cloudflare", m || "@cf/meta/llama-3.1-8b-instruct-fast", env);
-        return json(result);
-      } catch (e) {
-        return json({ pipeline: { step1: { status: "failed", label: "System", message: e.message } }, error: "Orchestration failed: " + e.message });
-      }
-    }
-
-    return json({ error: "Not found" }, 404);
-  }
-};
+</html>
