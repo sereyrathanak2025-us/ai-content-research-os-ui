@@ -1,3 +1,394 @@
+// Viral Radar Worker — Cloudflare Only (No Python Backend)
+// Single file: serves frontend + API + full pipeline
+// Deploy: npx wrangler deploy
+// Bindings: AI (Workers AI) — required
+// Secrets: YOUTUBE_API_KEY — required for real clips
+// Optional: OPENROUTER_API_KEY, GEMINI_API_KEY
+
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
+
+function json(data, status) {
+  return new Response(JSON.stringify(data), { status: status || 200, headers: { "Content-Type": "application/json", ...CORS } });
+}
+
+function cleanJson(text) {
+  let t = (typeof text === "string" ? text : JSON.stringify(text)).trim();
+  t = t.replace(/^```json/, "").replace(/^```/, "").replace(/```$/, "").trim();
+  const s = t.indexOf("{"), e = t.lastIndexOf("}");
+  if (s !== -1 && e !== -1 && e > s) t = t.slice(s, e + 1);
+  return t;
+}
+
+// ─── LLM Caller ─────────
+async function callLLM(prompt, provider, model, env) {
+  let responseText = "";
+  const systemMsg = "You are a viral content research analyst. Always respond with valid JSON only, no markdown, no extra text.";
+  const messages = [{ role: "system", content: systemMsg }, { role: "user", content: prompt }];
+
+  try {
+    if (provider === "cloudflare") {
+      if (!env.AI) throw new Error("Workers AI binding not configured.");
+      const cfModels = [model, "@cf/meta/llama-3.1-8b-instruct-fast", "@cf/zai-org/glm-4.7-flash"];
+      for (const cfModel of cfModels) {
+        try {
+          const resp = await env.AI.run(cfModel, { messages, max_tokens: 2000, response_format: { type: "json_object" } });
+          if (resp && resp.response) {
+            responseText = typeof resp.response === "string" ? resp.response : JSON.stringify(resp.response);
+            if (responseText.trim()) return { text: responseText, model: cfModel };
+          }
+        } catch (e) { console.warn("Model " + cfModel + " failed: " + e.message); }
+      }
+      throw new Error("All Cloudflare models failed.");
+    }
+
+    if (provider === "openrouter") {
+      if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
+      const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + env.OPENROUTER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages, max_tokens: 2000, response_format: { type: "json_object" } })
+      });
+      if (!orResp.ok) throw new Error("OpenRouter failed: " + orResp.status);
+      const orData = await orResp.json();
+      responseText = orData.choices?.[0]?.message?.content || "";
+    } else if (provider === "google") {
+      if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured.");
+      const geminiBody = {
+        contents: messages.map(m => ({ role: m.role === "system" ? "user" : m.role, parts: [{ text: m.content }] })),
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 2000 }
+      };
+      const gResp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + env.GEMINI_API_KEY, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody)
+      });
+      if (!gResp.ok) throw new Error("Gemini failed: " + gResp.status);
+      const gData = await gResp.json();
+      responseText = gData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    } else {
+      throw new Error("Unsupported provider: " + provider);
+    }
+
+    if (!responseText.trim()) throw new Error("Empty LLM response.");
+    return { text: responseText, model };
+  } catch (e) {
+    throw new Error("LLM call failed (" + provider + "/" + model + "): " + e.message);
+  }
+}
+
+// ─── YouTube Search ─────────
+async function searchYouTube(query, env, maxResults, daysAgo) {
+  if (!env.YOUTUBE_API_KEY) return [];
+  maxResults = maxResults || 10;
+  daysAgo = daysAgo || 30;
+  const publishedAfter = new Date(Date.now() - daysAgo * 86400000).toISOString();
+  const params = new URLSearchParams({ part: "snippet", q: query, key: env.YOUTUBE_API_KEY, maxResults: String(maxResults), type: "video", order: "viewCount", publishedAfter });
+  try {
+    const searchResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + params);
+    if (!searchResp.ok) return [];
+    const searchData = await searchResp.json();
+    const ids = searchData.items.map(i => i.id.videoId).filter(Boolean).join(",");
+    if (!ids) return [];
+    const detResp = await fetch("https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=" + ids + "&key=" + env.YOUTUBE_API_KEY);
+    if (!detResp.ok) return [];
+    const detData = await detResp.json();
+    return (detData.items || []).map(v => ({
+      id: v.id, url: "https://www.youtube.com/watch?v=" + v.id, title: v.snippet.title,
+      platform: "YouTube", channel: v.snippet.channelTitle,
+      thumbnail_url: v.snippet.thumbnails?.medium?.url || "",
+      tags: v.snippet.tags || [], description_snippet: (v.snippet.description || "").slice(0, 300),
+      views_approx: parseInt(v.statistics.viewCount || "0", 10),
+      likes_approx: parseInt(v.statistics.likeCount || "0", 10),
+      comments: parseInt(v.statistics.commentCount || "0", 10),
+      published_at: v.snippet.publishedAt, source_type: "YouTube_API"
+    }));
+  } catch (e) { console.warn("YT API: " + e.message); return []; }
+}
+
+// ─── Reference Channel Analysis ─────────
+async function analyzeRefChannels(channelUrls, env) {
+  if (!env.YOUTUBE_API_KEY || !channelUrls || channelUrls.length === 0) return null;
+  const dna = { detected_patterns: [], clip_length: "Unknown", channels_analyzed: [] };
+  for (const url of channelUrls) {
+    const handleMatch = url.match(/@([\w-]+)/);
+    const idMatch = url.match(/channel\/([\w-]+)/);
+    const handle = handleMatch ? handleMatch[1] : idMatch ? idMatch[1] : null;
+    if (!handle) continue;
+    try {
+      const chParams = new URLSearchParams({ part: "snippet", q: handle, key: env.YOUTUBE_API_KEY, type: "channel", maxResults: "1" });
+      const chResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + chParams);
+      if (!chResp.ok) continue;
+      const chData = await chResp.json();
+      const channelId = chData.items?.[0]?.id?.channelId;
+      if (!channelId) continue;
+      const vidParams = new URLSearchParams({ part: "snippet", channelId, key: env.YOUTUBE_API_KEY, maxResults: "5", order: "date", type: "video" });
+      const vidResp = await fetch("https://www.googleapis.com/youtube/v3/search?" + vidParams);
+      if (!vidResp.ok) continue;
+      const vidData = await vidResp.json();
+      const videoIds = (vidData.items || []).map(v => v.id.videoId).filter(Boolean).join(",");
+      if (!videoIds) continue;
+      const detParams = new URLSearchParams({ part: "snippet,statistics,contentDetails", id: videoIds, key: env.YOUTUBE_API_KEY });
+      const detResp = await fetch("https://www.googleapis.com/youtube/v3/videos?" + detParams);
+      if (!detResp.ok) continue;
+      const detData = await detResp.json();
+      const videos = (detData.items || []).map(v => ({
+        title: v.snippet.title, duration: v.contentDetails.duration,
+        views: parseInt(v.statistics.viewCount || "0", 10), tags: v.snippet.tags || []
+      }));
+      dna.channels_analyzed.push({ handle, recent_videos: videos });
+      if (videos.length > 0) {
+        const titles = videos.map(v => v.title.toLowerCase());
+        if (titles.some(t => t.includes("rank") || t.includes("top") || t.includes("worst") || t.includes("best"))) dna.detected_patterns.push("Countdown/ranking format");
+        if (titles.some(t => t.includes("fail") || t.includes("funny") || t.includes("shocking"))) dna.detected_patterns.push("Fail/funny content");
+        if (titles.some(t => t.includes("compilation"))) dna.detected_patterns.push("Uses compilations");
+        else dna.detected_patterns.push("Likely original clips");
+        const durations = videos.map(v => {
+          const m = v.duration?.match(/PT(\d+)M(\d+)S/);
+          if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
+          const s = v.duration?.match(/PT(\d+)S/);
+          if (s) return parseInt(s[1]);
+          return 0;
+        }).filter(d => d > 0);
+        if (durations.length > 0) {
+          const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
+          dna.clip_length = avg < 60 ? "Short (< 1 min)" : avg < 300 ? "Medium (1-5 min)" : "Long (> 5 min)";
+        }
+      }
+    } catch (e) { console.warn("Channel: " + handle + " " + e.message); }
+  }
+  dna.detected_patterns = [...new Set(dna.detected_patterns)];
+  if (dna.detected_patterns.length === 0) dna.detected_patterns = ["Unable to detect patterns"];
+  return dna;
+}
+
+// ─── Deterministic Analysis (in-Worker, replaces Python backend) ─────────
+function deterministicAnalysis(clips) {
+  const seen = new Map();
+  const processed = clips.map(c => {
+    const key = c.title.toLowerCase().trim();
+    let isOriginal = true;
+    let repostAnalysis = [];
+    if (seen.has(key)) {
+      isOriginal = false;
+      const original = seen.get(key);
+      repostAnalysis.push("Likely repost of: " + original.title);
+    } else {
+      seen.set(key, c);
+    }
+    let score = 0;
+    if (c.source_type === "YouTube_API") score += 100;
+    score += (c.views_approx / 1000000) * 10;
+    score += (c.likes_approx / 10000) * 5;
+    return {
+      clip: c,
+      is_likely_original_candidate: isOriginal,
+      repost_analysis_text: repostAnalysis.join(". ") || "No reposts identified.",
+      originality_confidence_score_backend: Math.min(100, score / 10)
+    };
+  });
+  processed.sort((a, b) => {
+    if (a.is_likely_original_candidate !== b.is_likely_original_candidate)
+      return b.is_likely_original_candidate - a.is_likely_original_candidate;
+    return b.originality_confidence_score_backend - a.originality_confidence_score_backend;
+  });
+  const totalClips = clips.length;
+  let trendStatus = "Stable";
+  if (totalClips >= 15) trendStatus = "Exploding";
+  else if (totalClips >= 8) trendStatus = "Growing";
+  else if (totalClips <= 2) trendStatus = "Declining";
+  const ranked = processed.map((pc, i) => ({
+    title: pc.clip.title, platform: pc.clip.platform, creator: pc.clip.channel,
+    rank_score: pc.originality_confidence_score_backend, rank_position: i + 1
+  }));
+  return { processed_clips_for_ai: processed, ranked_clips_by_backend: ranked, overall_trend_status: trendStatus };
+}
+
+// ─── Build Analysis Prompt ─────────
+function buildAnalysisPrompt(topic, topClips, nicheProfile, editorialDna, creativeBrief, detFacts) {
+  const parts = [];
+  parts.push('You are an expert viral content editor for ranking videos.');
+  parts.push('Topic: "' + topic + '".');
+  if (creativeBrief) parts.push('Creative Brief: "' + creativeBrief + '".');
+  parts.push("Real YouTube clips found: " + JSON.stringify(topClips) + ".");
+  parts.push("Niche: " + JSON.stringify(nicheProfile) + ".");
+  parts.push("DNA: " + JSON.stringify(editorialDna) + ".");
+  if (detFacts) {
+    parts.push("=== DETERMINISTIC FACTS (use these, do not contradict) ===");
+    parts.push("Trend status: " + detFacts.overall_trend_status);
+    if (detFacts.processed_clips_for_ai?.length > 0) {
+      const summary = detFacts.processed_clips_for_ai.slice(0, 20).map(pc => ({
+        title: pc.clip?.title || "", url: pc.clip?.url || "",
+        is_original: pc.is_likely_original_candidate,
+        repost_analysis: pc.repost_analysis_text,
+        confidence: pc.originality_confidence_score_backend
+      }));
+      parts.push("Processed clips: " + JSON.stringify(summary));
+    }
+    if (detFacts.ranked_clips_by_backend?.length > 0) {
+      parts.push("Backend ranking: " + JSON.stringify(detFacts.ranked_clips_by_backend.slice(0, 20)));
+    }
+    parts.push("=== END DETERMINISTIC FACTS ===");
+  }
+  parts.push("Generate actionable insights. Return ONLY JSON with this exact structure:");
+  const tmpl = [
+    '{"overall_opportunity_reasoning":"brief explanation",',
+    '"trend_status":"Growing",',
+    '"hook_suggestions":["hook1","hook2","hook3"],',
+    '"hashtag_strategy":["tag1","tag2","tag3","tag4","tag5"],',
+    '"key_search_phrases":["phrase1","phrase2","phrase3"],',
+    '"seo_elements_for_upload":{"title_insights":"SEO title","description_hook":"SEO desc","tags_to_prioritize":["tag1","tag2","tag3"]},',
+    '"ranked_clip_opportunities":['
+  ];
+  for (let r = 6; r >= 1; r--) {
+    tmpl.push('{"rank":' + r + ',"moment_idea":"clip moment description","suggested_source_platform":"YouTube","human_editor_search_terms":["term1","term2"],"url_to_potential_original_clip":"use a real URL from clips above","editorial_repost_analysis":"why this clip works"}' + (r > 1 ? ',' : ''));
+  }
+  tmpl.push(']}');
+  parts.push(tmpl.join(""));
+  parts.push("Include exactly 6 items (rank 6 down to 1). Use REAL urls from clips above. Focus on funny/shocking/fail moments.");
+  return parts.join(" ");
+}
+
+// ─── Orchestration ─────────
+async function orchestrate(topic, creativeBrief, refChannels, provider, model, env) {
+  const pipeline = {};
+  const refs = (refChannels || []).filter(c => c.trim());
+
+  // STEP 1: Research Planner
+  pipeline.step1 = { status: "running", label: "Research Planner", message: "Generating search queries" };
+  const plannerPrompt = 'You are a viral content research planner. Topic: "' + topic + '". Brief: "' + (creativeBrief || "") + '". Generate 5 YouTube search queries to find REAL original video clips. Return ONLY JSON: {"queries":["q1","q2","q3","q4","q5"],"niche_profile":["req1","req2"],"editorial_dna_guess":{"clip_length":"5-20s","hook_style":"immediate shock","emotion_focus":"humor/shock","source_preference":"original clips not compilations"}}';
+  let plannerData;
+  try {
+    const llmResult = await callLLM(plannerPrompt, provider, model, env);
+    plannerData = JSON.parse(cleanJson(llmResult.text));
+    pipeline.step1.status = "completed";
+    pipeline.step1.message = "Generated " + (plannerData.queries?.length || 0) + " search queries";
+  } catch (e) {
+    pipeline.step1.status = "failed";
+    pipeline.step1.message = e.message;
+    return { pipeline, editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: {}, research_constraints_applied: [] }, raw_evidence_found: null, ai_actionable_insights: null, ref_channel_analysis: null, error: "Step 1 failed: " + e.message };
+  }
+
+  // STEP 2: Style DNA
+  pipeline.step2 = { status: "running", label: "Style DNA Analyzer", message: "Analyzing reference channels" };
+  let editorialDna = plannerData.editorial_dna_guess || {};
+  let refAnalysis = null;
+  if (refs.length > 0) {
+    try {
+      refAnalysis = await analyzeRefChannels(refs, env);
+      if (refAnalysis) {
+        if (refAnalysis.clip_length !== "Unknown") editorialDna.clip_length = refAnalysis.clip_length;
+        if (refAnalysis.detected_patterns) editorialDna.detected_patterns = refAnalysis.detected_patterns;
+        pipeline.step2.status = "completed";
+        pipeline.step2.message = "Analyzed " + refAnalysis.channels_analyzed.length + " channels";
+      } else {
+        pipeline.step2.status = "completed";
+        pipeline.step2.message = "No YouTube API key";
+      }
+    } catch (e) {
+      pipeline.step2.status = "completed";
+      pipeline.step2.message = "Using LLM guess: " + e.message;
+    }
+  } else {
+    pipeline.step2.status = "completed";
+    pipeline.step2.message = "No reference channels provided";
+  }
+
+  // STEP 3: Source Hunter
+  pipeline.step3 = { status: "running", label: "Source Hunter", message: "Searching YouTube for real clips" };
+  const queries = plannerData.queries || [topic];
+  let allClips = [];
+  for (const q of queries) {
+    const results = await searchYouTube(q, env, 10, 30);
+    allClips = allClips.concat(results);
+  }
+  const seenIds = new Set();
+  const ytClips = allClips.filter(c => {
+    if (seenIds.has(c.id)) return false;
+    seenIds.add(c.id);
+    return true;
+  });
+  ytClips.sort((a, b) => b.views_approx - a.views_approx);
+  pipeline.step3.status = ytClips.length > 0 ? "completed" : "failed";
+  pipeline.step3.message = ytClips.length > 0 ? "Found " + ytClips.length + " YouTube clips" : "No clips found (YOUTUBE_API_KEY may not be set)";
+
+  const evidence = {
+    youtube_clips: ytClips, total_youtube: ytClips.length,
+    tiktok_clips: [], reddit_posts: [], instagram_reels: [], facebook_posts: [],
+    platform_search_links: {
+      tiktok: { url: "https://www.tiktok.com/search?q=" + encodeURIComponent(queries[0] || topic), platform: "TikTok" },
+      reddit: { url: "https://www.reddit.com/search/?q=" + encodeURIComponent(queries[0] || topic) + "&sort=top&t=week", platform: "Reddit" }
+    }
+  };
+
+  if (ytClips.length === 0) {
+    pipeline.step4 = { status: "skipped", label: "Editorial Analysis", message: "No evidence to analyze" };
+    return { pipeline, editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] }, raw_evidence_found: evidence, ai_actionable_insights: null, ref_channel_analysis: refAnalysis, error: "No source evidence found. Ensure YOUTUBE_API_KEY is set." };
+  }
+
+  // STEP 3.5: Deterministic Analysis
+  pipeline.step3_5 = { status: "running", label: "Deterministic Analysis", message: "Dedup, original ID, ranking" };
+  let detFacts = null;
+  try {
+    detFacts = deterministicAnalysis(ytClips);
+    pipeline.step3_5.status = "completed";
+    pipeline.step3_5.message = detFacts.processed_clips_for_ai.length + " clips processed, trend: " + detFacts.overall_trend_status;
+  } catch (e) {
+    pipeline.step3_5.status = "failed";
+    pipeline.step3_5.message = e.message;
+  }
+
+  // STEP 4: Editorial Analysis
+  pipeline.step4 = { status: "running", label: "Editorial Analysis", message: "Generating insights from real clips" };
+  const topClips = ytClips.slice(0, 20).map(c => ({ title: c.title, url: c.url, channel: c.channel, views: c.views_approx, thumbnail_url: c.thumbnail_url }));
+  const analysisPrompt = buildAnalysisPrompt(topic, topClips, plannerData.niche_profile || [], editorialDna, creativeBrief, detFacts);
+
+  try {
+    const llmResult2 = await callLLM(analysisPrompt, provider, model, env);
+    const data = JSON.parse(cleanJson(llmResult2.text));
+    pipeline.step4.status = "completed";
+    pipeline.step4.message = "Insights generated successfully";
+
+    const finalTrendStatus = detFacts?.overall_trend_status || data.trend_status || "Stable";
+
+    return {
+      pipeline,
+      editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] },
+      raw_evidence_found: evidence,
+      ai_actionable_insights: {
+        overall_opportunity_reasoning: data.overall_opportunity_reasoning || "",
+        trend_status: finalTrendStatus,
+        hook_suggestions: data.hook_suggestions || [],
+        hashtag_strategy: data.hashtag_strategy || [],
+        key_search_phrases_for_discoverability: data.key_search_phrases || [],
+        seo_elements_for_upload: data.seo_elements_for_upload || { title_insights: "", description_hook: "", tags_to_prioritize: [] },
+        ranked_clip_opportunities: data.ranked_clip_opportunities || []
+      },
+      ref_channel_analysis: refAnalysis,
+      deterministic_facts: detFacts
+    };
+  } catch (e) {
+    pipeline.step4.status = "failed";
+    pipeline.step4.message = e.message;
+    return {
+      pipeline,
+      editorial_objective: { topic, creative_brief_summary: creativeBrief, editorial_dna: editorialDna, research_constraints_applied: plannerData.niche_profile || [] },
+      raw_evidence_found: evidence,
+      ai_actionable_insights: {
+        overall_opportunity_reasoning: "AI analysis failed, showing raw clips",
+        trend_status: detFacts?.overall_trend_status || "Stable",
+        hook_suggestions: [], hashtag_strategy: [], key_search_phrases_for_discoverability: [],
+        seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
+        ranked_clip_opportunities: ytClips.slice(0, 6).map((c, i) => ({
+          rank: 6 - i, moment_idea: c.title, suggested_source_platform: "YouTube",
+          human_editor_search_terms: [topic], url_to_potential_original_clip: c.url,
+          editorial_repost_analysis: "High view count clip found via YouTube API"
+        }))
+      },
+      ref_channel_analysis: refAnalysis,
+      deterministic_facts: detFacts,
+      error: "Step 4 failed: " + e.message
+    };
+  }
+}
+
 // ─── Frontend HTML ─────────
 const FRONTEND_HTML = `<!DOCTYPE html>
 <html lang="en">
