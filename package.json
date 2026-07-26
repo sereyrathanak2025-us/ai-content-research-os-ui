@@ -5,10 +5,14 @@
   "description": "Viral Radar - static frontend for AI Content Research OS. No bundler/framework; index.html is served as-is.",
   "scripts": {
     "build": "echo 'No build step required — static index.html is served as-is.'",
-    "dev": "echo 'Open index.html directly, or serve it with any static file server.'"
+    "dev": "echo 'Open index.html directly, or serve it with any static file server.'",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
   }
 }
-
