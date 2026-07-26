@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"> 
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -25,7 +25,7 @@
             --font-mono: 'JetBrains Mono', monospace;
             --font-body: 'Work Sans', sans-serif;
 
-            /* Viral Engine specific colors (from viral engine.jsx) */
+            /* Viral Engine specific colors */
             --rank6-color: #FF6B35;
             --rank5-color: #F7931E;
             --rank4-color: #FFD700;
@@ -186,7 +186,7 @@
         .trend-list li { font-size: 13px; color: var(--text-dim); padding: 5px 0 5px 16px; position: relative; }
         .trend-list li::before { content: '▲'; position: absolute; left: 0; color: var(--acid); font-size: 9px; top: 8px; }
 
-        /* Viral Engine Specific Styles (from viral engine.jsx) */
+        /* Viral Engine Specific Styles */
         .retention-curve-wrapper {
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px 22px 12px;
             margin-bottom: 24px; display: flex; align-items: flex-end; gap: 7px;
@@ -203,7 +203,7 @@
         }
         .retention-bar-inner {
             width: 100%; border-radius: 3px 3px 0 0;
-            height: var(--bar-height); /* Dynamic height */
+            height: var(--bar-height);
             background: linear-gradient(180deg, var(--item-color), rgba(255,255,255,0.03));
             box-shadow: 0 -3px 10px var(--item-glow);
         }
@@ -294,1017 +294,655 @@
         .evidence-info-platform { color: var(--acid); }
         .evidence-info-source-type { font-family: var(--font-mono); font-size: 9px; color: var(--text-faint); text-transform: uppercase; margin-left: auto; }
         .evidence-no-data { font-size: 13px; color: var(--text-faint); text-align: center; padding: 20px; }
-
-
-        /* General utility classes */
-        .flex-row { display: flex; align-items: center; }
-        .flex-col { display: flex; flex-direction: column; }
-        .gap-4 { gap: 4px; }
-        .gap-6 { gap: 6px; }
-        .gap-7 { gap: 7px; }
-        .gap-8 { gap: 8px; }
-        .gap-9 { gap: 9px; }
-        .gap-10 { gap: 10px; }
-        .mt-8 { margin-top: 8px; }
-        .mb-10 { margin-bottom: 10px; }
-        .mb-14 { margin-bottom: 14px; }
-        .mb-16 { margin-bottom: 16px; }
-        .mb-24 { margin-bottom: 24px; }
-        .text-center { text-align: center; }
-        .hidden { display: none !important; }
-
-        @media (max-width: 560px) {
-            .config-row { grid-template-columns: 1fr; }
-            .evidence-thumb { width: 80px; height: 50px; }
-        }
     </style>
-</head>
-<body>
-    <div id="root">
-        <div class="loading-fallback" style="text-align:center;padding:60px;font-family:'JetBrains Mono',monospace;color:#9a9fa6;">
-            <div class="spinner" style="margin:0 auto 16px;"></div>
-            Booting Viral Radar…
-        </div>
-    </div>
-
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
     <script>
-const {
-  useState,
-  useEffect,
-  useRef
-} = React;
+        // --- Constants (Global) ---
+        const RANK_META = [
+            { rank: 6, label: "SCROLL STOPPER", color: "#FF6B35", glow: "rgba(255,107,53,0.4)", bar: 85 },
+            { rank: 5, label: "INTEREST BUILDER", color: "#F7931E", glow: "rgba(247,147,30,0.4)", bar: 65 },
+            { rank: 4, label: "CONTEXT SETTER", color: "#FFD700", glow: "rgba(255,215,0,0.35)", bar: 50 },
+            { rank: 3, label: "ESCALATION POINT", color: "#FF4444", glow: "rgba(255,68,68,0.4)", bar: 75 },
+            { rank: 2, label: "FALSE PAYOFF", color: "#CC00FF", glow: "rgba(204,0,255,0.45)", bar: 95 },
+            { rank: 1, label: "ULTIMATE PAYOFF", color: "#FF0050", glow: "rgba(255,0,80,0.6)", bar: 100 },
+        ];
 
-// --- Constants (Global) ---
-const RANK_META = [{
-  rank: 6,
-  label: "SCROLL STOPPER",
-  color: "#FF6B35",
-  glow: "rgba(255,107,53,0.4)",
-  bar: 85
-}, {
-  rank: 5,
-  label: "INTEREST BUILDER",
-  color: "#F7931E",
-  glow: "rgba(247,147,30,0.4)",
-  bar: 65
-}, {
-  rank: 4,
-  label: "CONTEXT SETTER",
-  color: "#FFD700",
-  glow: "rgba(255,215,0,0.35)",
-  bar: 50
-}, {
-  rank: 3,
-  label: "ESCALATION POINT",
-  color: "#FF4444",
-  glow: "rgba(255,68,68,0.4)",
-  bar: 75
-}, {
-  rank: 2,
-  label: "FALSE PAYOFF",
-  color: "#CC00FF",
-  glow: "rgba(204,0,255,0.45)",
-  bar: 95
-}, {
-  rank: 1,
-  label: "ULTIMATE PAYOFF",
-  color: "#FF0050",
-  glow: "rgba(255,0,80,0.6)",
-  bar: 100
-}];
-const EXAMPLE_TOPICS = ["Worst Martial Arts Fails", "Dumbest MMA Moments", "Most Embarrassing Sports Goals", "Craziest Referee Mistakes", "Funniest Gym Fails", "Worst Penalty Kicks Ever", "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts"];
-const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
-const PLATFORM_CFG = {
-  youtube: {
-    name: "YouTube",
-    icon: "▶",
-    color: "#FF0000",
-    bg: "rgba(255,0,0,0.08)",
-    border: "rgba(255,0,0,0.25)",
-    searchUrl: q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-    shortsUrl: q => `https://www.youtube.com/shorts?search=${encodeURIComponent(q)}`
-  },
-  tiktok: {
-    name: "TikTok",
-    icon: "♬",
-    color: "#00F2EA",
-    bg: "rgba(0,242,234,0.07)",
-    border: "rgba(0,242,234,0.25)",
-    searchUrl: q => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}`,
-    tagUrl: t => `https://www.tiktok.com/tag/${encodeURIComponent(t.replace(/\s+/g, ""))}`
-  },
-  reddit: {
-    name: "Reddit",
-    icon: "●",
-    color: "#FF4500",
-    bg: "rgba(255,69,0,0.08)",
-    border: "rgba(255,69,0,0.25)",
-    searchUrl: q => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top`,
-    subUrl: s => `https://www.reddit.com/r/${s}/top/?t=all`
-  },
-  instagram: {
-    name: "Instagram",
-    icon: "📸",
-    color: "#E1306C",
-    bg: "rgba(225,48,108,0.08)",
-    border: "rgba(225,48,108,0.25)",
-    searchUrl: q => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}`,
-    tagUrl: t => `https://www.instagram.com/explore/tags/${encodeURIComponent(t.replace(/\s+/g, ''))}`
-  },
-  twitter: {
-    name: "Twitter",
-    icon: "𝕏",
-    color: "#1DA1F2",
-    bg: "rgba(29,161,242,0.08)",
-    border: "rgba(29,161,242,0.25)",
-    searchUrl: q => `https://twitter.com/search?q=${encodeURIComponent(q)}`,
-    tagUrl: t => `https://twitter.com/hashtag/${encodeURIComponent(t.replace(/^#/, ''))}`
-  },
-  facebook: {
-    name: "Facebook",
-    icon: "fb",
-    color: "#1877F2",
-    bg: "rgba(24,119,242,0.08)",
-    border: "rgba(24,119,242,0.25)",
-    searchUrl: q => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}`
-  },
-  telegram: {
-    name: "Telegram",
-    icon: "✈️",
-    color: "#0088CC",
-    bg: "rgba(0,136,204,0.08)",
-    border: "rgba(0,136,204,0.25)",
-    searchUrl: q => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}`
-  } // Search public channels
-};
-const SURPRISE_NICHES = ["ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations", "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch", "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions", "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera", "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong", "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp", "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real"];
-const TREND_COLOR = {
-  Growing: "#4CAF50",
-  Stable: "#FFD700",
-  Declining: "#FF4444",
-  Exploding: "#FF0050"
-};
+        const EXAMPLE_TOPICS = [
+            "Worst Martial Arts Fails", "Dumbest MMA Moments",
+            "Most Embarrassing Sports Goals", "Craziest Referee Mistakes",
+            "Funniest Gym Fails", "Worst Penalty Kicks Ever",
+            "Most Painful Basketball Bloopers", "Craziest Skateboard Wipeouts",
+        ];
 
-// --- API Helper ---
-// FIX: Increased timeout to 60 seconds (60000 ms) as per final architecture
-const DEFAULT_TIMEOUT = 60000;
-// IMPORTANT: Replace with YOUR Cloudflare Worker URL
-const WORKER_BASE_URL = "https://viral-discovery-proxy.fasterwgseverkh.workers.dev";
+        const DATE_FILTERS = ["24 Hours", "7 Days", "30 Days", "1 Year", "All Time"];
 
-// FIX: Updated LLM_PROVIDERS_CONFIG with more reliable and current model IDs for OpenRouter and Google,
-// and prioritized Cloudflare as default/fallback.
-const LLM_PROVIDERS_CONFIG = {
-  cloudflare: {
-    name: "Cloudflare Workers AI",
-    models: [{
-      id: "@cf/meta/llama-3.1-8b-instruct-fast",
-      name: "Llama 3.1 (Cloudflare)"
-    }, {
-      id: "@cf/zai-org/glm-4.7-flash",
-      name: "GLM 4.7 Flash (Cloudflare)"
-    },
-    // More stable
-    {
-      id: "@cf/meta/llama-3-8b-instruct",
-      name: "Llama 3 (Cloudflare)"
-    },
-    // If 3.1 fails
-    {
-      id: "@cf/meta/llama-2-7b-chat-int8",
-      name: "Llama 2 (Cloudflare)"
-    } // Cheaper fallback
-    ]
-  },
-  openrouter: {
-    name: "OpenRouter",
-    models: [{
-      id: "openai/gpt-4o",
-      name: "GPT-4o (OpenRouter)"
-    }, {
-      id: "google/gemini-pro-1.5",
-      name: "Gemini Pro 1.5 (OpenRouter)"
-    },
-    // More reliable Gemini ID
-    {
-      id: "anthropic/claude-3-haiku",
-      name: "Claude 3 Haiku (OpenRouter)"
-    },
-    // Cheaper Claude
-    {
-      id: "mistralai/mistral-7b-instruct-v0.3",
-      name: "Mistral 7B (OpenRouter)"
-    }]
-  },
-  google: {
-    name: "Google AI Studio",
-    models: [{
-      id: "gemini-1.5-flash",
-      name: "Gemini 1.5 Flash"
-    },
-    // Common working model
-    {
-      id: "gemini-1.5-pro",
-      name: "Gemini 1.5 Pro"
-    } // If flash not enough
-    ]
-  },
-  github: {
-    name: "GitHub Models",
-    models: [{
-      id: "gpt-4o-mini",
-      name: "GPT-4o Mini (GitHub)"
-    }] // Assuming this model ID is still valid
-  },
-  huggingface: {
-    name: "HuggingFace",
-    models: [{
-      id: "mistralai/Mistral-7B-Instruct-v0.3",
-      name: "Mistral 7B (HF)"
-    }] // Assuming this model ID is still valid
-  }
-};
-async function callWorkerAPI(endpoint, payload, options = {}) {
-  const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
-  const controller = new AbortController();
-  const signal = controller.signal;
-  const timeout = options.timeout || DEFAULT_TIMEOUT;
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const res = await fetch(workerUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload),
-      signal: signal
-    });
-    clearTimeout(timer);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || `Worker request failed with status ${res.status}`);
-    }
-    return data;
-  } catch (err) {
-    clearTimeout(timer);
-    console.error("Error fetching from worker:", err);
-    throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
-  }
-}
+        const PLATFORM_CFG = {
+            youtube: { name: "YouTube", icon: "▶", color: "#FF0000", bg: "rgba(255,0,0,0.08)", border: "rgba(255,0,0,0.25)",
+                searchUrl: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+            tiktok: { name: "TikTok", icon: "♬", color: "#00F2EA", bg: "rgba(0,242,234,0.07)", border: "rgba(0,242,234,0.25)",
+                searchUrl: (q) => `https://www.tiktok.com/search?q=${encodeURIComponent(q)}` },
+            reddit: { name: "Reddit", icon: "●", color: "#FF4500", bg: "rgba(255,69,0,0.08)", border: "rgba(255,69,0,0.25)",
+                searchUrl: (q) => `https://www.reddit.com/search/?q=${encodeURIComponent(q)}&type=link&sort=top` },
+            instagram: { name: "Instagram", icon: "📸", color: "#E1306C", bg: "rgba(225,48,108,0.08)", border: "rgba(225,48,108,0.25)",
+                searchUrl: (q) => `https://www.instagram.com/explore/tags/${encodeURIComponent(q.replace(/\s+/g, ''))}` },
+            twitter: { name: "Twitter", icon: "𝕏", color: "#1DA1F2", bg: "rgba(29,161,242,0.08)", border: "rgba(29,161,242,0.25)",
+                searchUrl: (q) => `https://twitter.com/search?q=${encodeURIComponent(q)}` },
+            facebook: { name: "Facebook", icon: "fb", color: "#1877F2", bg: "rgba(24,119,242,0.08)", border: "rgba(24,119,242,0.25)",
+                searchUrl: (q) => `https://www.facebook.com/search/videos/?q=${encodeURIComponent(q)}` },
+            telegram: { name: "Telegram", icon: "✈️", color: "#0088CC", bg: "rgba(0,136,204,0.08)", border: "rgba(0,136,204,0.25)",
+                searchUrl: (q) => `https://t.me/s/${encodeURIComponent(q.replace(/\s+/g, ''))}` },
+        };
 
-// --- UI Components ---
-function openLink(url) {
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-function PlatformBtn({
-  platform,
-  label,
-  url,
-  small = false
-}) {
-  const c = PLATFORM_CFG[platform];
-  if (!c) {
-    console.warn(`Platform config not found for: ${platform}`);
-    return /*#__PURE__*/React.createElement("button", {
-      className: small ? 'platform-btn-small' : 'platform-btn',
-      disabled: true
-    }, label);
-  }
-  return /*#__PURE__*/React.createElement("button", {
-    onClick: () => openLink(url),
-    style: {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-      background: c.bg,
-      border: `1px solid ${c.border}`,
-      borderRadius: 7,
-      padding: small ? "4px 9px" : "5px 11px",
-      fontSize: small ? 10 : 11,
-      fontWeight: 700,
-      color: c.color,
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: small ? 9 : 10
-    }
-  }, c.icon), label, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 8,
-      opacity: 0.55
-    }
-  }, "↗"));
-}
-function RetentionCurve() {
-  return /*#__PURE__*/React.createElement("div", {
-    className: "retention-curve-wrapper"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "retention-curve-label"
-  }, "Retention"), [...RANK_META].reverse().map(m => /*#__PURE__*/React.createElement("div", {
-    key: m.rank,
-    className: "retention-rank-item"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "retention-percent",
-    style: {
-      color: m.color
-    }
-  }, m.bar, "%"), /*#__PURE__*/React.createElement("div", {
-    className: "retention-bar-inner",
-    style: {
-      '--bar-height': `${m.bar * 0.5}px`,
-      '--item-color': m.color,
-      '--item-glow': m.glow,
-      height: `${m.bar * 0.5}px`,
-      background: `linear-gradient(180deg,${m.color},rgba(255,255,255,0.03))`,
-      boxShadow: `0 -3px 10px ${m.glow}`
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "retention-rank-label"
-  }, "#", m.rank))));
-}
-function InsightsCard({
-  title,
-  icon,
-  children
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    className: "insights-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-card-title"
-  }, icon, " ", title), children);
-}
-function EvidenceList({
-  data,
-  platformType
-}) {
-  if (!data || data.length === 0) {
-    return /*#__PURE__*/React.createElement("div", {
-      className: "evidence-no-data"
-    }, "No ", platformType, " evidence found.");
-  }
-  return /*#__PURE__*/React.createElement("div", {
-    className: "evidence-list"
-  }, data.map((item, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    className: "evidence-item"
-  }, item.thumbnail_url ? /*#__PURE__*/React.createElement("img", {
-    src: item.thumbnail_url,
-    alt: "thumbnail",
-    className: "evidence-thumb"
-  }) : /*#__PURE__*/React.createElement("div", {
-    className: "evidence-thumb",
-    style: {
-      backgroundColor: '#262a30'
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "evidence-info"
-  }, /*#__PURE__*/React.createElement("a", {
-    href: item.url,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    className: "evidence-info-title"
-  }, item.title), /*#__PURE__*/React.createElement("div", {
-    className: "evidence-info-meta"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "evidence-info-platform"
-  }, item.platform), item.creator_handle && ` · ${item.creator_handle}`, " ", item.views_approx && ` · ${item.views_approx.toLocaleString()} views`, item.likes_approx && ` · ${item.likes_approx.toLocaleString()} likes`, item.upvotes_approx && ` · ${item.upvotes_approx.toLocaleString()} upvotes`, item.comments && ` · ${item.comments.toLocaleString()} comments`, item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`), item.description_snippet && /*#__PURE__*/React.createElement("div", {
-    className: "text-sm text-gray-600 mt-1"
-  }, item.description_snippet), /*#__PURE__*/React.createElement("span", {
-    className: "evidence-info-source-type"
-  }, item.source_type?.replace(/_/g, ' '))))));
-}
-function App() {
-  const [topic, setTopic] = useState('');
-  const [creativeBrief, setCreativeBrief] = useState('');
-  const [referenceChannels, setReferenceChannels] = useState('');
-  const [dateFilter, setDateFilter] = useState('7 Days');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [results, setResults] = useState(null);
-  const [activeProvider, setActiveProvider] = useState(() => {
-    // FIX: Default provider to 'cloudflare' as per architectural discussion
-    const firstConfigured = Object.keys(LLM_PROVIDERS_CONFIG).find(key => key === 'cloudflare' || LLM_PROVIDERS_CONFIG[key]);
-    return firstConfigured || 'cloudflare';
-  });
-  const [availableModels, setAvailableModels] = useState([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [restored, setRestored] = useState(false);
-  const [activeView, setActiveView] = useState("insights");
+        const SURPRISE_NICHES = [
+            "ranking the worst martial arts fails", "don't check the sound moments", "funniest chicken scream compilations",
+            "instant regret prank fails", "optical illusion moments that break your brain", "gym fails that hurt to watch",
+            "ranking the most unexpected plot twists caught on camera", "wait for it fail compilations", "fake wave prank reactions",
+            "perfect timing coincidences caught on camera", "things that shouldn't have worked but did", "ranking worst decisions caught on camera",
+            "animals ruining everything compilation", "don't trust your eyes illusions", "public prank reactions gone wrong",
+            "ranking the most savage comebacks caught on camera", "near miss moments that will make you gasp",
+            "ranking the funniest scream reactions", "instant karma caught on camera", "things that look fake but are 100% real",
+        ];
 
-  // FIX: Added missing state variables for phase indication and copy functionality
-  const [copied, setCopied] = useState(false);
-  const [phaseIdx, setPhaseIdx] = useState(0);
-  const intervalRef = useRef(null);
-  const phases = ["Planning research strategy…", "Extracting editorial DNA…", "Hunting for source clips…", "Analyzing raw evidence…", "Generating actionable insights…", "Finalizing report…"];
-  const STORAGE_KEY = 'viralRadarState_v1_react_source_intelligence';
+        const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Exploding: "#FF0050" };
 
-  // Helper to persist state to localStorage
-  const persistState = newState => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-    } catch (e) {
-      console.error("Failed to save state to localStorage:", e);
-    }
-  };
+        const DEFAULT_TIMEOUT = 60000;
+        const WORKER_BASE_URL = window.location.origin; // Worker URL should be the current host origin
 
-  // Helper to restore state from localStorage
-  const restoreState = () => {
-    try {
-      const savedState = localStorage.getItem(STORAGE_KEY);
-      if (savedState) {
-        const parsedState = JSON.parse(savedState);
-        setTopic(parsedState.topic || '');
-        setCreativeBrief(parsedState.creativeBrief || '');
-        setReferenceChannels(parsedState.referenceChannels || '');
-        setDateFilter(parsedState.dateFilter || '7 Days');
-        setResults(parsedState.results || null);
-        setRestored(!!parsedState.results);
-        setActiveView(parsedState.activeView || 'insights');
+        const LLM_PROVIDERS_CONFIG = {
+            cloudflare: { 
+                name: "Cloudflare Workers AI", 
+                models: [
+                    { id: "@cf/meta/llama-3.1-8b-instruct-fast", name: "Llama 3.1 (Cloudflare)" }, 
+                    { id: "@cf/zai-org/glm-4.7-flash", name: "GLM 4.7 Flash (Cloudflare)" },
+                    { id: "@cf/meta/llama-3-8b-instruct", name: "Llama 3 (Cloudflare)" }, 
+                    { id: "@cf/meta/llama-2-7b-chat-int8", name: "Llama 2 (Cloudflare)" }
+                ]
+            },
+            openrouter: { 
+                name: "OpenRouter", 
+                models: [
+                    { id: "openai/gpt-4o", name: "GPT-4o (OpenRouter)" },
+                    { id: "google/gemini-pro-1.5", name: "Gemini Pro 1.5 (OpenRouter)" }, 
+                    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku (OpenRouter)" }, 
+                    { id: "mistralai/mistral-7b-instruct-v0.3", name: "Mistral 7B (OpenRouter)" }
+                ]
+            },
+            google: { 
+                name: "Google AI Studio", 
+                models: [
+                    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" }, 
+                    { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" } 
+                ]
+            },
+            github: { 
+                name: "GitHub Models", 
+                models: [{ id: "gpt-4o-mini", name: "GPT-4o Mini (GitHub)" }]
+            },
+            huggingface: { 
+                name: "HuggingFace", 
+                models: [{ id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B (HF)" }]
+            },
+        };
 
-        // Restore LLM provider and model, defaulting to 'cloudflare' if none found
-        let restoredProviderName = parsedState.activeProvider;
-        if (!restoredProviderName || !LLM_PROVIDERS_CONFIG[restoredProviderName]) {
-          restoredProviderName = 'cloudflare';
+        async function callWorkerAPI(endpoint, payload, options = {}) {
+            const workerUrl = `${WORKER_BASE_URL}${endpoint}`;
+            const controller = new AbortController();
+            const signal = controller.signal;
+            const timeout = options.timeout || DEFAULT_TIMEOUT;
+            const timer = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const res = await fetch(workerUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                    signal: signal
+                });
+                clearTimeout(timer);
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || `Worker request failed with status ${res.status}`);
+                }
+                return data;
+            } catch (err) {
+                clearTimeout(timer);
+                console.error("Error fetching from worker:", err);
+                throw new Error(err.name === 'AbortError' ? `Request timed out after ${timeout / 1000}s.` : err.message);
+            }
         }
-        setActiveProvider(restoredProviderName);
-        const providerCfg = LLM_PROVIDERS_CONFIG[restoredProviderName];
-        setAvailableModels(providerCfg?.models || []);
-        if (parsedState.selectedModel && providerCfg?.models?.some(m => m.id === parsedState.selectedModel)) {
-          setSelectedModel(parsedState.selectedModel);
-        } else {
-          setSelectedModel(providerCfg?.models?.[0]?.id || '');
-        }
-      }
-    } catch (e) {
-      console.error("Failed to restore state from localStorage:", e);
-    }
-  };
 
-  // Initial fetch for worker capabilities and restore state
-  useEffect(() => {
-    const init = async () => {
-      let initialProviderName = activeProvider;
-      try {
-        // FIX: Added timeout to worker initial fetch
-        const response = await fetch(`${WORKER_BASE_URL}/`, {
-          signal: AbortSignal.timeout(10000)
+        // --- Helper functions for UI rendering ---
+        function getById(id) { return document.getElementById(id); }
+        function show(element) { if (element) element.style.display = ''; }
+        function hide(element) { if (element) element.style.display = 'none'; }
+        function renderTags(elementId, tags, defaultText = 'N/A') {
+            const el = getById(elementId);
+            if (!el) return;
+            el.innerHTML = '';
+            if (tags && tags.length > 0) {
+                tags.forEach(tag => {
+                    const span = document.createElement('span');
+                    span.className = 'insights-tag-chip';
+                    span.textContent = tag;
+                    el.appendChild(span);
+                });
+            } else {
+                const span = document.createElement('span');
+                span.textContent = defaultText;
+                el.appendChild(span);
+            }
+        }
+
+        function renderList(elementId, items, defaultText = 'No data available.') {
+            const ul = getById(elementId);
+            if (!ul) return;
+            ul.innerHTML = '';
+            if (items && items.length > 0) {
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    ul.appendChild(li);
+                });
+            } else {
+                const div = document.createElement('div');
+                div.className = 'evidence-no-data';
+                div.textContent = defaultText;
+                ul.appendChild(div);
+            }
+        }
+
+        function renderEvidenceList(elementId, data, platformType) {
+            const container = getById(elementId);
+            if (!container) return;
+            container.innerHTML = ''; // Clear previous content
+
+            if (!data || data.length === 0) {
+                const noDataDiv = document.createElement('div');
+                noDataDiv.className = 'evidence-no-data';
+                noDataDiv.textContent = `No ${platformType} evidence found.`;
+                container.appendChild(noDataDiv);
+                return;
+            }
+
+            data.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'evidence-item';
+
+                const thumbnailHtml = item.thumbnail_url
+                    ? `<img src="${item.thumbnail_url}" alt="thumbnail" class="evidence-thumb" />`
+                    : `<div class="evidence-thumb" style="background-color: #262a30;"></div>`;
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'evidence-info';
+                infoDiv.innerHTML = `
+                    <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="evidence-info-title">
+                        ${item.title || 'Untitled Clip'}
+                    </a>
+                    <div class="evidence-info-meta">
+                        <span class="evidence-info-platform">${item.platform || 'N/A'}</span>
+                        ${item.creator_handle ? ` · ${item.creator_handle}` : ''}
+                        ${item.views_approx ? ` · ${item.views_approx.toLocaleString()} views` : ''}
+                        ${item.likes_approx ? ` · ${item.likes_approx.toLocaleString()} likes` : ''}
+                        ${item.upvotes_approx ? ` · ${item.upvotes_approx.toLocaleString()} upvotes` : ''}
+                        ${item.comments ? ` · ${item.comments.toLocaleString()} comments` : ''}
+                        ${item.published_at ? ` · ${new Date(item.published_at).toLocaleDateString()}` : ''}
+                    </div>
+                    ${item.description_snippet ? `<div class="text-sm text-gray-600 mt-1">${item.description_snippet}</div>` : ''}
+                    <span class="evidence-info-source-type">${item.source_type?.replace(/_/g, ' ') || 'N/A'}</span>
+                `;
+                itemDiv.innerHTML = thumbnailHtml;
+                itemDiv.appendChild(infoDiv);
+                container.appendChild(itemDiv);
+            });
+        }
+
+
+        // --- App Logic ---
+        const state = {
+            topic: '',
+            creativeBrief: '',
+            referenceChannels: '',
+            dateFilter: '7 Days',
+            loading: false,
+            error: null,
+            results: null,
+            activeProvider: 'cloudflare', // Default as per new architecture
+            availableModels: [],
+            selectedModel: '',
+            restored: false,
+            activeView: "insights",
+            copied: false,
+            phaseIdx: 0,
+            intervalRef: null,
+        };
+
+        function setState(newState) {
+            Object.assign(state, newState);
+            render(); // Re-render UI after state change
+        }
+
+        function persistState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.error("Failed to save state to localStorage:", e);
+            }
+        }
+
+        function restoreState() {
+            try {
+                const savedState = localStorage.getItem(STORAGE_KEY);
+                if (savedState) {
+                    const parsedState = JSON.parse(savedState);
+                    setState({
+                        topic: parsedState.topic || '',
+                        creativeBrief: parsedState.creativeBrief || '',
+                        referenceChannels: parsedState.referenceChannels || '',
+                        dateFilter: parsedState.dateFilter || '7 Days',
+                        results: parsedState.results || null,
+                        restored: !!parsedState.results,
+                        activeView: parsedState.activeView || 'insights',
+                        copied: parsedState.copied || false,
+                        phaseIdx: parsedState.phaseIdx || 0,
+                    });
+
+                    // Restore LLM provider and model
+                    let restoredProviderName = parsedState.activeProvider;
+                    if (!restoredProviderName || !LLM_PROVIDERS_CONFIG[restoredProviderName]) {
+                        restoredProviderName = 'cloudflare';
+                    }
+                    setState({ activeProvider: restoredProviderName });
+
+                    const providerCfg = LLM_PROVIDERS_CONFIG[restoredProviderName];
+                    setState({ availableModels: providerCfg?.models || [] });
+                    if (parsedState.selectedModel && providerCfg?.models?.some(m => m.id === parsedState.selectedModel)) {
+                        setState({ selectedModel: parsedState.selectedModel });
+                    } else {
+                        setState({ selectedModel: providerCfg?.models?.[0]?.id || '' });
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to restore state from localStorage:", e);
+            }
+        }
+
+        async function initApp() {
+            let initialProviderName = state.activeProvider;
+
+            try {
+                const response = await fetch(`${WORKER_BASE_URL}/api/status`, { signal: AbortSignal.timeout(10000) });
+                if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
+                const data = await response.json();
+
+                if (data.providers_configured && typeof data.providers_configured === 'object') {
+                    const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
+                    if (firstConfiguredFromWorker) {
+                        initialProviderName = firstConfiguredFromWorker;
+                    } else {
+                        initialProviderName = 'cloudflare';
+                    }
+                } else {
+                    console.warn("Worker did not return valid 'providers_configured'. Defaulting to 'cloudflare'.");
+                    initialProviderName = 'cloudflare';
+                }
+            } catch (e) {
+                console.error("Failed to fetch worker capabilities, falling back to defaults:", e);
+                initialProviderName = 'cloudflare';
+            }
+
+            const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
+            if (currentProviderCfg) {
+                setState({ 
+                    activeProvider: initialProviderName,
+                    availableModels: currentProviderCfg.models,
+                    selectedModel: currentProviderCfg.models[0]?.id || '' 
+                });
+            } else {
+                setState({ 
+                    error: "Initial LLM provider configuration missing. Please check LLM_PROVIDERS_CONFIG.",
+                    activeProvider: '',
+                    availableModels: [],
+                    selectedModel: '' 
+                });
+            }
+            restoreState();
+            render(); // Initial render after fetching config and restoring state
+        }
+
+        function render() {
+            // Update input fields
+            getById('topic-input').value = state.topic;
+            getById('creative-brief-input').value = state.creativeBrief;
+            getById('reference-channels-input').value = state.referenceChannels;
+            getById('dateFilter').value = state.dateFilter;
+
+            // Update provider/model selects
+            const llmProviderSelect = getById('llmProvider');
+            if (llmProviderSelect) {
+                llmProviderSelect.innerHTML = Object.keys(LLM_PROVIDERS_CONFIG).map(key => `
+                    <option value="${key}" ${key === state.activeProvider ? 'selected' : ''}>${LLM_PROVIDERS_CONFIG[key].name}</option>
+                `).join('');
+                llmProviderSelect.value = state.activeProvider; // Ensure selected value is set
+            }
+
+            const llmModelSelect = getById('llmModel');
+            if (llmModelSelect) {
+                llmModelSelect.innerHTML = state.availableModels.map(m => `
+                    <option value="${m.id}" ${m.id === state.selectedModel ? 'selected' : ''}>${m.name}</option>
+                `).join('');
+                llmModelSelect.value = state.selectedModel; // Ensure selected value is set
+            }
+
+            // Loading state
+            if (state.loading) {
+                show(getById('loading-box'));
+                hide(getById('error-box'));
+                hide(getById('results-section'));
+                hide(getById('no-result-message'));
+                getById('generate-btn').classList.add('loading');
+                getById('generate-btn').disabled = true;
+                getById('generate-btn-text').textContent = phases[state.phaseIdx];
+                show(getById('generate-btn-loading-spinner'));
+                getById('topic-input').disabled = true;
+                getById('creative-brief-input').disabled = true;
+                getById('reference-channels-input').disabled = true;
+                getById('dateFilter').disabled = true;
+                llmProviderSelect.disabled = true;
+                llmModelSelect.disabled = true;
+            } else {
+                hide(getById('loading-box'));
+                getById('generate-btn').classList.remove('loading');
+                getById('generate-btn').disabled = !state.topic.trim() || !state.selectedModel;
+                getById('generate-btn-text').textContent = "🚀 Get Source Intelligence";
+                hide(getById('generate-btn-loading-spinner'));
+                getById('topic-input').disabled = false;
+                getById('creative-brief-input').disabled = false;
+                getById('reference-channels-input').disabled = false;
+                getById('dateFilter').disabled = false;
+                llmProviderSelect.disabled = false;
+                llmModelSelect.disabled = false;
+            }
+
+            // Error state
+            if (state.error) {
+                show(getById('error-box'));
+                getById('error-message').textContent = state.error;
+                hide(getById('results-section'));
+                hide(getById('no-result-message'));
+            } else {
+                hide(getById('error-box'));
+            }
+
+            // Results state
+            if (state.results && !state.loading && !state.error) {
+                show(getById('results-section'));
+                hide(getById('no-result-message'));
+                getById('restored-tag').style.display = state.restored ? '' : 'none';
+
+                const editorialObjective = state.results.editorial_objective || {};
+                const insights = state.results.ai_actionable_insights || {};
+                const rawEvidence = state.results.raw_evidence_found || {};
+
+                getById('result-summary-topic').textContent = editorialObjective.topic || 'N/A';
+                
+                const opportunityBadge = getById('opportunity-badge');
+                if (insights.overall_opportunity_reasoning) {
+                    opportunityBadge.textContent = `🚀 ${insights.overall_opportunity_reasoning.split(' ')[0]} Opportunity`;
+                    show(opportunityBadge);
+                } else {
+                    hide(opportunityBadge);
+                }
+
+                const trendBadge = getById('trend-badge');
+                if (insights.trend_status) {
+                    trendBadge.textContent = `📈 ${insights.trend_status}`;
+                    trendBadge.style.borderColor = (TREND_COLOR[insights.trend_status] || "#888") + '40';
+                    trendBadge.style.color = TREND_COLOR[insights.trend_status];
+                    show(trendBadge);
+                } else {
+                    hide(trendBadge);
+                }
+                
+                // Insights View
+                if (state.activeView === 'insights') {
+                    show(getById('insights-view-content'));
+                    hide(getById('raw-evidence-view-content'));
+                    getById('insights-view-btn').classList.add('active');
+                    getById('raw-evidence-view-btn').classList.remove('active');
+
+                    // Ranked Clips
+                    const rankedClipsList = getById('ranked-clips-list');
+                    rankedClipsList.innerHTML = '';
+                    if (insights.ranked_clip_opportunities && insights.ranked_clip_opportunities.length > 0) {
+                        insights.ranked_clip_opportunities.forEach((clip, i) => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `
+                                <div class="insights-item-label">Rank #${clip.rank || (6 - i)}: ${clip.moment_idea || 'N/A'}</div>
+                                <div class="insights-item-value">
+                                    Platform: ${clip.suggested_source_platform || 'Any'} |
+                                    Search Terms: ${(clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', ')}
+                                    ${clip.url_to_potential_original_clip ? `<a href="${clip.url_to_potential_original_clip}" target="_blank" rel="noopener noreferrer" style="margin-left: 10px; color: var(--acid);">View Clip ↗</a>` : ''}
+                                    ${clip.editorial_repost_analysis ? `<div class="text-sm text-gray-500 mt-1">${clip.editorial_repost_analysis}</div>` : ''}
+                                    ${clip.confidence_score !== undefined ? `<div class="text-sm text-gray-500 mt-1">Confidence: ${clip.confidence_score}%</div>` : ''}
+                                </div>
+                            `;
+                            rankedClipsList.appendChild(li);
+                        });
+                    } else {
+                        const div = document.createElement('div');
+                        div.className = 'evidence-no-data';
+                        div.textContent = 'No ranked clip opportunities found yet.';
+                        rankedClipsList.appendChild(div);
+                    }
+
+                    // YouTube Upload Strategy
+                    renderTags('hook-suggestions', insights.hook_suggestions);
+                    renderTags('hashtag-strategy', insights.hashtag_strategy);
+                    renderTags('key-search-phrases', insights.key_search_phrases_for_discoverability);
+                    getById('seo-title-insights').textContent = insights.seo_elements_for_upload?.title_insights || 'N/A';
+                    getById('seo-description-hook').textContent = insights.seo_elements_for_upload?.description_hook || 'N/A';
+                    renderTags('seo-priority-tags', insights.seo_elements_for_upload?.tags_to_prioritize);
+
+                    // Editorial DNA Summary
+                    getById('dna-clip-length').textContent = editorialObjective.editorial_dna?.clip_length || 'N/A';
+                    getById('dna-hook-style').textContent = editorialObjective.editorial_dna?.hook_style || 'N/A';
+                    getById('dna-emotion-focus').textContent = editorialObjective.editorial_dna?.emotion_focus || 'N/A';
+                    getById('dna-source-preference').textContent = editorialObjective.editorial_dna?.source_preference || 'N/A';
+
+                    // Research Constraints Applied
+                    renderList('research-constraints-list', editorialObjective.research_constraints_applied, 'No research constraints applied.');
+
+                } else if (state.activeView === 'raw_evidence') {
+                    hide(getById('insights-view-content'));
+                    show(getById('raw-evidence-view-content'));
+                    getById('insights-view-btn').classList.remove('active');
+                    getById('raw-evidence-view-btn').classList.add('active');
+
+                    // Raw Evidence Lists
+                    renderEvidenceList('youtube-clips-list', rawEvidence.youtube_clips, 'YouTube');
+                    renderEvidenceList('tiktok-clips-list', rawEvidence.tiktok_clips, 'TikTok');
+                    renderEvidenceList('reddit-posts-list', rawEvidence.reddit_posts, 'Reddit');
+                    renderEvidenceList('instagram-reels-list', rawEvidence.instagram_reels, 'Instagram');
+                    renderEvidenceList('facebook-posts-list', rawEvidence.facebook_posts, 'Facebook');
+                    renderEvidenceList('telegram-clips-list', rawEvidence.telegram_clips, 'Telegram');
+                }
+
+            } else if (!state.loading && !state.error) {
+                hide(getById('results-section'));
+                show(getById('no-result-message'));
+            }
+
+            persistState(); // Persist state after each render
+        }
+
+        // --- Event Handlers ---
+        getById('topic-input').addEventListener('input', (e) => setState({ topic: e.target.value }));
+        getById('creative-brief-input').addEventListener('input', (e) => setState({ creativeBrief: e.target.value }));
+        getById('reference-channels-input').addEventListener('input', (e) => setState({ referenceChannels: e.target.value }));
+        getById('dateFilter').addEventListener('change', (e) => setState({ dateFilter: e.target.value }));
+
+        getById('llmProvider').addEventListener('change', async (e) => {
+            const newProviderName = e.target.value;
+            setState({ activeProvider: newProviderName });
+            const providerCfg = LLM_PROVIDERS_CONFIG[newProviderName];
+            setState({ 
+                availableModels: providerCfg?.models || [], 
+                selectedModel: providerCfg?.models?.[0]?.id || '' 
+            });
         });
-        if (!response.ok) throw new Error(`Worker initial fetch failed with status ${response.status}`);
-        const data = await response.json();
 
-        // FIX: Handle missing providers_configured gracefully — default to cloudflare
-        if (data.providers_configured && typeof data.providers_configured === 'object') {
-          // Find the first configured provider from the Worker that also exists in our frontend config
-          const firstConfiguredFromWorker = Object.keys(LLM_PROVIDERS_CONFIG).find(key => data.providers_configured[key]);
-          if (firstConfiguredFromWorker) {
-            initialProviderName = firstConfiguredFromWorker;
-          } else {
-            initialProviderName = 'cloudflare'; // Default to cloudflare if none explicitly configured in worker or frontend
-          }
-        } else {
-          // Worker doesn't return providers_configured or it's malformed — default to cloudflare
-          console.warn("Worker did not return valid 'providers_configured'. Defaulting to 'cloudflare'.");
-          initialProviderName = 'cloudflare';
-        }
-      } catch (e) {
-        console.error("Failed to fetch worker capabilities, falling back to defaults:", e);
-        // FIX: Don't show error for initial fetch, just default to cloudflare and continue
-        initialProviderName = 'cloudflare';
-      }
-      const currentProviderCfg = LLM_PROVIDERS_CONFIG[initialProviderName];
-      if (currentProviderCfg) {
-        setActiveProvider(initialProviderName);
-        setAvailableModels(currentProviderCfg.models);
-        setSelectedModel(currentProviderCfg.models[0]?.id || '');
-      } else {
-        // Fallback if the default/initial provider config is somehow missing too
-        setError("Initial LLM provider configuration missing. Please check LLM_PROVIDERS_CONFIG.");
-        setActiveProvider('');
-        setAvailableModels([]);
-        setSelectedModel('');
-      }
-      restoreState();
-    };
-    init();
-  }, []);
+        getById('llmModel').addEventListener('change', (e) => setState({ selectedModel: e.target.value }));
 
-  // Persist state whenever relevant state changes
-  useEffect(() => {
-    persistState({
-      topic,
-      creativeBrief,
-      referenceChannels,
-      dateFilter,
-      results,
-      activeView,
-      activeProvider,
-      selectedModel,
-      copied,
-      phaseIdx
-    });
-  }, [topic, creativeBrief, referenceChannels, dateFilter, results, activeView, activeProvider, selectedModel, copied, phaseIdx]);
-  const handleProviderChange = e => {
-    const name = e.target.value;
-    const cfg = LLM_PROVIDERS_CONFIG[name];
-    setActiveProvider(name);
-    setAvailableModels(cfg?.models || []); // Defensive check
-    setSelectedModel(cfg?.models?.[0]?.id || ''); // Defensive check
-  };
-  const handleModelChange = e => {
-    setSelectedModel(e.target.value);
-  };
-  const handleResearch = async () => {
-    if (!topic.trim()) {
-      setError("Enter a topic first.");
-      return;
-    }
-    if (!selectedModel) {
-      setError("Please select an LLM model.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setResults(null);
-    setRestored(false);
-    setActiveView('insights');
-    setCopied(false);
-    setPhaseIdx(0);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      setPhaseIdx(p => (p + 1) % phases.length);
-    }, 900);
-    try {
-      const payload = {
-        topic: topic.trim(),
-        creativeBrief: creativeBrief.trim(),
-        referenceChannels: referenceChannels.split('\n').map(c => c.trim()).filter(Boolean),
-        dateFilter: dateFilter,
-        // Keep for now, but backend determines actual date scope
-        provider: activeProvider,
-        model: selectedModel,
-        // FIX: Added constraints object for the new worker architecture
-        constraints: {
-          clip_duration_range: "any",
-          // Example constraint
-          video_orientation: "any",
-          target_language: "any",
-          max_age_months: dateFilter === "All Time" ? 999 : parseInt(dateFilter.split(' ')[0]) || 30,
-          // Basic mapping
-          min_engagement_level: "medium",
-          content_tone: "any",
-          user_defined_constraints: [] // For other text-based constraints if needed
-        }
-      };
+        getById('surprise-btn').addEventListener('click', () => {
+            const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+            setState({ topic: pick });
+            setState({ creativeBrief: "Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank." });
+            setState({ referenceChannels: "youtube.com/@oogway_ranks\\nyoutube.com/@polarranks" });
+        });
 
-      // Call the new Worker endpoint
-      const insights = await callWorkerAPI('/api/generate-insights', payload);
-      setResults(insights);
-    } catch (err) {
-      console.error("Source Intelligence Engine failed:", err);
-      setError(err.message || "An unknown error occurred during source intelligence processing.");
-    } finally {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setLoading(false);
-      setPhaseIdx(0);
-    }
-  };
-  const hasResult = !!results;
-  return /*#__PURE__*/React.createElement("div", {
-    className: "shell"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "nav"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "nav-brand"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "nav-mark"
-  }, "✦"), /*#__PURE__*/React.createElement("span", {
-    className: "nav-name"
-  }, "Viral Radar")), /*#__PURE__*/React.createElement("span", {
-    className: "nav-badge"
-  }, "Source Intelligence Engine")), /*#__PURE__*/React.createElement("div", {
-    className: "hero"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "hero-tag"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "dot"
-  }), " AI-powered Viral Clip Discovery"), /*#__PURE__*/React.createElement("h1", null, "Uncover the ", /*#__PURE__*/React.createElement("span", null, "Original"), /*#__PURE__*/React.createElement("br", null), "Viral Moments."), /*#__PURE__*/React.createElement("p", null, "Turn editorial objectives into actionable insights. Find real source clips, analyze trends, and get strategic guidance for your content creation.")), /*#__PURE__*/React.createElement(RetentionCurve, null), /*#__PURE__*/React.createElement("div", {
-    className: "console console-input-section"
-  }, " ", /*#__PURE__*/React.createElement("div", {
-    className: "console-head"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "cdot",
-    style: {
-      background: '#ff5f57'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "cdot",
-    style: {
-      background: '#febc2e'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: '#28c840'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: '6px'
-    }
-  }, "research.sh")), /*#__PURE__*/React.createElement("div", {
-    className: "console-body"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "console-prompt"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "caret"
-  }, "›"), /*#__PURE__*/React.createElement("input", {
-    type: "text",
-    value: topic,
-    onChange: e => setTopic(e.target.value),
-    onKeyDown: e => e.key === "Enter" && !loading && handleResearch(),
-    placeholder: "e.g. Worst Martial Arts Fails",
-    disabled: loading,
-    className: "console-input"
-  }), !topic && !loading && /*#__PURE__*/React.createElement("span", {
-    className: "console-cursor"
-  }), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "surprise-btn",
-    onClick: handleSurpriseMe,
-    disabled: loading,
-    title: "Suggest a niche"
-  }, "🎲")), /*#__PURE__*/React.createElement("div", {
-    className: "config-row"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "select-wrap"
-  }, /*#__PURE__*/React.createElement("label", {
-    htmlFor: "dateFilter",
-    className: "ref-channels-label",
-    style: {
-      marginBottom: '4px'
-    }
-  }, "Date Window"), /*#__PURE__*/React.createElement("select", {
-    id: "dateFilter",
-    value: dateFilter,
-    onChange: e => setDateFilter(e.target.value),
-    disabled: loading
-  }, DATE_FILTERS.map(d => /*#__PURE__*/React.createElement("option", {
-    key: d,
-    value: d
-  }, d)))), /*#__PURE__*/React.createElement("div", {
-    className: "select-wrap"
-  }, /*#__PURE__*/React.createElement("label", {
-    htmlFor: "llmProvider",
-    className: "ref-channels-label",
-    style: {
-      marginBottom: '4px'
-    }
-  }, "AI Provider"), /*#__PURE__*/React.createElement("select", {
-    id: "llmProvider",
-    value: activeProvider,
-    onChange: handleProviderChange,
-    disabled: loading || Object.keys(LLM_PROVIDERS_CONFIG).length === 0
-  }, Object.keys(LLM_PROVIDERS_CONFIG).map(key => /*#__PURE__*/React.createElement("option", {
-    key: key,
-    value: key
-  }, LLM_PROVIDERS_CONFIG[key].name)))), /*#__PURE__*/React.createElement("div", {
-    className: "select-wrap"
-  }, /*#__PURE__*/React.createElement("label", {
-    htmlFor: "llmModel",
-    className: "ref-channels-label",
-    style: {
-      marginBottom: '4px'
-    }
-  }, "AI Model"), /*#__PURE__*/React.createElement("select", {
-    id: "llmModel",
-    value: selectedModel,
-    onChange: e => setSelectedModel(e.target.value),
-    disabled: loading || !availableModels.length
-  }, availableModels.map(m => /*#__PURE__*/React.createElement("option", {
-    key: m.id,
-    value: m.id
-  }, m.name))))), /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-block"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-label"
-  }, /*#__PURE__*/React.createElement("span", null, "◆ Editorial Objective: Creative Brief ", /*#__PURE__*/React.createElement("span", {
-    className: "ref-optional"
-  }, "(describe your content goals)"))), /*#__PURE__*/React.createElement("textarea", {
-    className: "ref-channels-input",
-    value: creativeBrief,
-    onChange: e => setCreativeBrief(e.target.value),
-    placeholder: "e.g. I need a ranked #6-#1 countdown of real, shocking/funny moments. Clips must be original, short (5-20s), one clear event, strong reaction, not compilations, recently reposted, suitable for ranking format.",
-    disabled: loading,
-    rows: 3
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-hint"
-  }, "This is read as direct instructions – it tells the AI what \"good\" looks like for your niche and guides the research plan.")), /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-block"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-label"
-  }, /*#__PURE__*/React.createElement("span", null, "◆ Editorial Objective: Style DNA Sources ", /*#__PURE__*/React.createElement("span", {
-    className: "ref-optional"
-  }, "(paste channel links)"))), /*#__PURE__*/React.createElement("textarea", {
-    className: "ref-channels-input",
-    value: referenceChannels,
-    onChange: e => setReferenceChannels(e.target.value),
-    placeholder: "youtube.com/@oogway_ranks\\nyoutube.com/@polarranks\\nyoutube.com/@mrpurifiedwater",
-    disabled: loading,
-    rows: 2
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "ref-channels-hint"
-  }, "The AI will analyze these channels to understand desired clip length, hook style, emotion focus, and source preference.")), /*#__PURE__*/React.createElement("button", {
-    className: `run-btn ${loading ? 'loading' : ''}`,
-    onClick: handleResearch,
-    disabled: loading || !topic.trim() || !selectedModel
-  }, loading ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      animation: "spin 0.8s linear infinite",
-      display: "inline-block"
-    }
-  }, "⚡"), phases[phaseIdx]) : "🚀 Get Source Intelligence"))), /*#__PURE__*/React.createElement("div", {
-    className: "agent-strip"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "agent-chip"
-  }, "ResearchPlanner"), /*#__PURE__*/React.createElement("span", {
-    className: "agent-chip"
-  }, "SourceHunter"), /*#__PURE__*/React.createElement("span", {
-    className: "agent-chip"
-  }, "InsightsGenerator")), error && /*#__PURE__*/React.createElement("div", {
-    className: "error-box"
-  }, "⚠️ ", error), loading && /*#__PURE__*/React.createElement("div", {
-    className: "loading-box"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "spinner",
-    style: {
-      margin: '0 auto'
-    }
-  }), /*#__PURE__*/React.createElement("p", null, "Orchestrating AI Agents & Backend Services...")), hasResult && !loading && /*#__PURE__*/React.createElement("div", {
-    className: "results"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "results-topbar"
-  }, restored ? /*#__PURE__*/React.createElement("span", {
-    className: "restored-tag"
-  }, "↺ restored from your last visit") : /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("button", {
-    className: "new-search-btn",
-    onClick: handleNewSearch
-  }, "New Research")), /*#__PURE__*/React.createElement("div", {
-    className: "result-summary-box"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "result-summary-title"
-  }, "Source Intelligence Report for:"), /*#__PURE__*/React.createElement("div", {
-    className: "result-summary-topic"
-  }, results.editorial_objective?.topic || 'N/A')), /*#__PURE__*/React.createElement("div", {
-    className: "result-summary-badges"
-  }, results.ai_actionable_insights?.overall_opportunity_reasoning && /*#__PURE__*/React.createElement("span", {
-    className: "summary-badge opportunity"
-  }, "🚀 ", results.ai_actionable_insights.overall_opportunity_reasoning.split(' ')[0], " Opportunity"), results.ai_actionable_insights?.trend_status && /*#__PURE__*/React.createElement("span", {
-    className: "summary-badge trend",
-    style: {
-      borderColor: (TREND_COLOR[results.ai_actionable_insights.trend_status] || "#888") + '40',
-      color: TREND_COLOR[results.ai_actionable_insights.trend_status]
-    }
-  }, "📈 ", results.ai_actionable_insights.trend_status), /*#__PURE__*/React.createElement("button", {
-    onClick: copyResult,
-    className: `copy-result-btn ${copied ? 'copied' : ''}`
-  }, copied ? "✔ Copied" : "📋 Copy"))), /*#__PURE__*/React.createElement("div", {
-    className: "view-mode-selector"
-  }, [{
-    id: "insights",
-    icon: "✨",
-    label: "AI Insights"
-  }, {
-    id: "raw_evidence",
-    icon: "📚",
-    label: "Raw Evidence"
-  }].map(v => /*#__PURE__*/React.createElement("button", {
-    key: v.id,
-    onClick: () => setActiveView(v.id),
-    className: `view-mode-btn ${activeView === v.id ? 'active' : ''}`
-  }, v.icon, " ", v.label))), activeView === "insights" && results.ai_actionable_insights && /*#__PURE__*/React.createElement("div", {
-    className: "insights-section"
-  }, /*#__PURE__*/React.createElement(InsightsCard, {
-    title: "Ranked Clip Opportunities",
-    icon: "🎯"
-  }, /*#__PURE__*/React.createElement("ul", {
-    className: "insights-list"
-  }, (results.ai_actionable_insights.ranked_clip_opportunities || []).length > 0 ? (results.ai_actionable_insights.ranked_clip_opportunities || []).map((clip, i) => /*#__PURE__*/React.createElement("li", {
-    key: i
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Rank #", clip.rank || 6 - i, ": ", clip.moment_idea || 'N/A'), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, "Platform: ", clip.suggested_source_platform || 'Any', " | Search Terms: ", (clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', '), clip.url_to_potential_original_clip && /*#__PURE__*/React.createElement("a", {
-    href: clip.url_to_potential_original_clip,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    style: {
-      marginLeft: '10px',
-      color: 'var(--acid)'
-    }
-  }, "View Clip ↗"), clip.editorial_repost_analysis && /*#__PURE__*/React.createElement("div", {
-    className: "text-sm text-gray-500 mt-1"
-  }, clip.editorial_repost_analysis), clip.confidence_score !== undefined && /*#__PURE__*/React.createElement("div", {
-    className: "text-sm text-gray-500 mt-1"
-  }, "Confidence: ", clip.confidence_score, "%")))) : /*#__PURE__*/React.createElement("div", {
-    className: "evidence-no-data"
-  }, "No ranked clip opportunities found yet."))), /*#__PURE__*/React.createElement(InsightsCard, {
-    title: "YouTube Upload Strategy",
-    icon: "🚀"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Hook Suggestions:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-tags-grid"
-  }, (results.ai_actionable_insights.hook_suggestions || []).length > 0 ? (results.ai_actionable_insights.hook_suggestions || []).map((s, i) => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    className: "insights-tag-chip"
-  }, s)) : /*#__PURE__*/React.createElement("span", null, "N/A"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Hashtag Strategy:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-tags-grid"
-  }, (results.ai_actionable_insights.hashtag_strategy || []).length > 0 ? (results.ai_actionable_insights.hashtag_strategy || []).map((h, i) => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    className: "insights-tag-chip"
-  }, h)) : /*#__PURE__*/React.createElement("span", null, "N/A"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Key Search Phrases for Discoverability:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-tags-grid"
-  }, (results.ai_actionable_insights.key_search_phrases_for_discoverability || []).length > 0 ? (results.ai_actionable_insights.key_search_phrases_for_discoverability || []).map((p, i) => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    className: "insights-tag-chip"
-  }, p)) : /*#__PURE__*/React.createElement("span", null, "N/A"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "SEO Title Insights:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.ai_actionable_insights.seo_elements_for_upload?.title_insights || 'N/A')), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "SEO Description Hook:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.ai_actionable_insights.seo_elements_for_upload?.description_hook || 'N/A')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "SEO Priority Tags:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-tags-grid"
-  }, (results.ai_actionable_insights.seo_elements_for_upload?.tags_to_prioritize || []).length > 0 ? (results.ai_actionable_insights.seo_elements_for_upload.tags_to_prioritize || []).map((t, i) => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    className: "insights-tag-chip"
-  }, t)) : /*#__PURE__*/React.createElement("span", null, "N/A")))), /*#__PURE__*/React.createElement(InsightsCard, {
-    title: "Editorial DNA Summary",
-    icon: "🧬"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Clip Length Preference:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.editorial_objective?.editorial_dna?.clip_length || 'N/A')), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Hook Style:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.editorial_objective?.editorial_dna?.hook_style || 'N/A')), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '10px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Emotion Focus:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.editorial_objective?.editorial_dna?.emotion_focus || 'N/A')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-label"
-  }, "Source Preference:"), /*#__PURE__*/React.createElement("div", {
-    className: "insights-item-value"
-  }, results.editorial_objective?.editorial_dna?.source_preference || 'N/A'))), /*#__PURE__*/React.createElement(InsightsCard, {
-    title: "Research Constraints Applied",
-    icon: "✅"
-  }, /*#__PURE__*/React.createElement("ul", {
-    className: "insights-list",
-    style: {
-      '--before-content': "'✅'"
-    }
-  }, (results.editorial_objective?.research_constraints_applied || []).length > 0 ? (results.editorial_objective?.research_constraints_applied || []).map((c, i) => /*#__PURE__*/React.createElement("li", {
-    key: i,
-    style: {
-      '--before-content': "'✅'"
-    }
-  }, c)) : /*#__PURE__*/React.createElement("div", {
-    className: "evidence-no-data"
-  }, "No research constraints applied.")))), activeView === "raw_evidence" && results.raw_evidence_found && /*#__PURE__*/React.createElement("div", {
-    className: "raw-evidence-section"
-  }, /*#__PURE__*/React.createElement(InsightsCard, {
-    title: "Raw Evidence Found",
-    icon: "📚"
-  }, /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginBottom: '8px'
-    }
-  }, "YouTube Clips"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.youtube_clips,
-    platformType: "YouTube"
-  }), /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginTop: '20px',
-      marginBottom: '8px'
-    }
-  }, "TikTok Clips"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.tiktok_clips,
-    platformType: "TikTok"
-  }), /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginTop: '20px',
-      marginBottom: '8px'
-    }
-  }, "Reddit Posts"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.reddit_posts,
-    platformType: "Reddit"
-  }), /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginTop: '20px',
-      marginBottom: '8px'
-    }
-  }, "Instagram Reels"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.instagram_reels,
-    platformType: "Instagram"
-  }), /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginTop: '20px',
-      marginBottom: '8px'
-    }
-  }, "Facebook Posts"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.facebook_posts,
-    platformType: "Facebook"
-  }), /*#__PURE__*/React.createElement("h3", {
-    className: "insights-item-label",
-    style: {
-      marginTop: '20px',
-      marginBottom: '8px'
-    }
-  }, "Telegram Clips"), /*#__PURE__*/React.createElement(EvidenceList, {
-    data: results.raw_evidence_found.telegram_clips,
-    platformType: "Telegram"
-  })))), !hasResult && !loading && /*#__PURE__*/React.createElement("div", {
-    className: "text-center",
-    style: {
-      padding: "55px 20px",
-      color: "rgba(240,240,245,0.16)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 42,
-      marginBottom: 9
-    }
-  }, "🚀"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 18
-    }
-  }, "Start your Source Intelligence Research!"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      marginTop: 10,
-      fontSize: 13
-    }
-  }, "Enter an objective above to get actionable insights and discover original viral clips.")));
-}
+        getById('generate-btn').addEventListener('click', async () => {
+            if (!state.topic.trim()) { setState({ error: "Enter a topic first." }); return; }
+            if (!state.selectedModel) { setState({ error: "Please select an LLM model." }); return; }
 
-// FIX: Use createRoot for React 18
-ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+            setState({ 
+                loading: true, 
+                error: null, 
+                results: null, 
+                restored: false, 
+                activeView: 'insights', 
+                copied: false, 
+                phaseIdx: 0 
+            });
+
+            if (state.intervalRef) clearInterval(state.intervalRef);
+            state.intervalRef = setInterval(() => {
+                setState({ phaseIdx: (state.phaseIdx + 1) % phases.length });
+            }, 900);
+
+            try {
+                const payload = {
+                    topic: state.topic.trim(),
+                    creativeBrief: state.creativeBrief.trim(),
+                    referenceChannels: state.referenceChannels.split('\\n').map(c => c.trim()).filter(Boolean),
+                    dateFilter: state.dateFilter,
+                    provider: state.activeProvider,
+                    model: state.selectedModel,
+                    constraints: {
+                        clip_duration_range: "any", 
+                        video_orientation: "any",
+                        target_language: "any",
+                        max_age_months: state.dateFilter === "All Time" ? 999 : (parseInt(state.dateFilter.split(' ')[0]) || 30),
+                        min_engagement_level: "medium",
+                        content_tone: "any",
+                        user_defined_constraints: []
+                    }
+                };
+
+                const insights = await callWorkerAPI('/api/generate-insights', payload);
+                setState({ results: insights });
+
+            } catch (err) {
+                console.error("Source Intelligence Engine failed:", err);
+                setState({ error: err.message || "An unknown error occurred during source intelligence processing." });
+            } finally {
+                if (state.intervalRef) clearInterval(state.intervalRef);
+                setState({ loading: false, phaseIdx: 0 });
+            }
+        });
+
+        getById('copy-result-btn').addEventListener('click', () => {
+            if (!state.results) return;
+
+            const insights = state.results.ai_actionable_insights;
+            const rankedClips = insights?.ranked_clip_opportunities || [];
+
+            let copyText = `✨ Source Intelligence Report for: ${state.results.editorial_objective?.topic || 'N/A'}\\n`;
+            copyText += `Creative Brief: ${state.results.editorial_objective?.creative_brief_summary || 'N/A'}\\n\\n`;
+            copyText += `--- Actionable Insights --- \\n\\n`;
+
+            if (insights?.overall_opportunity_reasoning) { 
+                copyText += `🚀 Opportunity Reasoning: ${insights.overall_opportunity_reasoning}\\n`;
+            }
+            if (insights?.trend_status) { 
+                copyText += `📈 Trend Status: ${insights.trend_status}\\n`;
+            }
+
+            if (insights?.hook_suggestions?.length > 0) {
+                copyText += `⚡ Hook Suggestions: ${insights.hook_suggestions.map(s => `"${s}"`).join(', ')}\\n`;
+            }
+            if (insights?.hashtag_strategy?.length > 0) {
+                copyText += `\\# Hashtag Strategy: ${insights.hashtag_strategy.map(h => `"${h}"`).join(', ')}\\n`;
+            }
+            if (insights?.key_search_phrases_for_discoverability?.length > 0) {
+                copyText += `🔍 Discoverability Phrases: ${insights.key_search_phrases_for_discoverability.map(p => `"${p}"`).join(', ')}\\n`;
+            }
+            if (insights?.suggested_source_platforms_for_originals?.length > 0) {
+                copyText += `Platforms for Originals: ${insights.suggested_source_platforms_for_originals.join(', ')}\\n`;
+            }
+            if (insights?.repost_analysis_insight) {
+                copyText += `🔄 Repost Analysis: ${insights.repost_analysis_insight}\\n`;
+            }
+            if (insights?.seo_elements_for_upload?.title_insights) {
+                copyText += `📝 Title SEO: ${insights.seo_elements_for_upload.title_insights}\\n`;
+            }
+            if (insights?.seo_elements_for_upload?.description_hook) {
+                copyText += `✍️ Description Hook: ${insights.seo_elements_for_upload.description_hook}\\n`;
+            }
+            if (insights?.seo_elements_for_upload?.tags_to_prioritize?.length > 0) {
+                copyText += `🏷️ Priority Tags: ${insights.seo_elements_for_upload.tags_to_prioritize.map(t => `"${t}"`).join(', ')}\\n`;
+            }
+
+            copyText += `\\n--- Ranked Clip Opportunities ---\\n\\n`;
+            if (rankedClips.length > 0) {
+                rankedClips.forEach(clip => {
+                    copyText += `Rank #${clip.rank || 'N/A'}: ${clip.moment_idea || 'N/A'}\\n`;
+                    copyText += `   Platform: ${clip.suggested_source_platform || 'Any'}\\n`;
+                    copyText += `   Search: ${(clip.human_editor_search_terms || []).map(t => `"${t}"`).join(', ')}\\n`;
+                    if (clip.url_to_potential_original_clip) {
+                        copyText += `   Potential Original: ${clip.url_to_potential_original_clip}\\n`;
+                    }
+                    if (clip.editorial_repost_analysis) {
+                        copyText += `   Repost Insight: ${clip.editorial_repost_analysis}\\n`;
+                    }
+                    if (clip.confidence_score !== undefined) { 
+                        copyText += `   Confidence: ${clip.confidence_score}%\\n`;
+                    }
+                    copyText += `\\n`;
+                });
+            } else {
+                copyText += `No ranked clip opportunities found yet.\\n`;
+            }
+
+            navigator.clipboard.writeText(copyText).then(() => {
+                setState({ copied: true });
+                setTimeout(() => setState({ copied: false }), 2000);
+            });
+        });
+
+        getById('new-search-btn').addEventListener('click', () => {
+            if (state.intervalRef) clearInterval(state.intervalRef);
+            setState({
+                topic: '',
+                creativeBrief: '',
+                referenceChannels: '',
+                dateFilter: '7 Days',
+                loading: false,
+                error: null,
+                results: null,
+                restored: false,
+                activeView: 'insights',
+                copied: false,
+                phaseIdx: 0,
+            });
+            localStorage.removeItem(STORAGE_KEY);
+        });
+
+        getById('insights-view-btn').addEventListener('click', () => setState({ activeView: 'insights' }));
+        getById('raw-evidence-view-btn').addEventListener('click', () => setState({ activeView: 'raw_evidence' }));
+
+        // Init App
+        document.addEventListener('DOMContentLoaded', initApp);
+
     </script>
 </body>
 </html>
