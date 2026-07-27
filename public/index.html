@@ -349,6 +349,42 @@
                         <div class="insights-card-title">✅ Research Constraints Applied</div>
                         <ul id="research-constraints-list" class="insights-list"></ul>
                     </div>
+
+                    <!-- FEATURE: shows the structured Editorial DNA profile extracted from
+                         REAL reference-channel videos (via YouTube Data API), as proof this
+                         isn't just reading the channel name/URL as text. Hidden entirely when
+                         no reference channels were analyzed for this run. -->
+                    <div class="insights-card" id="dna-profile-card" style="display:none;">
+                        <div class="insights-card-title">🧬 Style DNA Analysis <span id="dna-video-count" style="font-size:10px;color:var(--text-faint);font-weight:400;"></span></div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Content Type:</div>
+                            <div id="dna-content-type" class="insights-tags-grid"></div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Clip Type:</div>
+                            <div id="dna-clip-type" class="insights-tags-grid"></div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Preferred Emotions:</div>
+                            <div id="dna-preferred-emotions" class="insights-tags-grid"></div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Clip Length Range:</div>
+                            <div id="dna-clip-length-range" class="insights-item-value">N/A</div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Editing Pattern:</div>
+                            <div id="dna-editing-pattern" class="insights-tags-grid"></div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Source Platforms:</div>
+                            <div id="dna-source-platforms" class="insights-tags-grid"></div>
+                        </div>
+                        <div>
+                            <div class="insights-item-label">Reject List:</div>
+                            <div id="dna-reject-list" class="insights-tags-grid"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="raw-evidence-view-content" style="display:none;">
@@ -765,6 +801,25 @@
                     getById('dna-source-preference').textContent = dna.source_preference || 'N/A';
 
                     renderList('research-constraints-list', editorialObjective.research_constraints_applied, 'No research constraints applied.');
+
+                    const dnaAnalysis = state.results.ref_channel_analysis;
+                    const dnaCard = getById('dna-profile-card');
+                    if (dnaAnalysis) {
+                        show(dnaCard);
+                        getById('dna-video-count').textContent = dnaAnalysis.based_on_real_video_count
+                            ? '(based on ' + dnaAnalysis.based_on_real_video_count + ' real videos analyzed)'
+                            : '';
+                        renderTags('dna-content-type', dnaAnalysis.content_type);
+                        renderTags('dna-clip-type', dnaAnalysis.clip_type);
+                        renderTags('dna-preferred-emotions', dnaAnalysis.preferred_emotions);
+                        const clr = dnaAnalysis.clip_length_range;
+                        getById('dna-clip-length-range').textContent = (clr && clr.min_sec != null && clr.max_sec != null) ? (clr.min_sec + '-' + clr.max_sec + 's') : 'N/A';
+                        renderTags('dna-editing-pattern', dnaAnalysis.editing_pattern);
+                        renderTags('dna-source-platforms', dnaAnalysis.source_platforms);
+                        renderTags('dna-reject-list', dnaAnalysis.reject_list);
+                    } else {
+                        hide(dnaCard);
+                    }
                 } else if (state.activeView === 'raw_evidence') {
                     hide(getById('insights-view-content'));
                     show(getById('raw-evidence-view-content'));
