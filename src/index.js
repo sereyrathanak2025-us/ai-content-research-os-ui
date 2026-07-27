@@ -70,6 +70,89 @@ function isPluginRelevant(pluginName, ...texts) {
 }
 
 // -----------------------------------------------------------------------------
+// YOUTUBE CHANNEL HELPERS — used by EditorialDNAExtractionAgent
+// FEATURE: previously "Style DNA Sources" (reference channel links) were only ever
+// passed to the LLM as a literal text string ("reference channels: youtube.com/@x") —
+// the AI never actually saw what those channels post. These helpers fetch the REAL,
+// current videos from a channel via the YouTube Data API so the LLM can infer an
+// actual editorial pattern (clip length, format, emotion, editing style) from real
+// evidence instead of guessing from a URL.
+// -----------------------------------------------------------------------------
+function parseYouTubeChannelRef(rawUrl) {
+  let u = (rawUrl || "").trim();
+  u = u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/^m\./i, "").replace(/^youtube\.com\//i, "");
+  u = u.split(/[?#]/)[0]; // drop query/hash
+  u = u.replace(/\/+$/, ""); // drop trailing slash
+  if (u.startsWith("@")) return { type: "handle", value: u.split("/")[0] };
+  if (u.startsWith("channel/")) return { type: "id", value: u.slice("channel/".length).split("/")[0] };
+  if (u.startsWith("c/")) return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
+  if (u.startsWith("user/")) return { type: "user", value: u.slice("user/".length).split("/")[0] };
+  if (rawUrl.trim().startsWith("@")) return { type: "handle", value: rawUrl.trim().split("/")[0] };
+  // Bare name with no recognizable prefix: try it as a handle.
+  const bare = u.split("/")[0];
+  return bare ? { type: "handle", value: bare.startsWith("@") ? bare : "@" + bare } : null;
+}
+
+async function resolveYouTubeChannelId(ref, apiKey) {
+  if (!ref) return null;
+  if (ref.type === "id") return ref.value;
+  try {
+    const param = ref.type === "user" ? "forUsername" : "forHandle";
+    const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&${param}=${encodeURIComponent(ref.value)}&key=${apiKey}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.items && data.items[0]) return data.items[0].id;
+    }
+    // Fallback: search by name (handles legacy custom URLs / misc formats).
+    const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(ref.value)}&key=${apiKey}`);
+    if (searchResp.ok) {
+      const searchData = await searchResp.json();
+      const item = searchData.items && searchData.items[0];
+      if (item) return item.snippet?.channelId || item.id?.channelId || null;
+    }
+  } catch (e) {
+    console.warn("resolveYouTubeChannelId failed:", e.message);
+  }
+  return null;
+}
+
+function parseISO8601Duration(iso) {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || "");
+  if (!m) return 0;
+  const h = parseInt(m[1] || "0", 10), mi = parseInt(m[2] || "0", 10), s = parseInt(m[3] || "0", 10);
+  return h * 3600 + mi * 60 + s;
+}
+
+async function fetchRecentVideosForChannel(channelId, apiKey, maxResults) {
+  try {
+    const chResp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`);
+    if (!chResp.ok) return [];
+    const chData = await chResp.json();
+    const uploadsPlaylistId = chData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsPlaylistId) return [];
+
+    const plResp = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`);
+    if (!plResp.ok) return [];
+    const plData = await plResp.json();
+    const videoIds = (plData.items || []).map(i => i.contentDetails?.videoId).filter(Boolean);
+    if (videoIds.length === 0) return [];
+
+    const vidResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(",")}&key=${apiKey}`);
+    if (!vidResp.ok) return [];
+    const vidData = await vidResp.json();
+    return (vidData.items || []).map(v => ({
+      title: v.snippet.title,
+      description: (v.snippet.description || "").slice(0, 200),
+      duration_sec: parseISO8601Duration(v.contentDetails.duration),
+      views: parseInt(v.statistics?.viewCount || "0", 10)
+    }));
+  } catch (e) {
+    console.warn("fetchRecentVideosForChannel failed:", e.message);
+    return [];
+  }
+}
+
+// -----------------------------------------------------------------------------
 // KNOWLEDGE BASE LAYER (Simulated - Static for Phase 1)
 // -----------------------------------------------------------------------------
 const KNOWLEDGE_BASE_PLUGINS = {
@@ -149,6 +232,7 @@ class RuntimeState {
     this.timestamp = new Date().toISOString();
     this.status = "INITIALIZED"; // INITIALIZED, RUNNING, PAUSED, COMPLETED, FAILED
     this.input_contract = initialInput;
+    this.editorial_dna_profile = null; // Populated by EditorialDNAExtractionAgent, from real channel data
     this.editorial_intent = null;
     this.moment_ontology = null;
     this.discovery_missions = [];
@@ -703,6 +787,132 @@ function createAgentContext(workflowId, env) {
 }
 
 const AGENT_REGISTRY = {
+  // (0) Editorial DNA Extraction Agent — NEW
+  // FEATURE: this is the direct response to Dev VOF's feedback — "Style DNA Sources"
+  // (reference channel links) were previously only ever passed to the LLM as a literal
+  // text string; the AI never actually saw what those channels post, so it couldn't
+  // really learn their editorial pattern. This agent fetches REAL recent videos from
+  // each reference channel via the YouTube Data API (title, description, duration,
+  // views) and asks the LLM to infer a structured Editorial DNA profile from that real
+  // evidence — content type, clip type, preferred emotions, clip length range, editing
+  // pattern, source platforms, and an explicit reject list — matching the format Dev
+  // VOF specified. Downstream agents (EditorialIntentAgent, SourceHunterAgent) then use
+  // this profile to guide research and filtering instead of guessing from a topic string.
+  EditorialDNAExtractionAgent: {
+    id: "EditorialDNAExtractionAgent",
+    version: "1.0.0",
+    description: "Fetches real recent videos from reference channels and extracts a structured Editorial DNA profile from actual evidence (not channel-name text alone).",
+    input_schema: { type: "object", properties: { referenceChannels: { type: "array" } } },
+    output_schema: { type: "object" },
+    dependencies: [],
+    required_capabilities: ["LLMServiceCapability", "ExplainabilityRecordingCapability"],
+    estimated_cost: "Medium", estimated_latency_ms: 9000, max_retries: 2,
+    read_state_keys: ["input_contract"],
+    write_state_keys: ["editorial_dna_profile"],
+    run: async (runtimeState, context) => {
+      const { capability_registry, env, explainability_recorder } = context;
+      const llmService = capability_registry.LLMServiceCapability;
+      const referenceChannels = (runtimeState.input_contract.referenceChannels || []).map(c => (c || "").trim()).filter(Boolean);
+
+      const emptyResult = (reason) => ({
+        success: true,
+        result: { editorialDnaProfile: null },
+        metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: 0, explainability_trace_id: 'trace_dna_1' },
+        new_state_data: { editorial_dna_profile: null },
+        events_to_publish: [{ type: "EDITORIAL_DNA_SKIPPED", payload: { reason } }]
+      });
+
+      if (referenceChannels.length === 0) {
+        explainability_recorder.execute("EditorialDNAExtractionAgent: No reference channels provided, skipping", {});
+        return emptyResult("no_reference_channels");
+      }
+      if (!env.YOUTUBE_API_KEY) {
+        explainability_recorder.execute("EditorialDNAExtractionAgent: YOUTUBE_API_KEY not configured, skipping", {});
+        return emptyResult("youtube_api_key_missing");
+      }
+
+      // Resolve each reference channel to real recent video data (capped at 4 channels,
+      // 12 videos each, to keep the LLM prompt a reasonable size and cost).
+      const channelSummaries = [];
+      for (const link of referenceChannels.slice(0, 4)) {
+        try {
+          const ref = parseYouTubeChannelRef(link);
+          const channelId = await resolveYouTubeChannelId(ref, env.YOUTUBE_API_KEY);
+          if (!channelId) {
+            explainability_recorder.execute("EditorialDNAExtractionAgent: Could not resolve channel", { link });
+            continue;
+          }
+          const videos = await fetchRecentVideosForChannel(channelId, env.YOUTUBE_API_KEY, 12);
+          if (videos.length > 0) channelSummaries.push({ channel: link, videos });
+        } catch (e) {
+          console.warn("EditorialDNAExtractionAgent: failed for", link, e.message);
+        }
+      }
+
+      if (channelSummaries.length === 0) {
+        explainability_recorder.execute("EditorialDNAExtractionAgent: Could not fetch real data for any reference channel", { referenceChannels });
+        return emptyResult("no_channel_data_fetched");
+      }
+
+      const prompt =
+        "You are analyzing REAL, actual recent videos from one or more YouTube creator channels that a user wants to model new content after. " +
+        "This is REAL evidence — not a guess from a channel name. Base your analysis ONLY on what you observe below.\n\n" +
+        "Channel data (channel, then its recent videos with title/description/duration in seconds/views):\n" +
+        JSON.stringify(channelSummaries) + "\n\n" +
+        "Extract a structured Editorial DNA profile describing the observed editorial pattern. Fields:\n" +
+        "- content_type: array of short labels describing the video format (e.g. 'Ranked short-form videos')\n" +
+        "- clip_type: array describing what kind of clips are used (e.g. 'Original short clips', 'Single clear moment', 'Not compilations')\n" +
+        "- preferred_emotions: array of emotions this content is built around (e.g. 'Funny', 'Shock', 'Unexpected')\n" +
+        "- clip_length_range: object {min_sec, max_sec} — the typical length of individual moments/clips referenced, based on total video duration and pacing\n" +
+        "- editing_pattern: array of short observed editing/structure patterns (e.g. '#6 to #1 countdown', 'Fast pacing', 'One payoff per rank')\n" +
+        "- source_platforms: array of platforms this kind of content is typically sourced from (e.g. 'TikTok', 'YouTube Shorts', 'Instagram Reels', 'Reddit videos')\n" +
+        "- reject_list: array of content types this channel's style explicitly does NOT do and a research tool should avoid surfacing (e.g. 'Long compilations', 'Commentary videos', 'Podcasts', 'Reaction videos', 'News videos')\n" +
+        "Return ONLY JSON matching this structure.";
+
+      const schema = {
+        type: "object",
+        properties: {
+          content_type: { type: "array", items: { type: "string" } },
+          clip_type: { type: "array", items: { type: "string" } },
+          preferred_emotions: { type: "array", items: { type: "string" } },
+          clip_length_range: { type: "object", properties: { min_sec: { type: "number" }, max_sec: { type: "number" } } },
+          editing_pattern: { type: "array", items: { type: "string" } },
+          source_platforms: { type: "array", items: { type: "string" } },
+          reject_list: { type: "array", items: { type: "string" } }
+        },
+        required: ["content_type", "clip_type", "preferred_emotions", "clip_length_range", "editing_pattern", "source_platforms", "reject_list"]
+      };
+
+      const { data, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
+      if (error) {
+        console.warn("EditorialDNAExtractionAgent: LLM failed:", error);
+        return emptyResult("llm_failed");
+      }
+
+      const dnaProfile = {
+        content_type: coerceToArray(data?.content_type),
+        clip_type: coerceToArray(data?.clip_type),
+        preferred_emotions: coerceToArray(data?.preferred_emotions),
+        clip_length_range: (data?.clip_length_range && typeof data.clip_length_range === 'object') ? data.clip_length_range : { min_sec: 5, max_sec: 20 },
+        editing_pattern: coerceToArray(data?.editing_pattern),
+        source_platforms: coerceToArray(data?.source_platforms),
+        reject_list: coerceToArray(data?.reject_list),
+        source_channels: referenceChannels,
+        based_on_real_video_count: channelSummaries.reduce((sum, c) => sum + c.videos.length, 0)
+      };
+
+      explainability_recorder.execute("EditorialDNAExtractionAgent: Extracted DNA profile from real channel data", { dnaProfile, model, provider, confidence });
+
+      return {
+        success: true,
+        result: { editorialDnaProfile: dnaProfile },
+        metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_dna_1' },
+        new_state_data: { editorial_dna_profile: dnaProfile },
+        events_to_publish: [{ type: "EDITORIAL_DNA_EXTRACTED", payload: { channels: referenceChannels.length, videos_analyzed: dnaProfile.based_on_real_video_count } }]
+      };
+    }
+  },
+
   // (A) Opportunity Generator
   OpportunityGenerator: {
     id: "OpportunityGenerator",
@@ -746,10 +956,10 @@ const AGENT_REGISTRY = {
     description: "Translates user input into a precise and actionable Editorial Intent.",
     input_schema: { type: "object", properties: { topic: { type: "string" }, creativeBrief: { type: "string" } } },
     output_schema: { type: "object" },
-    dependencies: ["OpportunityGenerator"],
+    dependencies: ["OpportunityGenerator", "EditorialDNAExtractionAgent"],
     required_capabilities: ["LLMServiceCapability", "TaxonomyLookupCapability", "ConfidenceCalculationCapability", "ExplainabilityRecordingCapability"],
     estimated_cost: "Low", estimated_latency_ms: 6000, max_retries: 2,
-    read_state_keys: ["input_contract", "opportunity_topics"],
+    read_state_keys: ["input_contract", "opportunity_topics", "editorial_dna_profile"],
     write_state_keys: ["editorial_intent"],
     run: async (runtimeState, context) => {
       const { capability_registry, knowledge_base, env, explainability_recorder } = context;
@@ -759,8 +969,14 @@ const AGENT_REGISTRY = {
       const contentTaxonomy = knowledge_base.execute('core', 'content_taxonomy'); // General content taxonomy
 
       const { topic, creativeBrief, referenceChannels, constraints } = runtimeState.input_contract;
+      // FEATURE: use the REAL, evidence-based Editorial DNA profile (extracted from
+      // actual channel videos) when available, instead of just the raw channel URL text.
+      const dnaProfile = runtimeState.editorial_dna_profile;
 
       const prompt = "Given the topic \"" + topic + "\", creative brief \"" + creativeBrief + "\", and reference channels \"" + (referenceChannels || 'none') + "\", define the precise Editorial Intent.\n" +
+      (dnaProfile
+        ? "IMPORTANT: an Editorial DNA profile was already extracted from REAL recent videos on the reference channel(s) (based on " + dnaProfile.based_on_real_video_count + " actual videos analyzed): " + JSON.stringify(dnaProfile) + ". Align the Editorial Intent tightly with this real, evidence-based profile — its reject_list in particular should directly inform not_compilation/not_ranking_video and any other exclusions.\n"
+        : "") +
       "Consider target emotions (" + JSON.stringify(emotionTaxonomy) + "), platform characteristics (" + JSON.stringify(platformProfiles) + "), and content categories (" + JSON.stringify(contentTaxonomy) + ").\n" +
       "Output JSON with fields: topic, creative_brief_summary, primary_moment_categories[], target_emotions[], desired_clip_characteristics{}, target_platform_intents[] (platform, specific_criteria, priority_score), target_audience_profile, overall_content_goal.";
 
@@ -965,7 +1181,7 @@ const AGENT_REGISTRY = {
     dependencies: ["DiscoveryStrategyPlannerAgent"],
     required_capabilities: ["SearchExecutionCapability", "PersistenceCapability", "EventPublishingCapability", "ConfidenceCalculationCapability", "ExplainabilityRecordingCapability"],
     estimated_cost: "Medium", estimated_latency_ms: 15000, max_retries: 3,
-    read_state_keys: ["discovery_missions", "editorial_intent"],
+    read_state_keys: ["discovery_missions", "editorial_intent", "editorial_dna_profile"],
     write_state_keys: ["raw_clips_collected", "discovery_queue_status"],
     run: async (runtimeState, context) => {
       const { capability_registry, env, explainability_recorder } = context;
@@ -1029,10 +1245,20 @@ const AGENT_REGISTRY = {
       const compilationWords = policyRules.NO_COMPILATION_KEYWORDS || [];
       const rankingWords = policyRules.NO_RANKING_KEYWORDS || [];
 
+      // FEATURE: also reject anything matching the real, evidence-based reject_list from
+      // EditorialDNAExtractionAgent (e.g. "Commentary videos", "Podcasts", "Reaction
+      // videos", "News videos") — derived from actual reference-channel videos, not a
+      // static hardcoded list. Reduce each reject phrase to its meaningful keyword(s).
+      const STOPWORDS = new Set(["videos", "video", "content", "clips", "clip", "and", "or", "the", "a", "an", "long"]);
+      const dnaRejectWords = (runtimeState.editorial_dna_profile?.reject_list || [])
+        .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
+        .filter(w => w.length > 3 && !STOPWORDS.has(w));
+
       const looksLikeCompilationOrRanking = (clip) => {
         const haystack = ((clip.title || "") + " " + (clip.description_snippet || "")).toLowerCase();
         if (wantsNoCompilation && compilationWords.some(w => haystack.includes(w.toLowerCase()))) return true;
         if (wantsNoRanking && rankingWords.some(w => haystack.includes(w.toLowerCase()))) return true;
+        if (dnaRejectWords.some(w => haystack.includes(w))) return true;
         return false;
       };
 
@@ -1223,6 +1449,31 @@ const AGENT_REGISTRY = {
         .sort((a, b) => b.rank - a.rank) // rank 6 first, rank 1 last (countdown order)
         .slice(0, 6);
 
+      // BUGFIX/RELIABILITY: when every single LLM-ranked entry fails URL validation
+      // (typically because a weaker fallback model fabricated its own URL instead of
+      // reusing one from the candidate list, despite the prompt explicitly requiring
+      // it), the report used to just show "No ranked clip opportunities found yet" even
+      // though real, policy-filtered candidate clips were sitting right there unused.
+      // Fall back to a deterministic engagement-based ranking of the actual clips instead
+      // of showing nothing.
+      let finalRanked = validatedRanked;
+      if (finalRanked.length === 0 && clips.length > 0) {
+        explainability_recorder.execute("RankingAgent: LLM ranking had 0 valid matches, using engagement-based fallback", { candidate_count: clips.length });
+        finalRanked = clips
+          .slice()
+          .sort((a, b) => ((b.views_approx || 0) + (b.likes_approx || 0) * 5) - ((a.views_approx || 0) + (a.likes_approx || 0) * 5))
+          .slice(0, 6)
+          .map((c, i) => ({
+            rank: 6 - i,
+            moment_idea: c.title,
+            suggested_source_platform: c.platform,
+            url_to_potential_original_clip: c.url,
+            editorial_repost_analysis: "Auto-selected by engagement (views/likes) — the AI's own ranking reasoning wasn't available for this clip this run.",
+            confidence_score: 50,
+            human_editor_search_terms: (c.tags && c.tags.length > 0) ? c.tags.slice(0, 5) : [topic]
+          }));
+      }
+
       const finalInsights = {
         overall_opportunity_reasoning: data?.overall_opportunity_reasoning || "",
         trend_status: data?.trend_status || "Unknown",
@@ -1234,17 +1485,17 @@ const AGENT_REGISTRY = {
           description_hook: "Engage early with a strong hook",
           tags_to_prioritize: [topic.split(' ')[0]].filter(Boolean)
         },
-        ranked_clip_opportunities: validatedRanked
+        ranked_clip_opportunities: finalRanked
       };
 
-      explainability_recorder.execute("RankingAgent: Ranked clips", { count: validatedRanked.length, model, provider, confidence });
+      explainability_recorder.execute("RankingAgent: Ranked clips", { count: finalRanked.length, model, provider, confidence });
 
       return {
         success: true,
         result: { aiInsights: finalInsights },
         metadata: { agent_id: AGENT_REGISTRY.RankingAgent.id, version: AGENT_REGISTRY.RankingAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_ra_1' },
         new_state_data: { ai_insights: finalInsights },
-        events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: validatedRanked.length } }]
+        events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: finalRanked.length } }]
       };
     }
   },
@@ -1315,6 +1566,7 @@ async function orchestrate(workflowId, inputContract, env) {
 
   try {
     // Phase 1 Workflow - Simplified Linear Flow
+    await executeAgent("EditorialDNAExtractionAgent");
     await executeAgent("OpportunityGenerator");
     await executeAgent("EditorialIntentAgent");
     await executeAgent("MomentOntologyAgent");
@@ -1407,7 +1659,10 @@ async function orchestrate(workflowId, inputContract, env) {
         seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
         ranked_clip_opportunities: []
       },
-      ref_channel_analysis: null, // Not fully implemented in Phase 1
+      // FEATURE: previously always null. Now surfaces the structured Editorial DNA
+      // profile extracted from REAL reference-channel videos by EditorialDNAExtractionAgent
+      // (null if no reference channels were provided, or their real data couldn't be fetched).
+      ref_channel_analysis: runtimeState.editorial_dna_profile,
       overall_confidence_score: capabilityRegistry.ConfidenceCalculationCapability.execute().score,
       explainability_trace_id: 'workflow_trace_1'
     };
