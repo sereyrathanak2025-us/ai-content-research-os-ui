@@ -1,14 +1,19 @@
 {
-  "name": "ai-content-research-os-ui",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Viral Radar - static frontend for AI Content Research OS. No bundler/framework; index.html is served as-is.",
-  "scripts": {
-    "build": "echo 'No build step required — static index.html is served as-is.'",
-    "dev": "echo 'Open index.html directly, or serve it with any static file server.'"
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "viral-discovery-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-22",
+  "ai": {
+    "binding": "AI"
   },
-  "engines": {
-    "node": ">=18"
+  "ai_search": [
+    {
+      "binding": "AI_SEARCH",
+      "instance_name": "viral-clips",
+      "remote": true
+    }
+  ],
+  "assets": {
+    "directory": "public"
   }
 }
-
