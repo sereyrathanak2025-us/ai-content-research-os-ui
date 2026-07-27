@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "viral-discovery",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "ai_search": [
+    {
+      "binding": "AI_SEARCH",
+      "instance_name": "viral-clips",
+      "remote": true
+    }
+  ],
+  "assets": {
+    "directory": "public"
+  }
+}
