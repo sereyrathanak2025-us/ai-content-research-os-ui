@@ -1012,8 +1012,45 @@ const AGENT_REGISTRY = {
 
       await Promise.all(searchPromises);
 
+      // BUGFIX/FEATURE: NO_COMPILATION_KEYWORDS / NO_RANKING_KEYWORDS were defined in
+      // the knowledge base's policy_rules, and editorial_intent even captures explicit
+      // not_compilation/not_ranking_video flags from the LLM — but nothing ever actually
+      // checked a clip's title against them. PolicyEngine.apply() always returned
+      // "passed: true" unconditionally, and no agent even called it. So every search
+      // just returned whatever YouTube/TikTok/Reddit's own algorithm ranked highest for
+      // the query — which, for a topic like "funniest chicken scream compilations", is
+      // dominated by *other creators' own ranking/compilation videos*, not raw single
+      // moments. That's the real reason results looked like "manual search" instead of
+      // curated original clips. This applies the policy for real.
+      const dcc = runtimeState.editorial_intent?.desired_clip_characteristics || {};
+      const wantsNoCompilation = dcc.not_compilation !== false; // default true: this tool's whole point is original clips
+      const wantsNoRanking = dcc.not_ranking_video !== false;
+      const policyRules = context.knowledge_base.execute('core', 'policy_rules') || {};
+      const compilationWords = policyRules.NO_COMPILATION_KEYWORDS || [];
+      const rankingWords = policyRules.NO_RANKING_KEYWORDS || [];
+
+      const looksLikeCompilationOrRanking = (clip) => {
+        const haystack = ((clip.title || "") + " " + (clip.description_snippet || "")).toLowerCase();
+        if (wantsNoCompilation && compilationWords.some(w => haystack.includes(w.toLowerCase()))) return true;
+        if (wantsNoRanking && rankingWords.some(w => haystack.includes(w.toLowerCase()))) return true;
+        return false;
+      };
+
+      const filteredOut = allRawClips.filter(looksLikeCompilationOrRanking);
+      const keptClips = allRawClips.filter(c => !looksLikeCompilationOrRanking(c));
+      if (filteredOut.length > 0) {
+        explainability_recorder.execute(
+          "SourceHunterAgent: Policy filter removed " + filteredOut.length + " compilation/ranking-style results",
+          { removed_titles: filteredOut.slice(0, 10).map(c => c.title) }
+        );
+      }
+      // Safety net: if the filter would wipe out every single result (e.g. because the
+      // whole niche is inherently "ranking"-named on YouTube), keep the originals rather
+      // than handing RankingAgent an empty list and a dead report.
+      const finalClips = keptClips.length > 0 ? keptClips : allRawClips;
+
       const confidence = capability_registry.ConfidenceCalculationCapability.execute({
-        search_coverage_success: allRawClips.length > 0 ? 1 : 0
+        search_coverage_success: finalClips.length > 0 ? 1 : 0
       });
 
       // Update queue status and raw clips collected in RuntimeState
@@ -1021,15 +1058,15 @@ const AGENT_REGISTRY = {
         pending: pendingSearches,
         completed: discoveryMissions.length - pendingSearches,
         failed: 0, // Placeholder
-        results: allRawClips.map(clip => ({ id: clip.id, url: clip.url })) // Only store minimal info in queue status
+        results: finalClips.map(clip => ({ id: clip.id, url: clip.url })) // Only store minimal info in queue status
       };
 
       return {
         success: true,
-        result: { raw_clips: allRawClips },
+        result: { raw_clips: finalClips },
         metadata: { agent_id: AGENT_REGISTRY.SourceHunterAgent.id, version: AGENT_REGISTRY.SourceHunterAgent.version, confidence_score: confidence.score, explainability_trace_id: 'trace_sh_1' },
         new_state_data: {
-          raw_clips_collected: allRawClips,
+          raw_clips_collected: finalClips,
           discovery_queue_status: newDiscoveryQueueStatus
         },
         events_to_publish: [
@@ -1147,12 +1184,23 @@ const AGENT_REGISTRY = {
       // Defensive validation: only keep ranked entries whose URL actually matches a real
       // collected clip (drops any hallucinated URLs instead of silently shipping them),
       // and attach the real platform/thumbnail from the matched clip.
-      const urlToClip = new Map(clips.map(c => [c.url, c]));
+      // BUGFIX: this previously required an *exact* string match against
+      // url_to_potential_original_clip. In practice the LLM sometimes echoes the URL back
+      // with a trailing slash, a different http/https scheme, or a stray tracking param —
+      // an exact match then fails for every single entry, and the whole ranked list comes
+      // back empty ("No ranked clip opportunities found yet") even though the clips it was
+      // ranking really were in the candidate list. Normalize both sides before comparing,
+      // and fall back to matching by candidate index if the model returned one.
+      const normalizeUrl = (u) => (u || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "").split(/[?#]/)[0].toLowerCase();
+      const urlToClip = new Map(clips.map(c => [normalizeUrl(c.url), c]));
       const rawRanked = coerceToArray(data?.ranked_clip_opportunities);
       const validatedRanked = rawRanked
-        .filter(r => r && urlToClip.has(r.url_to_potential_original_clip))
         .map(r => {
-          const matchedClip = urlToClip.get(r.url_to_potential_original_clip);
+          if (!r) return null;
+          const norm = normalizeUrl(r.url_to_potential_original_clip);
+          const matchedClip = urlToClip.get(norm) ||
+            (Number.isInteger(r.index) ? candidates[r.index] && clips.find(c => c.url === candidates[r.index].url) : null);
+          if (!matchedClip) return null;
           // BUGFIX: the frontend's ranked-clip card reads `human_editor_search_terms`
           // to show a human editor what to search for if they want to find this moment
           // themselves — but this field was never produced anywhere on the backend, so
@@ -1165,12 +1213,13 @@ const AGENT_REGISTRY = {
             rank: Number(r.rank) || 0,
             moment_idea: r.moment_idea || matchedClip.title,
             suggested_source_platform: matchedClip.platform,
-            url_to_potential_original_clip: r.url_to_potential_original_clip,
+            url_to_potential_original_clip: matchedClip.url,
             editorial_repost_analysis: r.editorial_repost_analysis || "",
             confidence_score: Number.isFinite(r.confidence_score) ? r.confidence_score : Math.round(confidence || 70),
             human_editor_search_terms: searchTerms
           };
         })
+        .filter(Boolean)
         .sort((a, b) => b.rank - a.rank) // rank 6 first, rank 1 last (countdown order)
         .slice(0, 6);
 
@@ -1500,6 +1549,17 @@ export default {
       }
     }
 
+    // FIX: previously "/" served an HTML page built by concatenating a giant JS
+    // template literal (HTML_STYLES + HTML_CONTENT) that *embedded a second,
+    // client-side <script> block inside itself*. Because the whole thing was one
+    // template literal, every `${...}` inside the embedded client-side script was
+    // evaluated immediately, server-side, at HTML-generation time — not deferred to
+    // the browser. Any `${...}` referencing client-only variables (state, item, m,
+    // clip, etc.) would throw a ReferenceError server-side. The frontend is now a
+    // real standalone index.html file (see repo root), served as a static asset by
+    // Cloudflare Workers Assets automatically — this Worker no longer needs to (and
+    // must not try to) generate HTML at all. Any GET request that isn't one of the
+    // /api/* routes above and isn't matched by a static file falls through here.
     return json({ error: "Not found" }, 404);
   },
 };
