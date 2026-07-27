@@ -20,3 +20,21 @@
     "directory": "public"
   }
 }
+
+{
+  "name": "viral-discovery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Viral Radar — combined frontend (public/index.html, static assets) + backend Worker API (src/index.js).",
+  "scripts": {
+    "build": "echo 'No build step required — static index.html and Worker JS are used as-is.'",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
