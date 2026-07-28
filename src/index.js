@@ -1830,4 +1830,28 @@ export default {
     }
 
     // Legacy history endpoint.
-   
+    if (url.pathname === "/api/history" && request.method === "GET") {
+      if (!env.DB) return json({ history: [] });
+      try {
+        const result = await env.DB.prepare("SELECT topic, created_at FROM research_history ORDER BY created_at DESC LIMIT 10").all();
+        return json({ history: result.results || [] });
+      } catch (e) {
+        console.warn("D1 history fetch failed:", e.message);
+        return json({ history: [] });
+      }
+    }
+
+    // FIX: previously "/" served an HTML page built by concatenating a giant JS
+    // template literal (HTML_STYLES + HTML_CONTENT) that *embedded a second,
+    // client-side <script> block inside itself*. Because the whole thing was one
+    // template literal, every `${...}` inside the embedded client-side script was
+    // evaluated immediately, server-side, at HTML-generation time — not deferred to
+    // the browser. Any `${...}` referencing client-only variables (state, item, m,
+    // clip, etc.) would throw a ReferenceError server-side. The frontend is now a
+    // real standalone index.html file (see repo root), served as a static asset by
+    // Cloudflare Workers Assets automatically — this Worker no longer needs to (and
+    // must not try to) generate HTML at all. Any GET request that isn't one of the
+    // /api/* routes above and isn't matched by a static file falls through here.
+    return json({ error: "Not found" }, 404);
+  },
+};
