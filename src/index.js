@@ -1,4 +1,3 @@
-print(ruflo__memory_store(key='modified_worker_js_ranking_rubric', value='''
 // This is the combined Cloudflare Worker for Viral Radar, handling both API and static asset serving.
 // It integrates multiple agents, LLM routing, and search capabilities.
 
@@ -432,9 +431,9 @@ class YouTubeSearchCapability {
                 statsData.items.forEach(statItem => {
                     const video = videos.find(v => v.id === statItem.id);
                     if (video) {
-                        video.views = parseInt(statItem.statistics.viewCount || 0);
-                        video.likes = parseInt(statItem.statistics.likeCount || 0);
-                        video.commentCount = parseInt(statItem.statistics.commentCount || 0);
+                        clip.views = parseInt(statItem.statistics.viewCount || 0);
+                        clip.likes = parseInt(statItem.statistics.likeCount || 0);
+                        clip.commentCount = parseInt(statItem.statistics.commentCount || 0);
                     }
                 });
             } else {
@@ -760,6 +759,11 @@ class EditorialIntentAgent {
 
     async execute(state) {
         state.addStatus(`${this.name}: Generating editorial intent...`);
+
+        if (!state.viral_opportunity) {
+            state.addError(`${this.name}: Viral opportunity not set. Cannot plan discovery strategy.`);
+            return;
+        }
 
         const prompt = `
         You are an AI content strategist. Analyze the user's topic and optionally the extracted Editorial DNA, then generate actionable editorial insights.
@@ -1104,11 +1108,12 @@ class RankingAgent {
         }
 
         // If LLM ranking failed entirely or didn't provide enough clips, use a robust fallback
+        // This fallback now also generates a generic rubric, ensuring the UI always gets the expected structure.
         if (finalRankedClips.length === 0) {
             state.addWarn(`${this.name}: LLM ranking failed or provided no valid clips. Falling back to engagement-based selection and generating a generic rubric.`);
             // Sort filtered clips by a combined engagement score
             const sortedFallbackClips = candidateClips
-                .filter(clip => !this.looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity)) // Re-filter to be safe
+                .filter(clip => !new SourceHunterAgent(this.llm, null).looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity)) // Re-filter to be safe
                 .sort((a, b) => ((b.views || 0) + (b.likes || 0) * 5) - ((a.views || 0) + (a.likes || 0) * 5));
 
             const fallbackCount = Math.min(MAX_RANKED_CLIPS, sortedFallbackClips.length);
@@ -1350,4 +1355,3 @@ app.post('/api/generate-insights', async (c) => {
 
 
 export default app;
-'''))
