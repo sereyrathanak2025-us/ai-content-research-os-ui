@@ -438,7 +438,12 @@
         ];
 
         const TREND_COLOR = { Growing: "#4CAF50", Stable: "#FFD700", Declining: "#FF4444", Emerging: "#FF0050" };
-        const DEFAULT_TIMEOUT = 60000;
+        // BUGFIX: 60s was tuned for the original 5-agent pipeline. With
+        // EditorialDNAExtractionAgent (multiple YouTube API calls per reference channel)
+        // and Apify-based TikTok/Reddit search (which can take 15-30s+ per platform to
+        // run synchronously) added, full runs routinely exceed 60s and the frontend was
+        // aborting requests that were still completing fine on the backend.
+        const DEFAULT_TIMEOUT = 150000; // 150s
         const WORKER_BASE_URL = window.location.origin;
 
         const LLM_PROVIDERS_CONFIG = {
