@@ -975,10 +975,13 @@ const AGENT_REGISTRY = {
 
       const prompt = "Given the topic \"" + topic + "\", creative brief \"" + creativeBrief + "\", and reference channels \"" + (referenceChannels || 'none') + "\", define the precise Editorial Intent.\n" +
       (dnaProfile
-        ? "IMPORTANT: an Editorial DNA profile was already extracted from REAL recent videos on the reference channel(s) (based on " + dnaProfile.based_on_real_video_count + " actual videos analyzed): " + JSON.stringify(dnaProfile) + ". Align the Editorial Intent tightly with this real, evidence-based profile — its reject_list in particular should directly inform not_compilation/not_ranking_video and any other exclusions.\n"
+        ? "IMPORTANT: an Editorial DNA profile was already extracted from REAL recent videos on the reference channel(s) (based on " + dnaProfile.based_on_real_video_count + " actual videos analyzed): " + JSON.stringify(dnaProfile) + ". Align the Editorial Intent tightly with this real, evidence-based profile — its reject_list in particular should directly inform reject_content_types below.\n"
         : "") +
       "Consider target emotions (" + JSON.stringify(emotionTaxonomy) + "), platform characteristics (" + JSON.stringify(platformProfiles) + "), and content categories (" + JSON.stringify(contentTaxonomy) + ").\n" +
-      "Output JSON with fields: topic, creative_brief_summary, primary_moment_categories[], target_emotions[], desired_clip_characteristics{}, target_platform_intents[] (platform, specific_criteria, priority_score), target_audience_profile, overall_content_goal.";
+      "Think like a human video editor planning a research strategy for THIS SPECIFIC topic — not a generic search. " +
+      "For 'acceptable_event_types', list 5-8 SPECIFIC real-world scenario types that would genuinely satisfy this topic as single short moments (e.g. for \"perfect timing coincidences\": photobombs, object collisions, camera-timing illusions, lucky near-misses — NOT generic restatements of the topic words). " +
+      "For 'reject_content_types', list content categories a search for this topic could easily surface but that DO NOT belong (e.g. DIY/craft tutorials, podcasts, news reports, movie/TV clips, reaction videos, gaming clips, long compilations — pick whichever of these are actually plausible false positives for THIS topic, add others if relevant).\n" +
+      "Output JSON with fields: topic, creative_brief_summary, primary_moment_categories[], acceptable_event_types[], reject_content_types[], target_emotions[], desired_clip_characteristics{}, target_platform_intents[] (platform, specific_criteria, priority_score), target_audience_profile, overall_content_goal.";
 
       const schema = {
         type: "object",
@@ -986,13 +989,15 @@ const AGENT_REGISTRY = {
           topic: { type: "string" },
           creative_brief_summary: { type: "string" },
           primary_moment_categories: { type: "array", items: { type: "string" } },
+          acceptable_event_types: { type: "array", items: { type: "string" } },
+          reject_content_types: { type: "array", items: { type: "string" } },
           target_emotions: { type: "array", items: { type: "string" } },
           desired_clip_characteristics: { type: "object" },
           target_platform_intents: { type: "array", items: { type: "object" } },
           target_audience_profile: { type: "string" },
           overall_content_goal: { type: "string" },
         },
-        required: ["topic", "creative_brief_summary", "primary_moment_categories", "target_emotions", "desired_clip_characteristics", "target_platform_intents", "target_audience_profile", "overall_content_goal"]
+        required: ["topic", "creative_brief_summary", "primary_moment_categories", "acceptable_event_types", "reject_content_types", "target_emotions", "desired_clip_characteristics", "target_platform_intents", "target_audience_profile", "overall_content_goal"]
       };
 
       const { data: llmData, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
@@ -1002,7 +1007,9 @@ const AGENT_REGISTRY = {
       const finalEditorialIntent = {
           ...llmData,
           topic: llmData.topic || topic, // Fallback to original input
-          creative_brief_summary: llmData.creative_brief_summary || creativeBrief // Fallback to original input
+          creative_brief_summary: llmData.creative_brief_summary || creativeBrief, // Fallback to original input
+          acceptable_event_types: coerceToArray(llmData.acceptable_event_types),
+          reject_content_types: coerceToArray(llmData.reject_content_types)
       };
 
       explainability_recorder.execute("EditorialIntentAgent: Generated intent", { editorialIntent: finalEditorialIntent, model, provider, confidence });
@@ -1113,6 +1120,7 @@ const AGENT_REGISTRY = {
       const constraints = runtimeState.global_constraints;
 
       const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 5-10 Discovery Missions.\n" +
+      "IMPORTANT: build primary_queries/keywords from the SPECIFIC acceptable_event_types in the Editorial Intent (e.g. 'photobomb', 'object collision') — do NOT just restate the topic words verbatim as the only query, since that tends to surface pre-made compilation/ranking videos about the topic rather than raw individual moments.\n" +
       "Each mission should include: mission_focus, clip_criteria (from editorialIntent.desired_clip_characteristics), priority_score (1-100), confidence_score (1-100), estimated_cost (Low/Medium/High), expected_yield (Low/Medium/High), and platform_strategies[] (platform, search_approach, primary_queries[], secondary_queries[], hashtags[], keywords[], filters{}).\n" +
       "Integrate keywords from specific plugin knowledge bases like 'fails' if relevant: " + JSON.stringify(discoveryKeywordsFails || {}) + ".\n" +
       "Return ONLY JSON array of Discovery Mission objects.";
@@ -1254,11 +1262,20 @@ const AGENT_REGISTRY = {
         .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
         .filter(w => w.length > 3 && !STOPWORDS.has(w));
 
+      // FEATURE: this is the direct fix for topics leaking irrelevant categories (DIY,
+      // news, podcasts, gaming, movie clips, etc.) when no reference channels were given —
+      // EditorialIntentAgent now generates a per-topic reject_content_types list via LLM
+      // reasoning about THIS specific topic, independent of the (optional) DNA profile.
+      const intentRejectWords = (runtimeState.editorial_intent?.reject_content_types || [])
+        .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
+        .filter(w => w.length > 3 && !STOPWORDS.has(w));
+
       const looksLikeCompilationOrRanking = (clip) => {
         const haystack = ((clip.title || "") + " " + (clip.description_snippet || "")).toLowerCase();
         if (wantsNoCompilation && compilationWords.some(w => haystack.includes(w.toLowerCase()))) return true;
         if (wantsNoRanking && rankingWords.some(w => haystack.includes(w.toLowerCase()))) return true;
         if (dnaRejectWords.some(w => haystack.includes(w))) return true;
+        if (intentRejectWords.some(w => haystack.includes(w))) return true;
         return false;
       };
 
@@ -1417,14 +1434,34 @@ const AGENT_REGISTRY = {
       // back empty ("No ranked clip opportunities found yet") even though the clips it was
       // ranking really were in the candidate list. Normalize both sides before comparing,
       // and fall back to matching by candidate index if the model returned one.
-      const normalizeUrl = (u) => (u || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "").split(/[?#]/)[0].toLowerCase();
-      const urlToClip = new Map(clips.map(c => [normalizeUrl(c.url), c]));
+      // BUGFIX: normalizeUrl previously did NOT strip a "www." prefix, so a clip stored
+      // as "https://www.youtube.com/watch?v=X" would never match the LLM echoing back
+      // "https://youtube.com/watch?v=X" (no www) — a very common variation — causing
+      // EVERY ranked entry to fail validation and silently fall back to the low-confidence
+      // (50%) engagement-based ranking on every single run. Also extract the YouTube
+      // video ID as a second, even more robust matching key (immune to www/mobile/query
+      // differences entirely) since that's what's actually unique about a YouTube URL.
+      const normalizeUrl = (u) => (u || "").trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").split(/[?#]/)[0].toLowerCase();
+      const extractYouTubeVideoId = (u) => {
+        const m = /(?:[?&]v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/.exec(u || "");
+        return m ? m[1] : null;
+      };
+      const urlToClip = new Map();
+      const videoIdToClip = new Map();
+      clips.forEach(c => {
+        urlToClip.set(normalizeUrl(c.url), c);
+        const vid = extractYouTubeVideoId(c.url);
+        if (vid) videoIdToClip.set(vid, c);
+      });
       const rawRanked = coerceToArray(data?.ranked_clip_opportunities);
       const validatedRanked = rawRanked
         .map(r => {
           if (!r) return null;
-          const norm = normalizeUrl(r.url_to_potential_original_clip);
+          const givenUrl = r.url_to_potential_original_clip;
+          const norm = normalizeUrl(givenUrl);
+          const vid = extractYouTubeVideoId(givenUrl);
           const matchedClip = urlToClip.get(norm) ||
+            (vid && videoIdToClip.get(vid)) ||
             (Number.isInteger(r.index) ? candidates[r.index] && clips.find(c => c.url === candidates[r.index].url) : null);
           if (!matchedClip) return null;
           // BUGFIX: the frontend's ranked-clip card reads `human_editor_search_terms`
@@ -1793,28 +1830,4 @@ export default {
     }
 
     // Legacy history endpoint.
-    if (url.pathname === "/api/history" && request.method === "GET") {
-      if (!env.DB) return json({ history: [] });
-      try {
-        const result = await env.DB.prepare("SELECT topic, created_at FROM research_history ORDER BY created_at DESC LIMIT 10").all();
-        return json({ history: result.results || [] });
-      } catch (e) {
-        console.warn("D1 history fetch failed:", e.message);
-        return json({ history: [] });
-      }
-    }
-
-    // FIX: previously "/" served an HTML page built by concatenating a giant JS
-    // template literal (HTML_STYLES + HTML_CONTENT) that *embedded a second,
-    // client-side <script> block inside itself*. Because the whole thing was one
-    // template literal, every `${...}` inside the embedded client-side script was
-    // evaluated immediately, server-side, at HTML-generation time — not deferred to
-    // the browser. Any `${...}` referencing client-only variables (state, item, m,
-    // clip, etc.) would throw a ReferenceError server-side. The frontend is now a
-    // real standalone index.html file (see repo root), served as a static asset by
-    // Cloudflare Workers Assets automatically — this Worker no longer needs to (and
-    // must not try to) generate HTML at all. Any GET request that isn't one of the
-    // /api/* routes above and isn't matched by a static file falls through here.
-    return json({ error: "Not found" }, 404);
-  },
-};
+   
