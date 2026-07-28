@@ -833,21 +833,25 @@ const AGENT_REGISTRY = {
 
       // Resolve each reference channel to real recent video data (capped at 4 channels,
       // 12 videos each, to keep the LLM prompt a reasonable size and cost).
-      const channelSummaries = [];
-      for (const link of referenceChannels.slice(0, 4)) {
+      // PERF: process channels in parallel (was a sequential for-loop) — with 2+
+      // reference channels this alone was adding several extra seconds of latency,
+      // contributing to the frontend's request timeout on the expanded pipeline.
+      const channelResults = await Promise.all(referenceChannels.slice(0, 4).map(async (link) => {
         try {
           const ref = parseYouTubeChannelRef(link);
           const channelId = await resolveYouTubeChannelId(ref, env.YOUTUBE_API_KEY);
           if (!channelId) {
             explainability_recorder.execute("EditorialDNAExtractionAgent: Could not resolve channel", { link });
-            continue;
+            return null;
           }
           const videos = await fetchRecentVideosForChannel(channelId, env.YOUTUBE_API_KEY, 12);
-          if (videos.length > 0) channelSummaries.push({ channel: link, videos });
+          return videos.length > 0 ? { channel: link, videos } : null;
         } catch (e) {
           console.warn("EditorialDNAExtractionAgent: failed for", link, e.message);
+          return null;
         }
-      }
+      }));
+      const channelSummaries = channelResults.filter(Boolean);
 
       if (channelSummaries.length === 0) {
         explainability_recorder.execute("EditorialDNAExtractionAgent: Could not fetch real data for any reference channel", { referenceChannels });
