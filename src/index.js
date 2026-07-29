@@ -1,4 +1,4 @@
-// Viral Radar — Combined Cloudflare Worker (Hono) for API + static asset serving.
+// Viral Radar — Combined Cloudflare Worker (plain, dependency-free) for API serving.
 //
 // PATCHED — see "// FIX:" comments throughout. Summary of what was wrong:
 //
@@ -24,7 +24,9 @@
 // 3) [CRITICAL] No CORS handling at all. index.html is hosted on a different
 //    origin (GitHub Pages / raw GitHub), so without CORS headers the browser
 //    blocks every response before your JS ever sees it — including the status
-//    check. Added Hono's built-in cors() middleware.
+//    check. Added CORS headers to every response + an OPTIONS preflight
+//    handler (see the CORS constant and json() helper, and the OPTIONS check
+//    in the fetch handler at the bottom).
 // 4) [CRITICAL] state.addWarn(...) is called in 3 places but was never defined
 //    on RuntimeState. In RankingAgent's main ranking loop this call sits
 //    outside any try/catch, so the resulting TypeError propagated all the way
@@ -61,19 +63,27 @@
 //    one slow/hung call could stall the whole request until Cloudflare killed
 //    it, truncating the response ("Unexpected end of JSON input" client-side).
 //    Added bounded timeouts to every external call.
+// 10) Removed the Hono framework entirely (see note further down) — it was
+//    the direct cause of the last deploy failure ("Could not resolve 'hono'":
+//    the package was never added to package.json) and wasn't needed for an
+//    app with only 3 routes. This version has zero npm dependencies.
 
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { serveStatic } from 'hono/cloudflare-pages'
+// FIX (per user request): reverted from Hono back to a plain, dependency-free
+// Cloudflare Worker. Hono itself wasn't the cause of any logic bug, but it was
+// an unnecessary external dependency for an app with only 3 routes — and it's
+// exactly what caused the last deploy failure ("Could not resolve 'hono'"),
+// because whatever generated this file never added hono to package.json.
+// A plain Worker has zero npm dependencies, so that whole class of failure
+// (missing/misconfigured packages) simply cannot happen here again. Static
+// index.html serving (Hono's serveStatic) is dropped too, matching how this
+// app has worked the whole time: index.html stays hosted separately (GitHub),
+// this Worker is API-only.
 
-const app = new Hono()
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
 
-// FIX #3: required for the browser to accept responses from a different origin.
-app.use('*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type'],
-}))
+function json(data, status = 200) {
+    return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...CORS } });
+}
 
 // --- Constants and Utilities ---
 const DEFAULT_PROVIDER = 'cloudflare';
@@ -1259,13 +1269,10 @@ class Orchestrator {
 
 // --- Cloudflare Worker Setup ---
 
-app.get('/', serveStatic({ root: './public', default: 'index.html' }))
-
-// FIX #7 & #8: /api/status also served at "/" as a fallback so the existing
-// frontend's capabilities check (which calls the bare Worker URL) keeps
-// working even if static asset serving isn't matched for some reason.
-app.get('/api/status', (c) => {
-    const llmRouter = new LLMRouter(c.env);
+// FIX #7 & #8: serve status at both "/" and "/api/status" so the existing
+// frontend's capabilities check (which calls the bare Worker URL) keeps working.
+function handleStatus(env) {
+    const llmRouter = new LLMRouter(env);
     const availableProviders = Object.keys(llmRouter.providers).map(key => {
         const provider = llmRouter.providers[key];
         return {
@@ -1275,31 +1282,31 @@ app.get('/api/status', (c) => {
             models: provider.models,
             configured_models: provider.models.filter(model => {
                 if (key === 'cloudflare') return true;
-                if (key === 'openrouter' && c.env.OPENROUTER_API_KEY) return true;
-                if (key === 'google' && c.env.GEMINI_API_KEY) return true;
-                if (key === 'github' && c.env.GITHUB_MODELS_TOKEN) return true;
-                if (key === 'huggingface' && c.env.HF_TOKEN) return true;
+                if (key === 'openrouter' && env.OPENROUTER_API_KEY) return true;
+                if (key === 'google' && env.GEMINI_API_KEY) return true;
+                if (key === 'github' && env.GITHUB_MODELS_TOKEN) return true;
+                if (key === 'huggingface' && env.HF_TOKEN) return true;
                 return false;
             }),
         };
     });
 
-    return c.json({
+    return json({
         status: 'ok',
         version: '1.0',
         message: 'Viral Radar Worker is operational.',
         llm_providers: availableProviders,
         providers_configured: {
-            cloudflare: Boolean(c.env.AI),
-            openrouter: Boolean(c.env.OPENROUTER_API_KEY),
-            google: Boolean(c.env.GEMINI_API_KEY),
-            github: Boolean(c.env.GITHUB_MODELS_TOKEN),
-            huggingface: Boolean(c.env.HF_TOKEN),
+            cloudflare: Boolean(env.AI),
+            openrouter: Boolean(env.OPENROUTER_API_KEY),
+            google: Boolean(env.GEMINI_API_KEY),
+            github: Boolean(env.GITHUB_MODELS_TOKEN),
+            huggingface: Boolean(env.HF_TOKEN),
         },
-        configured_youtube_api: !!c.env.YOUTUBE_API_KEY,
-        configured_apify_api: !!c.env.APIFY_API_TOKEN,
+        configured_youtube_api: !!env.YOUTUBE_API_KEY,
+        configured_apify_api: !!env.APIFY_API_TOKEN,
     });
-});
+}
 
 // FIX #8: build the exact shape index.html's UI already knows how to render
 // (editorial_objective wrapper, ranked_clip_opportunities nested inside
@@ -1381,8 +1388,10 @@ function buildFrontendCompatibleResponse(state) {
     };
 }
 
-app.post('/api/generate-insights', async (c) => {
-    const body = await c.req.json();
+async function handleGenerateInsights(request, env) {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+
     // FIX #7: match the frontend's actual field names (referenceChannels,
     // provider, model), while still accepting the old snake_case names too.
     const topic = body.topic;
@@ -1391,7 +1400,7 @@ app.post('/api/generate-insights', async (c) => {
     const model = body.model;
 
     if (!topic) {
-        return c.json({ error: 'Topic is required.' }, 400);
+        return json({ error: 'Topic is required.' }, 400);
     }
 
     // index.html sends referenceChannels as an array of plain strings
@@ -1407,16 +1416,16 @@ app.post('/api/generate-insights', async (c) => {
         })
         .filter(Boolean);
 
-    const orchestrator = new Orchestrator(c.env);
+    const orchestrator = new Orchestrator(env);
     try {
         const state = await orchestrator.execute(topic, referenceChannels, provider, model);
-        return c.json(buildFrontendCompatibleResponse(state));
+        return json(buildFrontendCompatibleResponse(state));
     } catch (error) {
         console.error('Orchestration workflow failed:', error);
         // Return 200 with an empty-but-valid contract so the existing
         // frontend can display something instead of erroring on a 500 body
         // it doesn't otherwise expect.
-        return c.json({
+        return json({
             editorial_objective: { topic, creative_brief_summary: '', editorial_dna: {}, research_constraints_applied: [] },
             raw_evidence_found: null,
             ai_actionable_insights: null,
@@ -1424,6 +1433,23 @@ app.post('/api/generate-insights', async (c) => {
             error: `Orchestration workflow failed: ${error.message}`,
         }, 200);
     }
-});
+}
 
-export default app;
+export default {
+    async fetch(request, env) {
+        const url = new URL(request.url);
+
+        if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+        if ((url.pathname === "/" || url.pathname === "/api/status") && request.method === "GET") {
+            return handleStatus(env);
+        }
+
+        if (url.pathname === "/api/generate-insights" && request.method === "POST") {
+            return handleGenerateInsights(request, env);
+        }
+
+        return json({ error: "Not found" }, 404);
+    },
+};
+
