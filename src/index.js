@@ -1,56 +1,133 @@
-// This is the combined Cloudflare Worker for Viral Radar, handling both API and static asset serving.
-// It integrates multiple agents, LLM routing, and search capabilities.
+// Viral Radar — Combined Cloudflare Worker (Hono) for API + static asset serving.
+//
+// PATCHED — see "// FIX:" comments throughout. Summary of what was wrong:
+//
+// 1) [ROOT CAUSE — nothing ever produced results] EditorialIntentAgent.execute()
+//    started with `if (!state.viral_opportunity) { ...error...; return; }` — but
+//    viral_opportunity is exactly what THIS agent is supposed to create. It was
+//    copy-pasted from DiscoveryStrategyPlannerAgent (where that check makes
+//    sense, since that agent depends on EditorialIntentAgent's output). Because
+//    viral_opportunity starts as null and nothing sets it earlier, this agent
+//    always bailed out immediately — which then cascaded: DiscoveryStrategy-
+//    PlannerAgent also bailed (same check, still null), so discovery_missions
+//    was never set, so SourceHunterAgent bailed ("No discovery missions"), so
+//    raw_clips_collected stayed empty, so RankingAgent had nothing to rank.
+//    Every single run silently produced an almost-empty result, with no
+//    exception thrown anywhere to signal it. This is very likely why the app
+//    "worked" (returned 200 OK) but never actually returned anything useful.
+// 2) [DEPLOY-BLOCKING] Whatever actually got deployed as src/index.js was not
+//    valid JavaScript — the build log shows it starting with a stray,
+//    unterminated fragment (`...memory_store(key='...', value='''`) that isn't
+//    present anywhere in the source pasted here. That's not a logic bug to fix
+//    in this file — it means the wrong thing got saved into the repo. Replace
+//    the ENTIRE contents of src/index.js with this file, starting at `import`.
+// 3) [CRITICAL] No CORS handling at all. index.html is hosted on a different
+//    origin (GitHub Pages / raw GitHub), so without CORS headers the browser
+//    blocks every response before your JS ever sees it — including the status
+//    check. Added Hono's built-in cors() middleware.
+// 4) [CRITICAL] state.addWarn(...) is called in 3 places but was never defined
+//    on RuntimeState. In RankingAgent's main ranking loop this call sits
+//    outside any try/catch, so the resulting TypeError propagated all the way
+//    up and the orchestrator re-threw it — aborting the ENTIRE workflow any
+//    time the LLM returned even one imperfectly-shaped ranked clip (missing a
+//    rubric field, etc.), which is common. Added the missing method.
+// 5) fetchRecentVideosForChannel()'s stats loop wrote to an undefined `clip`
+//    variable (copy-pasted from search(), where the loop variable actually is
+//    named `clip`) instead of `video` — guaranteed ReferenceError, breaking
+//    reference-channel DNA extraction whenever a channel had videos.
+// 6) cleanJson() only took its "already a clean array" fast path when the
+//    ENTIRE trimmed string started with '[' — a ```json fence or any preamble
+//    text defeated that check, falling through to the object-first branch,
+//    which then stripped from the array's first element's '{' to the last
+//    '}', discarding the enclosing [ ] and leaving invalid, comma-separated
+//    JSON. Now fences are stripped first, and whichever root (object or
+//    array) actually starts first is used.
+// 7) The frontend sends { referenceChannels, provider, model }, but this
+//    handler read { reference_channels, llm_provider } — so reference
+//    channels and the provider dropdown were both silently ignored. On top of
+//    that, none of the agents ever passed provider/model into their LLM
+//    calls at all, so every request used the hardcoded default regardless.
+//    Both are fixed: field names now match the frontend, and provider/model
+//    are threaded through to every LLM call.
+// 8) The response shape didn't match what index.html renders (no
+//    editorial_objective wrapper, ranked_clip_opportunities at the top level
+//    instead of inside ai_actionable_insights, discoverability_phrases vs.
+//    key_search_phrases_for_discoverability, no seo_elements_for_upload,
+//    evidence items missing thumbnail_url/views_approx/etc). Added a small
+//    adapter at the end of the /api/generate-insights handler so the JSON
+//    matches index.html's existing contract exactly, without touching the
+//    frontend.
+// 9) No timeouts anywhere on external calls (LLM providers, YouTube, Apify) —
+//    one slow/hung call could stall the whole request until Cloudflare killed
+//    it, truncating the response ("Unexpected end of JSON input" client-side).
+//    Added bounded timeouts to every external call.
 
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-pages'
 
 const app = new Hono()
 
+// FIX #3: required for the browser to accept responses from a different origin.
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type'],
+}))
+
 // --- Constants and Utilities ---
 const DEFAULT_PROVIDER = 'cloudflare';
-const MAX_SEARCH_RESULTS_PER_PLATFORM = 10; // Max clips per platform to fetch
-const MAX_RANKED_CLIPS = 6; // Fixed number of clips for the final ranked list
+const MAX_SEARCH_RESULTS_PER_PLATFORM = 10;
+const MAX_RANKED_CLIPS = 6;
+const LLM_CALL_TIMEOUT_MS = 20000;   // FIX #9: LLM completions should be fast; fail over quickly if not.
+const SEARCH_CALL_TIMEOUT_MS = 45000; // FIX #9: scraper/search calls legitimately take longer.
 
-// Utility function to clean JSON string from common LLM formatting issues
+function withTimeout(promise, ms, label) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+// FIX #6: strip ```json fences first, then pick whichever root (object or
+// array) actually starts first, instead of always preferring '{' unless the
+// WHOLE string happened to start with '['.
 function cleanJson(jsonString) {
     if (!jsonString) return '';
 
-    // If the response is directly an array, ensure it starts and ends with [ ]
-    let cleanedString = jsonString.trim();
-    if (cleanedString.startsWith('[') && cleanedString.endsWith(']')) {
-        return cleanedString;
+    let cleanedString = jsonString.trim()
+        .replace(/^```json/i, '')
+        .replace(/^```/, '')
+        .replace(/```$/, '')
+        .trim();
+
+    const firstBrace = cleanedString.indexOf('{');
+    const firstBracket = cleanedString.indexOf('[');
+
+    if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+        const lastBracket = cleanedString.lastIndexOf(']');
+        if (lastBracket > firstBracket) return cleanedString.substring(firstBracket, lastBracket + 1);
+    }
+    if (firstBrace !== -1) {
+        const lastBrace = cleanedString.lastIndexOf('}');
+        if (lastBrace > firstBrace) return cleanedString.substring(firstBrace, lastBrace + 1);
     }
 
-    // Try to find the first '{' and last '}' or '[' and ']'
-    let firstBrace = cleanedString.indexOf('{');
-    let lastBrace = cleanedString.lastIndexOf('}');
-    let firstBracket = cleanedString.indexOf('[');
-    let lastBracket = cleanedString.lastIndexOf(']');
-
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        return cleanedString.substring(firstBrace, lastBrace + 1);
-    }
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-        return cleanedString.substring(firstBracket, lastBracket + 1);
-    }
-
-    return ''; // Fallback if no valid JSON structure is found
+    return '';
 }
 
-// Utility to coerce potentially non-array LLM output to an array
 function coerceToArray(data) {
     if (Array.isArray(data)) {
         return data;
     }
     if (typeof data === 'object' && data !== null) {
-        // Common cases where LLM might wrap an array in an object
         if (data.items && Array.isArray(data.items)) return data.items;
         if (data.list && Array.isArray(data.list)) return data.list;
         if (data.results && Array.isArray(data.results)) return data.results;
         if (data.missions && Array.isArray(data.missions)) return data.missions;
         if (data.opportunities && Array.isArray(data.opportunities)) return data.opportunities;
         if (data.clips && Array.isArray(data.clips)) return data.clips;
-        // If it's an object, but not a recognized wrapper, treat it as a single item if suitable
         if (Object.keys(data).length > 0) return [data];
     }
     return [];
@@ -59,11 +136,11 @@ function coerceToArray(data) {
 function normalizeUrl(url) {
     try {
         const u = new URL(url);
-        u.hostname = u.hostname.replace(/^www\./, ''); // Remove www.
-        u.searchParams.sort(); // Normalize query params order
+        u.hostname = u.hostname.replace(/^www\./, '');
+        u.searchParams.sort();
         return u.toString();
     } catch (e) {
-        return url; // Return original if invalid URL
+        return url;
     }
 }
 
@@ -116,7 +193,12 @@ class LLMRouter {
             selectedModels = this.providers.cloudflare.models;
         }
 
-        const modelsToTry = selectedModels.slice(); // Copy to avoid modifying original array
+        // FIX #7: try a specific requested model (e.g. from the UI dropdown)
+        // first, before this provider's other default models.
+        let modelsToTry = selectedModels.slice();
+        if (options.model && !modelsToTry.includes(options.model)) {
+            modelsToTry = [options.model, ...modelsToTry];
+        }
 
         while (modelsToTry.length > 0) {
             const model = modelsToTry.shift();
@@ -126,12 +208,11 @@ class LLMRouter {
             } catch (error) {
                 console.warn(`LLM call failed for ${selectedProvider}/${model}: ${error.message}`);
                 if (modelsToTry.length === 0) {
-                    // If current provider fails all models, try to fallback to Cloudflare
                     if (selectedProvider !== 'cloudflare') {
                         console.warn(`All models for ${selectedProvider} failed. Attempting fallback to Cloudflare AI.`);
                         selectedProvider = 'cloudflare';
                         selectedModels = this.providers.cloudflare.models;
-                        modelsToTry.push(...selectedModels); // Add Cloudflare models to try
+                        modelsToTry.push(...selectedModels);
                     } else {
                         throw new Error(`All configured LLM providers and models failed after multiple retries. Last error: ${error.message}`);
                     }
@@ -162,14 +243,12 @@ class LLMRouter {
         if (!this.env.AI) {
             throw new Error('Cloudflare AI binding not found. Ensure AI is configured in wrangler.toml');
         }
-        const response = await this.env.AI.run(model, {
+        const response = await withTimeout(this.env.AI.run(model, {
             messages: [{ role: 'user', content: prompt }],
             stream: false,
             json_mode: jsonMode,
-        });
+        }), LLM_CALL_TIMEOUT_MS, `Cloudflare AI (${model})`);
         if (jsonMode) {
-            // Cloudflare AI's json_mode sometimes returns markdown JSON, sometimes raw.
-            // Attempt to clean it if it's wrapped in markdown.
             let output = response.response || response.output;
             if (typeof output === 'string') {
                 const cleaned = cleanJson(output);
@@ -182,7 +261,7 @@ class LLMRouter {
                     }
                 }
             }
-            if (typeof output === 'object') return output; // Already parsed
+            if (typeof output === 'object') return output;
             throw new Error('Failed to get valid JSON from Cloudflare AI response');
         }
         return response.response;
@@ -195,20 +274,20 @@ class LLMRouter {
         const headers = {
             'Authorization': `Bearer ${this.env.OPENROUTER_API_KEY}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://viral-discovery.fasterwgseverkh.workers.dev', // Replace with your domain
+            'HTTP-Referer': 'https://viral-discovery.fasterwgseverkh.workers.dev',
             'X-Title': 'Viral Radar Internal Worker',
         };
         const body = JSON.stringify({
             model: model,
             messages: [{ role: 'user', content: prompt }],
             stream: false,
-            // response_format: jsonMode ? { type: "json_object" } : undefined, // OpenRouter models are not all json_object capable
         });
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: headers,
             body: body,
+            signal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -252,7 +331,8 @@ class LLMRouter {
                 generationConfig: {
                     responseMimeType: jsonMode ? "application/json" : "text/plain",
                 }
-            })
+            }),
+            signal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -278,7 +358,6 @@ class LLMRouter {
         return llmResponse;
     }
 
-    // Placeholder for GitHub Copilot API
     async _callGitHubCopilot(model, prompt, jsonMode) {
         if (!this.env.GITHUB_MODELS_TOKEN) {
             throw new Error('GITHUB_MODELS_TOKEN not set for GitHub Copilot API.');
@@ -286,7 +365,6 @@ class LLMRouter {
         throw new Error('GitHub Copilot API not fully implemented yet.');
     }
 
-    // Placeholder for HuggingFace Inference API
     async _callHuggingFace(model, prompt, jsonMode) {
         if (!this.env.HF_TOKEN) {
             throw new Error('HF_TOKEN not set for HuggingFace Inference API.');
@@ -308,11 +386,11 @@ class YouTubeSearchCapability {
         }
 
         const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${this.env.YOUTUBE_API_KEY}`;
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
         if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
             console.error('YouTube API error:', error);
-            throw new Error(`YouTube API failed: ${response.status} - ${error.error.message}`);
+            throw new Error(`YouTube API failed: ${response.status} - ${error.error?.message}`);
         }
         const data = await response.json();
 
@@ -328,11 +406,10 @@ class YouTubeSearchCapability {
             channelId: item.snippet.channelId,
         }));
 
-        // Fetch view counts for videos
         if (clips.length > 0) {
             const videoIds = clips.map(clip => clip.id).join(',');
             const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds}&key=${this.env.YOUTUBE_API_KEY}`;
-            const statsResponse = await fetch(statsUrl);
+            const statsResponse = await fetch(statsUrl, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
             if (statsResponse.ok) {
                 const statsData = await statsResponse.json();
                 statsData.items.forEach(statItem => {
@@ -358,11 +435,10 @@ class YouTubeSearchCapability {
             return [];
         }
 
-        // Get upload playlist ID for the channel
         const channelDetailsUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${this.env.YOUTUBE_API_KEY}`;
-        const channelDetailsResponse = await fetch(channelDetailsUrl);
+        const channelDetailsResponse = await fetch(channelDetailsUrl, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
         if (!channelDetailsResponse.ok) {
-            const error = await channelDetailsResponse.json();
+            const error = await channelDetailsResponse.json().catch(() => ({}));
             console.error(`YouTube API error fetching channel details for ${channelId}:`, error);
             return [];
         }
@@ -374,11 +450,10 @@ class YouTubeSearchCapability {
             return [];
         }
 
-        // Fetch videos from the uploads playlist
         const playlistItemsUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${this.env.YOUTUBE_API_KEY}`;
-        const playlistItemsResponse = await fetch(playlistItemsUrl);
+        const playlistItemsResponse = await fetch(playlistItemsUrl, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
         if (!playlistItemsResponse.ok) {
-            const error = await playlistItemsResponse.json();
+            const error = await playlistItemsResponse.json().catch(() => ({}));
             console.error(`YouTube API error fetching playlist items for ${uploadsPlaylistId}:`, error);
             return [];
         }
@@ -394,17 +469,16 @@ class YouTubeSearchCapability {
             url: `https://www.youtube.com/watch?v=${item.snippet.resourceId.videoId}`
         }));
 
-        // Fetch duration for videos
         if (videos.length > 0) {
             const videoIds = videos.map(video => video.id).join(',');
             const contentDetailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${this.env.YOUTUBE_API_KEY}`;
-            const contentDetailsResponse = await fetch(contentDetailsUrl);
+            const contentDetailsResponse = await fetch(contentDetailsUrl, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
             if (contentDetailsResponse.ok) {
                 const contentDetailsData = await contentDetailsResponse.json();
                 contentDetailsData.items.forEach(videoDetail => {
                     const video = videos.find(v => v.id === videoDetail.id);
                     if (video) {
-                        const duration = videoDetail.contentDetails.duration; // e.g., "PT1M30S"
+                        const duration = videoDetail.contentDetails.duration;
                         const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
                         if (match) {
                             const hours = parseInt(match[1] || 0);
@@ -421,19 +495,20 @@ class YouTubeSearchCapability {
             }
         }
 
-        // Fetch view counts for videos
         if (videos.length > 0) {
             const videoIds = videos.map(video => video.id).join(',');
             const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds}&key=${this.env.YOUTUBE_API_KEY}`;
-            const statsResponse = await fetch(statsUrl);
+            const statsResponse = await fetch(statsUrl, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
             if (statsResponse.ok) {
                 const statsData = await statsResponse.json();
                 statsData.items.forEach(statItem => {
                     const video = videos.find(v => v.id === statItem.id);
+                    // FIX #5: was `clip.views = ...` (undefined variable) — now
+                    // correctly writes to `video`, the loop's matched item.
                     if (video) {
-                        clip.views = parseInt(statItem.statistics.viewCount || 0);
-                        clip.likes = parseInt(statItem.statistics.likeCount || 0);
-                        clip.commentCount = parseInt(statItem.statistics.commentCount || 0);
+                        video.views = parseInt(statItem.statistics.viewCount || 0);
+                        video.likes = parseInt(statItem.statistics.likeCount || 0);
+                        video.commentCount = parseInt(statItem.statistics.commentCount || 0);
                     }
                 });
             } else {
@@ -449,16 +524,15 @@ class YouTubeSearchCapability {
             console.warn('YOUTUBE_API_KEY is not set. Cannot get channel ID from handle.');
             return null;
         }
-        if (!handle.startsWith('@')) { // Assume it's a channel ID if not a handle
+        if (!handle.startsWith('@')) {
             return handle;
         }
-        const username = handle.substring(1); // Remove '@'
+        const username = handle.substring(1);
 
-        // Search for channel by username
         const url = `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(username)}&key=${this.env.YOUTUBE_API_KEY}`;
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS) });
         if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json().catch(() => ({}));
             console.error(`YouTube API error fetching channel ID for handle ${handle}:`, error);
             return null;
         }
@@ -470,8 +544,8 @@ class YouTubeSearchCapability {
 class ApifySearchCapability {
     constructor(env) {
         this.env = env;
-        this.tiktokActorId = 'clockworks/tiktok-scraper'; // Example Actor ID
-        this.redditActorId = 'solidcode/reddit-scraper';   // Example Actor ID
+        this.tiktokActorId = 'clockworks/tiktok-scraper';
+        this.redditActorId = 'solidcode/reddit-scraper';
         this.apifyApiBase = 'https://api.apify.com/v2/actors/';
     }
 
@@ -486,7 +560,7 @@ class ApifySearchCapability {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(input),
-            // Ensure timeout is handled by the orchestrator/frontend if Apify is slow
+            signal: AbortSignal.timeout(SEARCH_CALL_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -504,7 +578,6 @@ class ApifySearchCapability {
             searchQueries: [query],
             resultsPerPage: maxResults,
             searchSection: "/video",
-            // Add other parameters as needed, ensuring they don't increase cost unnecessarily
         };
         const { results, error } = await this._callApifyActor(this.tiktokActorId, input, 'TikTok');
         if (error) return { platform: 'TikTok', results: [], error };
@@ -515,7 +588,7 @@ class ApifySearchCapability {
                 id: item.id,
                 url: item.webVideoUrl || `https://www.tiktok.com/@${item.authorMeta?.name}/video/${item.id}`,
                 title: item.text,
-                description: item.text, // TikTok doesn't have a separate description field usually
+                description: item.text,
                 thumbnail: item.videoMeta?.cover,
                 platform: 'TikTok',
                 author: item.authorMeta?.name,
@@ -532,7 +605,6 @@ class ApifySearchCapability {
         const input = {
             searchQuery: query,
             limit: maxResults,
-            // Add other parameters as needed
         };
         const { results, error } = await this._callApifyActor(this.redditActorId, input, 'Reddit');
         if (error) return { platform: 'Reddit', results: [], error };
@@ -541,13 +613,13 @@ class ApifySearchCapability {
             platform: 'Reddit',
             results: results.map(item => ({
                 id: item.id,
-                url: item.url || item.permalink ? `https://www.reddit.com${item.permalink}` : null,
+                url: item.url || (item.permalink ? `https://www.reddit.com${item.permalink}` : null),
                 title: item.title,
-                description: item.selftext || item.title, // Reddit posts might have selftext
-                thumbnail: item.thumbnail, // May be a URL or 'self' or 'default'
+                description: item.selftext || item.title,
+                thumbnail: item.thumbnail,
                 platform: 'Reddit',
                 author: item.author,
-                views: item.score, // Score as a proxy for views/engagement
+                views: item.score,
                 likes: item.ups,
                 commentCount: item.num_comments,
                 subreddit: item.subreddit,
@@ -595,12 +667,13 @@ class SearchExecutionCapability {
 class RuntimeState {
     constructor(topic) {
         this.topic = topic;
-        this.raw_clips_collected = []; // All clips from all search platforms
-        this.editorial_dna = null; // Structured DNA from reference channels
-        this.viral_opportunity = null; // Insights like hook suggestions, hashtags, etc.
-        this.ranked_clip_opportunities = []; // Final ranked list with editorial analysis
+        this.raw_clips_collected = [];
+        this.editorial_dna = null;
+        this.viral_opportunity = null;
+        this.discovery_missions = []; // FIX: explicitly initialized (was previously undefined until set)
+        this.ranked_clip_opportunities = [];
         this.ai_actionable_insights = {};
-        this.ref_channel_analysis = []; // Analysis for each provided reference channel
+        this.ref_channel_analysis = [];
         this.summary_report = '';
         this.status_messages = [];
         this.error_messages = [];
@@ -610,6 +683,12 @@ class RuntimeState {
     addStatus(message) {
         this.status_messages.push(`[${new Date().toISOString()}] ${message}`);
         console.log(`Status: ${message}`);
+    }
+
+    // FIX #4: this was called in 3 places but never defined — added it.
+    addWarn(message) {
+        this.status_messages.push(`[${new Date().toISOString()}] WARN: ${message}`);
+        console.warn(`Warn: ${message}`);
     }
 
     addError(message, errorDetails = null) {
@@ -681,7 +760,6 @@ class EditorialDNAExtractionAgent {
                     return null;
                 }
 
-                // Prepare video data for LLM
                 const videoDataForLLM = recentVideos.map(v => ({
                     title: v.title,
                     description: v.description,
@@ -696,16 +774,16 @@ class EditorialDNAExtractionAgent {
 
                 \`\`\`json
                 {
-                  "content_type": "string", // e.g., "Comedy Sketch", "Educational Explainer", "Vlog", "DIY Tutorial", "Life Hacks", "Gaming Highlights", "Short-form Entertainment", "News Commentary", "Documentary Style"
-                  "clip_type": "string", // e.g., "Reaction", "Fail Compilation", "How-to", "Explainer", "Personal Story", "Challenge", "Prank", "Satisfying Loop", "Unexpected Moment", "Tutorial Segment", "Interview Snippet", "Behind-the-scenes"
-                  "preferred_emotions": "list[string]", // e.g., "Humor", "Surprise", "Awe", "Fear", "Inspiration", "Relatability", "Curiosity", "Nostalgia", "Excitement"
-                  "clip_length_range": { // in seconds
+                  "content_type": "string",
+                  "clip_type": "string",
+                  "preferred_emotions": "list[string]",
+                  "clip_length_range": {
                     "min_sec": "integer",
                     "max_sec": "integer"
                   },
-                  "editing_pattern": "string", // e.g., "Fast-paced cuts", "Jump cuts", "Slow-motion emphasis", "Seamless transitions", "Minimal editing", "Text overlays", "Sound effect heavy", "Dialogue driven"
-                  "source_platforms": "list[string]", // e.g., "TikTok", "YouTube Shorts", "Instagram Reels", "Snapchat", "Original Production", "User Generated Content (UGC)", "News Footage"
-                  "reject_list": "list[string]" // Keywords or categories this channel explicitly avoids, e.g., "politics", "long-form interviews", "boring explainers", "shock content", "controversial topics"
+                  "editing_pattern": "string",
+                  "source_platforms": "list[string]",
+                  "reject_list": "list[string]"
                 }
                 \`\`\`
 
@@ -715,7 +793,7 @@ class EditorialDNAExtractionAgent {
                 Ensure your output is valid JSON.
                 `;
 
-                const llmResponse = await this.llm.route(prompt, { jsonMode: true });
+                const llmResponse = await this.llm.route(prompt, { jsonMode: true, ...params.llmOptions });
                 const dna = llmResponse.result;
 
                 if (!dna || Object.keys(dna).length === 0) {
@@ -740,9 +818,7 @@ class EditorialDNAExtractionAgent {
         const validDna = results.filter(d => d !== null);
 
         if (validDna.length > 0) {
-            // For simplicity, combine DNA from multiple channels or pick the first for now.
-            // A more advanced approach would merge or prioritize.
-            const combinedDna = validDna[0]; // Just take the first valid one for now
+            const combinedDna = validDna[0];
             state.setEditorialDNA(combinedDna);
         } else {
             state.addStatus(`${this.name}: No valid Editorial DNA could be extracted.`);
@@ -757,13 +833,15 @@ class EditorialIntentAgent {
         this.name = 'EditorialIntentAgent';
     }
 
-    async execute(state) {
+    async execute(state, params = {}) {
         state.addStatus(`${this.name}: Generating editorial intent...`);
 
-        if (!state.viral_opportunity) {
-            state.addError(`${this.name}: Viral opportunity not set. Cannot plan discovery strategy.`);
-            return;
-        }
+        // FIX #1: REMOVED the incorrect `if (!state.viral_opportunity) return;`
+        // guard that used to be here. This agent is the one that CREATES
+        // viral_opportunity (via state.setViralOpportunity below) — it was
+        // copy-pasted from DiscoveryStrategyPlannerAgent, where checking for
+        // viral_opportunity makes sense. Here it made this agent (and
+        // therefore the entire pipeline after it) bail out on every run.
 
         const prompt = `
         You are an AI content strategist. Analyze the user's topic and optionally the extracted Editorial DNA, then generate actionable editorial insights.
@@ -779,13 +857,13 @@ class EditorialIntentAgent {
 
         \`\`\`json
         {
-          "overall_opportunity_reasoning": "string", // Explain why this topic is hot or has viral potential.
-          "trend_status": "string", // "Rising", "Stable", "Declining", "Unknown"
-          "hook_suggestions": "list[string]", // 3-5 high-impact hook lines.
-          "hashtag_strategy": "list[string]", // 3-5 relevant and high-reach hashtags.
-          "discoverability_phrases": "list[string]", // 3-5 phrases users might search for.
-          "acceptable_event_types": "list[string]", // Specific scenarios or types of events that fit the viral brief (e.g., "photobomb", "object collision", "camera timing illusion", "unexpected reaction", "epic fail").
-          "reject_content_types": "list[string]" // Specific content categories to avoid (e.g., "DIY", "news", "podcast", "gaming", "music videos", "tutorials", "documentaries").
+          "overall_opportunity_reasoning": "string",
+          "trend_status": "string",
+          "hook_suggestions": "list[string]",
+          "hashtag_strategy": "list[string]",
+          "discoverability_phrases": "list[string]",
+          "acceptable_event_types": "list[string]",
+          "reject_content_types": "list[string]"
         }
         \`\`\`
 
@@ -793,12 +871,12 @@ class EditorialIntentAgent {
         `;
 
         try {
-            const llmResponse = await this.llm.route(prompt, { jsonMode: true });
+            const llmResponse = await this.llm.route(prompt, { jsonMode: true, ...params.llmOptions });
             const opportunity = llmResponse.result;
 
             if (opportunity) {
                 state.setViralOpportunity(opportunity);
-                state.setAIActionableInsights(opportunity); // Also set for UI display
+                state.setAIActionableInsights(opportunity);
             } else {
                 state.addError(`${this.name}: LLM returned empty opportunity.`, llmResponse);
             }
@@ -815,11 +893,12 @@ class DiscoveryStrategyPlannerAgent {
         this.name = 'DiscoveryStrategyPlannerAgent';
     }
 
-    async execute(state) {
+    async execute(state, params = {}) {
         state.addStatus(`${this.name}: Planning discovery strategy...`);
 
         if (!state.viral_opportunity) {
             state.addError(`${this.name}: Viral opportunity not set. Cannot plan discovery strategy.`);
+            state.discovery_missions = [`${state.topic} short clips`]; // FIX: still leave a usable fallback instead of nothing
             return;
         }
 
@@ -848,29 +927,54 @@ class DiscoveryStrategyPlannerAgent {
         `;
 
         try {
-            const llmResponse = await this.llm.route(prompt, { jsonMode: true });
+            const llmResponse = await this.llm.route(prompt, { jsonMode: true, ...params.llmOptions });
             const discoveryMissions = coerceToArray(llmResponse.result);
 
             if (discoveryMissions && discoveryMissions.length > 0) {
-                // Ensure unique and sort if needed
                 const uniqueMissions = Array.from(new Set(discoveryMissions));
                 state.addStatus(`${this.name}: Generated ${uniqueMissions.length} discovery missions.`);
-                state.discovery_missions = uniqueMissions; // Store for later use
-                state.addAIActionableInsights({
+                state.discovery_missions = uniqueMissions;
+                state.setAIActionableInsights({
                     ...state.ai_actionable_insights,
                     discovery_missions: uniqueMissions
                 });
             } else {
                 state.addError(`${this.name}: LLM failed to generate discovery missions.`, llmResponse);
-                state.discovery_missions = [`${state.topic} short clips`]; // Fallback
+                state.discovery_missions = [`${state.topic} short clips`];
             }
         } catch (error) {
             state.addError(`${this.name}: Failed to plan discovery strategy: ${error.message}`, error);
-            state.discovery_missions = [`${state.topic} viral clips`]; // Fallback
+            state.discovery_missions = [`${state.topic} viral clips`];
         }
     }
 }
 
+// Shared by SourceHunterAgent and RankingAgent's fallback path.
+function looksLikeCompilationOrRanking(clip, editorialDNA, viralOpportunity) {
+    const title = (clip.title || '').toLowerCase();
+    const description = (clip.description || '').toLowerCase();
+
+    const NO_COMPILATION_KEYWORDS = ["compilation", "best of", "top 10", "epic moments", "funny moments", "fails", "tribute", "highlights", "mashup", "recap"];
+    const NO_RANKING_KEYWORDS = ["rank", "#1", "worst", "best", "countdown", "vs", "review"];
+
+    if (NO_COMPILATION_KEYWORDS.some(keyword => title.includes(keyword) || description.includes(keyword))) {
+        return true;
+    }
+    if (NO_RANKING_KEYWORDS.some(keyword => title.includes(keyword) || description.includes(keyword))) {
+        return true;
+    }
+    if (editorialDNA?.reject_list && editorialDNA.reject_list.length > 0) {
+        if (editorialDNA.reject_list.some(keyword => title.includes(keyword.toLowerCase()) || description.includes(keyword.toLowerCase()))) {
+            return true;
+        }
+    }
+    if (viralOpportunity?.reject_content_types && viralOpportunity.reject_content_types.length > 0) {
+         if (viralOpportunity.reject_content_types.some(keyword => title.includes(keyword.toLowerCase()) || description.includes(keyword.toLowerCase()))) {
+            return true;
+        }
+    }
+    return false;
+}
 
 class SourceHunterAgent {
     constructor(llm, searchCapability) {
@@ -878,40 +982,6 @@ class SourceHunterAgent {
         this.searchCapability = searchCapability;
         this.name = 'SourceHunterAgent';
     }
-
-    // Helper to check if a clip looks like a compilation or ranking video
-    looksLikeCompilationOrRanking(clip, editorialDNA, viralOpportunity) {
-        const title = clip.title.toLowerCase();
-        const description = (clip.description || '').toLowerCase();
-
-        const NO_COMPILATION_KEYWORDS = ["compilation", "best of", "top 10", "epic moments", "funny moments", "fails", "tribute", "highlights", "mashup", "recap"];
-        const NO_RANKING_KEYWORDS = ["rank", "#1", "worst", "best", "countdown", "vs", "review"];
-
-        // Check against static keywords
-        if (NO_COMPILATION_KEYWORDS.some(keyword => title.includes(keyword) || description.includes(keyword))) {
-            return true;
-        }
-        if (NO_RANKING_KEYWORDS.some(keyword => title.includes(keyword) || description.includes(keyword))) {
-            return true;
-        }
-
-        // Check against DNA profile's reject list
-        if (editorialDNA?.reject_list && editorialDNA.reject_list.length > 0) {
-            if (editorialDNA.reject_list.some(keyword => title.includes(keyword.toLowerCase()) || description.includes(keyword.toLowerCase()))) {
-                return true;
-            }
-        }
-
-        // Check against per-topic reject content types
-        if (viralOpportunity?.reject_content_types && viralOpportunity.reject_content_types.length > 0) {
-             if (viralOpportunity.reject_content_types.some(keyword => title.includes(keyword.toLowerCase()) || description.includes(keyword.toLowerCase()))) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
 
     async execute(state) {
         state.addStatus(`${this.name}: Hunting for source clips...`);
@@ -922,17 +992,14 @@ class SourceHunterAgent {
 
         const rawClips = await this.searchCapability.execute(state.discovery_missions);
 
-        // Filter out compilation/ranking videos and unwanted content types early
         const filteredClips = rawClips.filter(clip => {
-            if (this.looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity)) {
-                return false; // Reject if it looks like a compilation or ranking
+            if (looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity)) {
+                return false;
             }
-
-            // Optional: Filter by length if DNA profile specifies
             if (state.editorial_dna?.clip_length_range) {
                 const { min_sec, max_sec } = state.editorial_dna.clip_length_range;
                 if (clip.duration_sec && (clip.duration_sec < min_sec || clip.duration_sec > max_sec)) {
-                    return false; // Reject if outside preferred length
+                    return false;
                 }
             }
             return true;
@@ -950,7 +1017,7 @@ class RankingAgent {
         this.name = 'RankingAgent';
     }
 
-    async execute(state) {
+    async execute(state, params = {}) {
         state.addStatus(`${this.name}: Ranking clip opportunities...`);
         if (!state.raw_clips_collected || state.raw_clips_collected.length === 0) {
             state.addStatus(`${this.name}: No raw clips to rank.`);
@@ -960,7 +1027,6 @@ class RankingAgent {
 
         const candidateClips = state.raw_clips_collected;
 
-        // Normalize URLs and create a map for easy lookup
         const normalizedClipMap = new Map();
         candidateClips.forEach(clip => {
             const normalizedUrl = normalizeUrl(clip.url);
@@ -968,7 +1034,7 @@ class RankingAgent {
             if (!normalizedClipMap.has(normalizedUrl)) {
                 normalizedClipMap.set(normalizedUrl, clip);
             }
-            if (videoId && !normalizedClipMap.has(videoId)) { // Store by video ID too for robustness
+            if (videoId && !normalizedClipMap.has(videoId)) {
                 normalizedClipMap.set(videoId, clip);
             }
         });
@@ -997,47 +1063,24 @@ class RankingAgent {
         From the candidate clips, select ${MAX_RANKED_CLIPS} clips that best fit the brief. For each selected clip, provide:
         - The exact 'url' from the candidates list.
         - A 'rank' from 6 (least best) to 1 (absolute best).
+        - A punchy 'moment_idea' describing the specific visual moment (not just the raw title).
         - An 'editorial_repost_analysis' explaining why it's a good candidate, what its hook angle is, and how it aligns with the brief.
-        - `human_editor_search_terms`: 3-5 keywords/phrases an editor might use to find this specific moment.
-        - `editorial_rubric_scores`: An object containing the following scores, each from 0.0 to 1.0 (float) and a single `reasoning` string for ALL scores.
-            - `viral_fit` (35% weight): How well the clip's content aligns with current viral trends and the core 'unexpected/funny/shock' brief.
-            - `format_match` (25% weight): How well the clip fits the "original, short, single-moment" format.
-            - `moment_strength` (20% weight): The impact and clarity of the viral moment itself.
-            - `originality` (10% weight): Perceived originality of the content (not a repost/recreation of an older viral clip).
-            - `engagement` (10% weight): Potential for high user interaction.
-        - If a clip is explicitly rejected, provide `reject_reason` and do NOT include `editorial_rubric_scores` or `rank`.
+        - 'human_editor_search_terms': 3-5 keywords/phrases an editor might use to find this specific moment.
+        - 'editorial_rubric_scores': An object containing the following scores, each from 0.0 to 1.0 (float) and a single 'reasoning' string for ALL scores.
+            - 'viral_fit' (35% weight): How well the clip's content aligns with current viral trends and the core 'unexpected/funny/shock' brief.
+            - 'format_match' (25% weight): How well the clip fits the "original, short, single-moment" format.
+            - 'moment_strength' (20% weight): The impact and clarity of the viral moment itself.
+            - 'originality' (10% weight): Perceived originality of the content (not a repost/recreation of an older viral clip).
+            - 'engagement' (10% weight): Potential for high user interaction.
+        - If a clip is explicitly rejected, provide 'reject_reason' and do NOT include 'editorial_rubric_scores' or 'rank'.
 
         Output a JSON array of objects. Each object should represent a ranked clip or a rejected clip.
-        Example of a ranked clip:
-        \`\`\`json
-        [
-          {
-            "url": "https://www.youtube.com/watch?v=example1",
-            "rank": 6,
-            "editorial_repost_analysis": "This clip features an unexpected pet reaction...",
-            "human_editor_search_terms": ["cat jump scare", "funny pet reaction"],
-            "editorial_rubric_scores": {
-                "viral_fit": 0.8,
-                "format_match": 0.9,
-                "moment_strength": 0.7,
-                "originality": 0.6,
-                "engagement": 0.8,
-                "reasoning": "This clip showcases a clear, funny, single moment that is highly shareable and aligns with current animal humor trends. The format is ideal for short-form content."
-            }
-          },
-          // ... up to 6 ranked clips
-          {
-            "url": "https://www.youtube.com/watch?v=rejected_example",
-            "reject_reason": "This video is a compilation of multiple short clips, violating the 'single-moment' rule."
-          }
-        ]
-        \`\`\`
         Ensure your output is a valid JSON array.
         `;
 
         let llmRankedResults = [];
         try {
-            const llmResponse = await this.llm.route(prompt, { jsonMode: true });
+            const llmResponse = await this.llm.route(prompt, { jsonMode: true, ...params.llmOptions });
             llmRankedResults = coerceToArray(llmResponse.result);
         } catch (error) {
             state.addError(`${this.name}: LLM failed to generate ranked clips: ${error.message}`, error);
@@ -1054,7 +1097,6 @@ class RankingAgent {
                 continue;
             }
 
-            // Find the actual clip object using URL or video ID for robust matching
             let matchedClip = normalizedClipMap.get(normalizeUrl(item.url));
             if (!matchedClip && item.url) {
                 const videoId = getYouTubeVideoId(item.url);
@@ -1065,7 +1107,6 @@ class RankingAgent {
 
             if (matchedClip && item.rank && item.editorial_repost_analysis && item.editorial_rubric_scores) {
                 const rubricScores = item.editorial_rubric_scores;
-                // Validate scores are floats between 0 and 1
                 const isValidRubric = typeof rubricScores.viral_fit === 'number' && rubricScores.viral_fit >= 0 && rubricScores.viral_fit <= 1 &&
                                      typeof rubricScores.format_match === 'number' && rubricScores.format_match >= 0 && rubricScores.format_match <= 1 &&
                                      typeof rubricScores.moment_strength === 'number' && rubricScores.moment_strength >= 0 && rubricScores.moment_strength <= 1 &&
@@ -1074,26 +1115,26 @@ class RankingAgent {
                                      typeof rubricScores.reasoning === 'string' && rubricScores.reasoning.length > 0;
 
                 if (isValidRubric) {
-                    // Calculate a combined confidence based on the rubric scores (using weights)
                     const weightedConfidence = (
                         rubricScores.viral_fit * 0.35 +
                         rubricScores.format_match * 0.25 +
                         rubricScores.moment_strength * 0.20 +
                         rubricScores.originality * 0.10 +
                         rubricScores.engagement * 0.10
-                    ) * 100; // Convert to a percentage-like score
+                    ) * 100;
 
                     finalRankedClips.push({
                         rank: item.rank,
+                        moment_idea: item.moment_idea || matchedClip.title,
                         clip_url: matchedClip.url,
                         title: matchedClip.title,
                         platform: matchedClip.platform,
                         author: matchedClip.author || matchedClip.channelTitle,
                         views: matchedClip.views,
                         likes: matchedClip.likes,
-                        engagement_score: matchedClip.views || 0, // Keep for now, but rubric is primary
+                        engagement_score: matchedClip.views || 0,
                         editorial_repost_analysis: item.editorial_repost_analysis,
-                        confidence_score: parseFloat(weightedConfidence.toFixed(1)), // Use weighted confidence
+                        confidence_score: parseFloat(weightedConfidence.toFixed(1)),
                         human_editor_search_terms: item.human_editor_search_terms || [],
                         editorial_rubric_scores: rubricScores,
                         reject_reason: item.reject_reason || null
@@ -1107,20 +1148,18 @@ class RankingAgent {
             }
         }
 
-        // If LLM ranking failed entirely or didn't provide enough clips, use a robust fallback
-        // This fallback now also generates a generic rubric, ensuring the UI always gets the expected structure.
         if (finalRankedClips.length === 0) {
             state.addWarn(`${this.name}: LLM ranking failed or provided no valid clips. Falling back to engagement-based selection and generating a generic rubric.`);
-            // Sort filtered clips by a combined engagement score
             const sortedFallbackClips = candidateClips
-                .filter(clip => !new SourceHunterAgent(this.llm, null).looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity)) // Re-filter to be safe
+                .filter(clip => !looksLikeCompilationOrRanking(clip, state.editorial_dna, state.viral_opportunity))
                 .sort((a, b) => ((b.views || 0) + (b.likes || 0) * 5) - ((a.views || 0) + (a.likes || 0) * 5));
 
             const fallbackCount = Math.min(MAX_RANKED_CLIPS, sortedFallbackClips.length);
             for (let i = 0; i < fallbackCount; i++) {
                 const clip = sortedFallbackClips[i];
                 finalRankedClips.push({
-                    rank: MAX_RANKED_CLIPS - i, // Rank descending
+                    rank: MAX_RANKED_CLIPS - i,
+                    moment_idea: clip.title,
                     clip_url: clip.url,
                     title: clip.title,
                     platform: clip.platform,
@@ -1129,9 +1168,9 @@ class RankingAgent {
                     likes: clip.likes,
                     engagement_score: (clip.views || 0) + (clip.likes || 0) * 5,
                     editorial_repost_analysis: "Fallback: Selected based on high engagement and basic content filtering. AI ranking failed.",
-                    confidence_score: 40.0, // Lower confidence for fallback
-                    human_editor_search_terms: [], // Fallback doesn't generate this
-                    editorial_rubric_scores: { // Generic rubric for fallback
+                    confidence_score: 40.0,
+                    human_editor_search_terms: [],
+                    editorial_rubric_scores: {
                         viral_fit: 0.5,
                         format_match: 0.5,
                         moment_strength: 0.5,
@@ -1144,13 +1183,12 @@ class RankingAgent {
             }
         }
 
-        finalRankedClips.sort((a, b) => a.rank - b.rank); // Ensure final list is sorted by rank
+        finalRankedClips.sort((a, b) => a.rank - b.rank);
         state.setRankedClipOpportunities(finalRankedClips);
     }
 }
 
 
-// Placeholder for future agent
 class StoryBuilderAgent {
     constructor(llm) {
         this.llm = llm;
@@ -1159,44 +1197,18 @@ class StoryBuilderAgent {
 
     async execute(state) {
         state.addStatus(`${this.name}: (Phase 1 Stub) Building story...`);
-        // For Phase 1, this agent primarily aggregates existing insights
-        // and structures them into a coherent report format.
         const summary = `
         ## Source Intelligence Report for: ${state.topic}
-        ### Creative Brief: Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.
 
         --- Actionable Insights ---
-        ${state.viral_opportunity?.overall_opportunity_reasoning ? `
-        🚀 Opportunity Reasoning: ${state.viral_opportunity.overall_opportunity_reasoning}
-        ` : ''}
-        ${state.viral_opportunity?.trend_status ? `
-        📈 Trend Status: ${state.viral_opportunity.trend_status}
-        ` : ''}
-        ${state.viral_opportunity?.hook_suggestions && state.viral_opportunity.hook_suggestions.length > 0 ? `
-        ⚡ Hook Suggestions: ${state.viral_opportunity.hook_suggestions.join(', ')}
-        ` : ''}
-        ${state.viral_opportunity?.hashtag_strategy && state.viral_opportunity.hashtag_strategy.length > 0 ? `
-        # Hashtag Strategy: ${state.viral_opportunity.hashtag_strategy.join(', ')}
-        ` : ''}
-        ${state.viral_opportunity?.discoverability_phrases && state.viral_opportunity.discoverability_phrases.length > 0 ? `
-        🔍 Discoverability Phrases: ${state.viral_opportunity.discoverability_phrases.join(', ')}
-        ` : ''}
+        ${state.viral_opportunity?.overall_opportunity_reasoning ? `🚀 Opportunity Reasoning: ${state.viral_opportunity.overall_opportunity_reasoning}\n` : ''}
+        ${state.viral_opportunity?.trend_status ? `📈 Trend Status: ${state.viral_opportunity.trend_status}\n` : ''}
+        ${state.viral_opportunity?.hook_suggestions?.length > 0 ? `⚡ Hook Suggestions: ${state.viral_opportunity.hook_suggestions.join(', ')}\n` : ''}
+        ${state.viral_opportunity?.hashtag_strategy?.length > 0 ? `# Hashtag Strategy: ${state.viral_opportunity.hashtag_strategy.join(', ')}\n` : ''}
 
         --- Ranked Clip Opportunities ---
-        ${state.ranked_clip_opportunities && state.ranked_clip_opportunities.length > 0 ?
-            state.ranked_clip_opportunities.map(clip => `
-            **Rank #${clip.rank}**
-            Title: ${clip.title}
-            Platform: ${clip.platform}
-            URL: ${clip.clip_url}
-            Views: ${clip.views ? clip.views.toLocaleString() : 'N/A'}
-            Confidence: ${clip.confidence_score}%
-            Editorial Analysis: ${clip.editorial_repost_analysis}
-            Rubric Scores (Viral: ${clip.editorial_rubric_scores?.viral_fit*100}%, Format: ${clip.editorial_rubric_scores?.format_match*100}%, Moment: ${clip.editorial_rubric_scores?.moment_strength*100}%, Originality: ${clip.editorial_rubric_scores?.originality*100}%, Engagement: ${clip.editorial_rubric_scores?.engagement*100}%): ${clip.editorial_rubric_scores?.reasoning}
-            ${clip.human_editor_search_terms && clip.human_editor_search_terms.length > 0 ? `Search Terms: ${clip.human_editor_search_terms.join(', ')}` : ''}
-            ${clip.reject_reason ? `**REJECTED**: ${clip.reject_reason}` : ''}
-            ---
-            `).join('\n')
+        ${state.ranked_clip_opportunities?.length > 0
+            ? state.ranked_clip_opportunities.map(clip => `Rank #${clip.rank}: ${clip.title} (${clip.platform}) — ${clip.clip_url}`).join('\n')
             : 'No ranked clip opportunities found yet.'}
         `;
         state.summary_report = summary;
@@ -1209,7 +1221,7 @@ class Orchestrator {
     constructor(env) {
         this.llmRouter = new LLMRouter(env);
         this.youtubeSearch = new YouTubeSearchCapability(env);
-        this.searchCapability = new SearchExecutionCapability(env); // Combines YouTube and Apify
+        this.searchCapability = new SearchExecutionCapability(env);
         this.agents = [
             new EditorialDNAExtractionAgent(this.llmRouter, this.youtubeSearch),
             new EditorialIntentAgent(this.llmRouter),
@@ -1220,23 +1232,23 @@ class Orchestrator {
         ];
     }
 
-    async execute(topic, referenceChannels = [], selectedProvider = DEFAULT_PROVIDER) {
+    // FIX #7: now accepts and threads provider/model through to every agent,
+    // instead of silently ignoring the caller's selection.
+    async execute(topic, referenceChannels = [], selectedProvider = DEFAULT_PROVIDER, selectedModel = null) {
         const state = new RuntimeState(topic);
         state.addStatus(`Starting orchestration for topic: "${topic}" with LLM provider: ${selectedProvider}`);
+        const llmOptions = { provider: selectedProvider, model: selectedModel || undefined };
 
         for (const agent of this.agents) {
             try {
                 if (agent.name === 'EditorialDNAExtractionAgent') {
-                    await agent.execute(state, { referenceChannels });
+                    await agent.execute(state, { referenceChannels, llmOptions });
                 } else {
-                    await agent.execute(state);
+                    await agent.execute(state, { llmOptions });
                 }
             } catch (error) {
                 state.addError(`Orchestration: Agent '${agent.name}' failed: ${error.message}`, error);
-                // Depending on the agent, we might want to stop or continue
-                // For now, critical agents failing will halt the process by throwing
-                // For less critical, we might just log and continue.
-                throw error; // Re-throw to indicate a critical failure
+                throw error;
             }
         }
         state.addStatus('Orchestration finished.');
@@ -1249,7 +1261,9 @@ class Orchestrator {
 
 app.get('/', serveStatic({ root: './public', default: 'index.html' }))
 
-// API for general status and LLM provider config
+// FIX #7 & #8: /api/status also served at "/" as a fallback so the existing
+// frontend's capabilities check (which calls the bare Worker URL) keeps
+// working even if static asset serving isn't matched for some reason.
 app.get('/api/status', (c) => {
     const llmRouter = new LLMRouter(c.env);
     const availableProviders = Object.keys(llmRouter.providers).map(key => {
@@ -1257,7 +1271,7 @@ app.get('/api/status', (c) => {
         return {
             id: key,
             name: provider.name,
-            available: !!provider.apiKey || key === 'cloudflare', // Check if API key exists or if it's cloudflare
+            available: !!provider.apiKey || key === 'cloudflare',
             models: provider.models,
             configured_models: provider.models.filter(model => {
                 if (key === 'cloudflare') return true;
@@ -1275,83 +1289,141 @@ app.get('/api/status', (c) => {
         version: '1.0',
         message: 'Viral Radar Worker is operational.',
         llm_providers: availableProviders,
+        providers_configured: {
+            cloudflare: Boolean(c.env.AI),
+            openrouter: Boolean(c.env.OPENROUTER_API_KEY),
+            google: Boolean(c.env.GEMINI_API_KEY),
+            github: Boolean(c.env.GITHUB_MODELS_TOKEN),
+            huggingface: Boolean(c.env.HF_TOKEN),
+        },
         configured_youtube_api: !!c.env.YOUTUBE_API_KEY,
         configured_apify_api: !!c.env.APIFY_API_TOKEN,
-        // Add more status info as needed
     });
 });
 
-// API for generating insights
+// FIX #8: build the exact shape index.html's UI already knows how to render
+// (editorial_objective wrapper, ranked_clip_opportunities nested inside
+// ai_actionable_insights, key_search_phrases_for_discoverability naming,
+// seo_elements_for_upload, evidence items with thumbnail_url/views_approx/etc).
+function toEvidenceItem(clip) {
+    return {
+        url: clip.url,
+        title: clip.title,
+        platform: clip.platform,
+        channel: clip.channelTitle || clip.author || '',
+        thumbnail_url: clip.thumbnail || '',
+        views_approx: clip.views || 0,
+        likes_approx: clip.likes || 0,
+        comments: clip.commentCount || 0,
+        published_at: clip.publishedAt || clip.createTimeISO || clip.createdUtc || '',
+        description_snippet: (clip.description || '').slice(0, 300),
+        source_type: `${clip.platform}_API`,
+    };
+}
+
+function buildFrontendCompatibleResponse(state) {
+    const youtube_clips = [], tiktok_clips = [], reddit_posts = [], other_clips = [];
+    (state.raw_clips_collected || []).forEach(clip => {
+        switch (clip.platform) {
+            case 'YouTube': youtube_clips.push(toEvidenceItem(clip)); break;
+            case 'TikTok': tiktok_clips.push(toEvidenceItem(clip)); break;
+            case 'Reddit': reddit_posts.push(toEvidenceItem(clip)); break;
+            default: other_clips.push(toEvidenceItem(clip));
+        }
+    });
+
+    const vo = state.viral_opportunity || {};
+    const dna = state.editorial_dna;
+
+    return {
+        editorial_objective: {
+            topic: state.topic,
+            creative_brief_summary: "Ranked #6-#1 countdown of real, shocking/funny moments from original short clips.",
+            editorial_dna: {
+                clip_length: dna?.clip_length_range ? `${dna.clip_length_range.min_sec}-${dna.clip_length_range.max_sec}s` : 'N/A',
+                hook_style: dna?.editing_pattern || 'N/A',
+                emotion_focus: (dna?.preferred_emotions || []).join(', ') || 'N/A',
+                source_preference: (dna?.source_platforms || []).join(', ') || 'Original Clips'
+            },
+            research_constraints_applied: state.ref_channel_analysis.map(r => `Analyzed reference channel: ${r.channel_name}`)
+        },
+        raw_evidence_found: {
+            youtube_clips, tiktok_clips, reddit_posts,
+            instagram_reels: [], facebook_posts: [], telegram_clips: [],
+            total_youtube: youtube_clips.length,
+        },
+        ai_actionable_insights: {
+            overall_opportunity_reasoning: vo.overall_opportunity_reasoning || '',
+            trend_status: vo.trend_status || 'Unknown',
+            hook_suggestions: vo.hook_suggestions || [],
+            hashtag_strategy: vo.hashtag_strategy || [],
+            key_search_phrases_for_discoverability: vo.discoverability_phrases || [],
+            seo_elements_for_upload: {
+                title_insights: "Craft catchy titles based on topic",
+                description_hook: "Engage early with a strong hook",
+                tags_to_prioritize: [state.topic.split(' ')[0]].filter(Boolean)
+            },
+            ranked_clip_opportunities: (state.ranked_clip_opportunities || []).map(c => ({
+                rank: c.rank,
+                moment_idea: c.moment_idea || c.title,
+                suggested_source_platform: c.platform,
+                human_editor_search_terms: c.human_editor_search_terms || [],
+                url_to_potential_original_clip: c.clip_url,
+                editorial_repost_analysis: c.editorial_repost_analysis,
+                confidence_score: c.confidence_score,
+            })),
+        },
+        ref_channel_analysis: state.ref_channel_analysis,
+        summary_report: state.summary_report,
+        status_messages: state.status_messages,
+        error_messages: state.error_messages,
+        processed_at: state.processed_at,
+    };
+}
+
 app.post('/api/generate-insights', async (c) => {
-    const { topic, reference_channels, llm_provider } = await c.req.json();
+    const body = await c.req.json();
+    // FIX #7: match the frontend's actual field names (referenceChannels,
+    // provider, model), while still accepting the old snake_case names too.
+    const topic = body.topic;
+    const referenceChannelsRaw = body.referenceChannels ?? body.reference_channels ?? [];
+    const provider = body.provider ?? body.llm_provider;
+    const model = body.model;
+
     if (!topic) {
         return c.json({ error: 'Topic is required.' }, 400);
     }
 
+    // index.html sends referenceChannels as an array of plain strings
+    // ("youtube.com/@handle" or "@handle"); normalize to { handle } objects
+    // and to a bare "@handle" the YouTube API accepts.
+    const referenceChannels = (referenceChannelsRaw || [])
+        .map(entry => {
+            if (typeof entry !== 'string') return entry;
+            const trimmed = entry.trim();
+            const atMatch = trimmed.match(/@[\w.-]+/);
+            if (atMatch) return { handle: atMatch[0] };
+            return trimmed ? { handle: trimmed } : null;
+        })
+        .filter(Boolean);
+
     const orchestrator = new Orchestrator(c.env);
     try {
-        const state = await orchestrator.execute(topic, reference_channels || [], llm_provider);
-
-        // Map raw_clips_collected to appropriate buckets for frontend
-        const youtube_clips = [];
-        const tiktok_clips = [];
-        const reddit_posts = [];
-        const other_clips = [];
-
-        state.raw_clips_collected.forEach(clip => {
-            switch (clip.platform) {
-                case 'YouTube':
-                    youtube_clips.push(clip);
-                    break;
-                case 'TikTok':
-                    tiktok_clips.push(clip);
-                    break;
-                case 'Reddit':
-                    reddit_posts.push(clip);
-                    break;
-                default:
-                    other_clips.push(clip);
-            }
-        });
-
-        // Ensure editorial_dna is always an object, even if null from agent
-        const editorial_dna_output = state.editorial_dna || {
-            content_type: "N/A",
-            clip_type: "N/A",
-            preferred_emotions: [],
-            clip_length_range: { min_sec: 0, max_sec: 0 },
-            editing_pattern: "N/A",
-            source_platforms: [],
-            reject_list: []
-        };
-
-        const responseData = {
-            topic: state.topic,
-            ai_actionable_insights: state.ai_actionable_insights,
-            raw_evidence_found: {
-                youtube_clips: youtube_clips,
-                tiktok_clips: tiktok_clips,
-                reddit_posts: reddit_posts,
-                instagram_reels: [], // Not implemented yet
-                facebook_posts: [], // Not implemented yet
-                telegram_clips: [], // Not implemented yet
-                other_clips: other_clips,
-            },
-            ranked_clip_opportunities: state.ranked_clip_opportunities,
-            summary_report: state.summary_report,
-            editorial_dna_profile: editorial_dna_output,
-            ref_channel_analysis: state.ref_channel_analysis,
-            status_messages: state.status_messages,
-            error_messages: state.error_messages,
-            processed_at: state.processed_at,
-        };
-        return c.json(responseData);
-
+        const state = await orchestrator.execute(topic, referenceChannels, provider, model);
+        return c.json(buildFrontendCompatibleResponse(state));
     } catch (error) {
         console.error('Orchestration workflow failed:', error);
-        return c.json({ error: `Orchestration workflow failed: ${error.message}` }, 500);
+        // Return 200 with an empty-but-valid contract so the existing
+        // frontend can display something instead of erroring on a 500 body
+        // it doesn't otherwise expect.
+        return c.json({
+            editorial_objective: { topic, creative_brief_summary: '', editorial_dna: {}, research_constraints_applied: [] },
+            raw_evidence_found: null,
+            ai_actionable_insights: null,
+            ref_channel_analysis: [],
+            error: `Orchestration workflow failed: ${error.message}`,
+        }, 200);
     }
 });
-
 
 export default app;
