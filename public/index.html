@@ -357,32 +357,32 @@
                     <div class="insights-card" id="dna-profile-card" style="display:none;">
                         <div class="insights-card-title">🧬 Style DNA Analysis <span id="dna-video-count" style="font-size:10px;color:var(--text-faint);font-weight:400;"></span></div>
                         <div style="margin-bottom: 10px;">
-                            <div class="insights-item-label">Content Type:</div>
-                            <div id="dna-content-type" class="insights-tags-grid"></div>
+                            <div class="insights-item-label">Clip Archetypes:</div>
+                            <div id="dna-clip-archetypes" class="insights-tags-grid"></div>
                         </div>
                         <div style="margin-bottom: 10px;">
-                            <div class="insights-item-label">Clip Type:</div>
-                            <div id="dna-clip-type" class="insights-tags-grid"></div>
+                            <div class="insights-item-label">Hook Patterns:</div>
+                            <div id="dna-hook-patterns" class="insights-tags-grid"></div>
                         </div>
                         <div style="margin-bottom: 10px;">
-                            <div class="insights-item-label">Preferred Emotions:</div>
-                            <div id="dna-preferred-emotions" class="insights-tags-grid"></div>
+                            <div class="insights-item-label">Emotion Pattern (viewer arc):</div>
+                            <div id="dna-emotion-patterns" class="insights-tags-grid"></div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div class="insights-item-label">Ranking Logic:</div>
+                            <div id="dna-ranking-logic" class="insights-item-value">N/A</div>
                         </div>
                         <div style="margin-bottom: 10px;">
                             <div class="insights-item-label">Clip Length Range:</div>
                             <div id="dna-clip-length-range" class="insights-item-value">N/A</div>
                         </div>
                         <div style="margin-bottom: 10px;">
-                            <div class="insights-item-label">Editing Pattern:</div>
-                            <div id="dna-editing-pattern" class="insights-tags-grid"></div>
-                        </div>
-                        <div style="margin-bottom: 10px;">
                             <div class="insights-item-label">Source Platforms:</div>
                             <div id="dna-source-platforms" class="insights-tags-grid"></div>
                         </div>
                         <div>
-                            <div class="insights-item-label">Reject List:</div>
-                            <div id="dna-reject-list" class="insights-tags-grid"></div>
+                            <div class="insights-item-label">Reject Patterns:</div>
+                            <div id="dna-reject-patterns" class="insights-tags-grid"></div>
                         </div>
                     </div>
                 </div>
@@ -775,20 +775,32 @@
                         insights.ranked_clip_opportunities.forEach((clip, i) => {
                             const li = document.createElement('li');
                             const searchTerms = (clip.human_editor_search_terms || []).map(t => '"' + t + '"').join(', ');
+                            const sb = clip.score_breakdown;
+                            const scoreLine = sb
+                                ? 'DNA ' + sb.style_dna_match + ' · Moment ' + sb.moment_strength + ' · Emotion ' + sb.viewer_emotion + ' · Original ' + sb.original_source + ' · Engagement ' + sb.engagement
+                                : '';
                             li.innerHTML =
-                                '<div class="insights-item-label">Rank #' + (clip.rank || (6 - i)) + ': ' + (clip.moment_idea || 'N/A') + '</div>' +
+                                '<div class="insights-item-label">Rank #' + (clip.rank || (6 - i)) + ': ' + (clip.moment_idea || 'N/A') +
+                                (clip.final_score !== undefined ? ' <span style="color:var(--acid);">(' + clip.final_score + '/100)</span>' : '') + '</div>' +
                                 '<div class="insights-item-value">Platform: ' + (clip.suggested_source_platform || 'Any') +
                                 (searchTerms ? ' | Search Terms: ' + searchTerms : '') +
                                 (clip.url_to_potential_original_clip ? ' <a href="' + clip.url_to_potential_original_clip + '" target="_blank" rel="noopener noreferrer" style="margin-left:10px;color:var(--acid);">View Clip ↗</a>' : '') +
-                                (clip.editorial_repost_analysis ? '<div style="font-size:12px;color:var(--text-faint);margin-top:4px;">' + clip.editorial_repost_analysis + '</div>' : '') +
-                                (clip.confidence_score !== undefined ? '<div style="font-size:12px;color:var(--text-faint);margin-top:4px;">Confidence: ' + clip.confidence_score + '%</div>' : '') +
+                                (clip.style_dna_match_reason ? '<div style="font-size:12px;color:var(--text-faint);margin-top:6px;"><b style="color:var(--text-dim);">DNA match:</b> ' + clip.style_dna_match_reason + '</div>' : '') +
+                                (clip.countdown_position_reason ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Why this rank:</b> ' + clip.countdown_position_reason + '</div>' : '') +
+                                (clip.viral_mechanism ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Viral mechanism:</b> ' + clip.viral_mechanism + '</div>' : '') +
+                                (clip.emotion_trigger ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Emotion trigger:</b> ' + clip.emotion_trigger + '</div>' : '') +
+                                (clip.source_confidence ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Source confidence:</b> ' + clip.source_confidence + '</div>' : '') +
+                                (scoreLine ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px;font-family:var(--font-mono);">' + scoreLine + '</div>' : '') +
                                 '</div>';
                             rankedClipsList.appendChild(li);
                         });
                     } else {
                         const div = document.createElement('div');
                         div.className = 'evidence-no-data';
-                        div.textContent = 'No ranked clip opportunities found yet.';
+                        // CONTRACT §3 (REJECT over FALLBACK): an empty list here means no
+                        // candidate clip could be justified with full editorial reasoning
+                        // this run — it is never silently backfilled with a views-only pick.
+                        div.textContent = 'No clip passed the required editorial reasoning bar this run. Try again, broaden the topic, or add reference channels for a stronger DNA match.';
                         rankedClipsList.appendChild(div);
                     }
 
@@ -814,14 +826,14 @@
                         getById('dna-video-count').textContent = dnaAnalysis.based_on_real_video_count
                             ? '(based on ' + dnaAnalysis.based_on_real_video_count + ' real videos analyzed)'
                             : '';
-                        renderTags('dna-content-type', dnaAnalysis.content_type);
-                        renderTags('dna-clip-type', dnaAnalysis.clip_type);
-                        renderTags('dna-preferred-emotions', dnaAnalysis.preferred_emotions);
+                        renderTags('dna-clip-archetypes', dnaAnalysis.clip_archetypes);
+                        renderTags('dna-hook-patterns', dnaAnalysis.hook_patterns);
+                        renderTags('dna-emotion-patterns', dnaAnalysis.emotion_patterns);
+                        getById('dna-ranking-logic').textContent = dnaAnalysis.ranking_logic || 'N/A';
                         const clr = dnaAnalysis.clip_length_range;
                         getById('dna-clip-length-range').textContent = (clr && clr.min_sec != null && clr.max_sec != null) ? (clr.min_sec + '-' + clr.max_sec + 's') : 'N/A';
-                        renderTags('dna-editing-pattern', dnaAnalysis.editing_pattern);
                         renderTags('dna-source-platforms', dnaAnalysis.source_platforms);
-                        renderTags('dna-reject-list', dnaAnalysis.reject_list);
+                        renderTags('dna-reject-patterns', dnaAnalysis.reject_patterns);
                     } else {
                         hide(dnaCard);
                     }
@@ -864,13 +876,37 @@
 
         getById('llmModel').addEventListener('change', (e) => setState({ selectedModel: e.target.value }));
 
-        getById('surprise-btn').addEventListener('click', () => {
-            const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
-            setState({
-                topic: pick,
-                creativeBrief: "Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.",
-                referenceChannels: "youtube.com/@oogway_ranks\nyoutube.com/@polarranks"
-            });
+        getById('surprise-btn').addEventListener('click', async () => {
+            const btn = getById('surprise-btn');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                const opportunity = await callWorkerAPI('/api/generate-opportunity', {
+                    provider: state.activeProvider,
+                    model: state.selectedModel,
+                    dnaProfile: (state.results && state.results.ref_channel_analysis) || null
+                }, { timeout: 30000 });
+                const briefParts = [];
+                if (opportunity.format) briefParts.push('Format: ' + opportunity.format + '.');
+                if (opportunity.viewer_emotion_arc) briefParts.push('Viewer emotion arc: ' + opportunity.viewer_emotion_arc + '.');
+                briefParts.push("Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank.");
+                if (opportunity.reject && opportunity.reject.length) briefParts.push('Avoid: ' + opportunity.reject.join(', ') + '.');
+                setState({
+                    topic: opportunity.title || SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)],
+                    creativeBrief: briefParts.join(' ')
+                });
+            } catch (e) {
+                console.error('Dice (Viral Opportunity) failed, falling back to static list:', e);
+                const pick = SURPRISE_NICHES[Math.floor(Math.random() * SURPRISE_NICHES.length)];
+                setState({
+                    topic: pick,
+                    creativeBrief: "Generate a ranked #6-#1 countdown of real, shocking/funny moments pulled from original short clips — not a compilation reel, high-energy editing, one clear 'moment' per rank."
+                });
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
         });
 
         getById('generate-btn').addEventListener('click', async () => {
@@ -930,18 +966,21 @@
             copyText += "\n--- Ranked Clip Opportunities ---\n\n";
             if (rankedClips.length > 0) {
                 rankedClips.forEach(clip => {
-                    copyText += "Rank #" + (clip.rank || 'N/A') + ": " + (clip.moment_idea || 'N/A') + "\n";
+                    copyText += "Rank #" + (clip.rank || 'N/A') + ": " + (clip.moment_idea || 'N/A') + (clip.final_score !== undefined ? " (" + clip.final_score + "/100)" : "") + "\n";
                     copyText += "   Platform: " + (clip.suggested_source_platform || 'Any') + "\n";
                     if (clip.human_editor_search_terms && clip.human_editor_search_terms.length) {
                         copyText += "   Search: " + clip.human_editor_search_terms.map(t => '"' + t + '"').join(', ') + "\n";
                     }
                     if (clip.url_to_potential_original_clip) copyText += "   Potential Original: " + clip.url_to_potential_original_clip + "\n";
-                    if (clip.editorial_repost_analysis) copyText += "   Repost Insight: " + clip.editorial_repost_analysis + "\n";
-                    if (clip.confidence_score !== undefined) copyText += "   Confidence: " + clip.confidence_score + "%\n";
+                    if (clip.style_dna_match_reason) copyText += "   DNA Match: " + clip.style_dna_match_reason + "\n";
+                    if (clip.countdown_position_reason) copyText += "   Why This Rank: " + clip.countdown_position_reason + "\n";
+                    if (clip.viral_mechanism) copyText += "   Viral Mechanism: " + clip.viral_mechanism + "\n";
+                    if (clip.emotion_trigger) copyText += "   Emotion Trigger: " + clip.emotion_trigger + "\n";
+                    if (clip.source_confidence) copyText += "   Source Confidence: " + clip.source_confidence + "\n";
                     copyText += "\n";
                 });
             } else {
-                copyText += "No ranked clip opportunities found yet.\n";
+                copyText += "No clip passed the required editorial reasoning bar this run.\n";
             }
 
             navigator.clipboard.writeText(copyText).then(() => {
