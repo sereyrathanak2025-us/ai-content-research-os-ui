@@ -1452,4 +1452,3 @@ export default {
         return json({ error: "Not found" }, 404);
     },
 };
-
