@@ -790,6 +790,7 @@
                                 (clip.viral_mechanism ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Viral mechanism:</b> ' + clip.viral_mechanism + '</div>' : '') +
                                 (clip.emotion_trigger ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Emotion trigger:</b> ' + clip.emotion_trigger + '</div>' : '') +
                                 (clip.source_confidence ? '<div style="font-size:12px;color:var(--text-faint);margin-top:2px;"><b style="color:var(--text-dim);">Source confidence:</b> ' + clip.source_confidence + '</div>' : '') +
+                                (clip.suggested_caption_overlay ? '<div style="font-size:13px;color:var(--acid);margin-top:6px;font-weight:600;">' + clip.suggested_caption_overlay + '</div>' : '') +
                                 (scoreLine ? '<div style="font-size:11px;color:var(--text-faint);margin-top:4px;font-family:var(--font-mono);">' + scoreLine + '</div>' : '') +
                                 '</div>';
                             rankedClipsList.appendChild(li);
@@ -977,6 +978,7 @@
                     if (clip.viral_mechanism) copyText += "   Viral Mechanism: " + clip.viral_mechanism + "\n";
                     if (clip.emotion_trigger) copyText += "   Emotion Trigger: " + clip.emotion_trigger + "\n";
                     if (clip.source_confidence) copyText += "   Source Confidence: " + clip.source_confidence + "\n";
+                    if (clip.suggested_caption_overlay) copyText += "   Suggested Caption: " + clip.suggested_caption_overlay + "\n";
                     copyText += "\n";
                 });
             } else {
