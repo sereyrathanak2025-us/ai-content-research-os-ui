@@ -327,8 +327,12 @@ const LLMRouter = {
         fallback: ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-pro"]
       },
       google: {
-        id: modelPreference.google || "gemini-pro",
-        fallback: ["gemini-pro", "gemini-1.5-flash-latest"]
+        // BUGFIX: "gemini-1.5-flash-latest" alias was returning 404 "not found for API
+        // version v1beta" — Google has retired that alias. Using current model IDs with
+        // multiple fallbacks (including the older "-latest"-free naming) for resilience
+        // against further model deprecations.
+        id: modelPreference.google || "gemini-2.0-flash",
+        fallback: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
       },
       // Add other providers as needed: github, huggingface, etc.
     };
@@ -433,13 +437,25 @@ const LLMRouter = {
           }
 
           if (success && responseText.trim()) {
+            const cleaned = cleanJson(responseText);
             try {
-              const parsedData = JSON.parse(cleanJson(responseText));
+              const parsedData = JSON.parse(cleaned);
               return { data: parsedData, provider: provider, model: currentModel, confidence: 0.9 }; // Placeholder confidence
             } catch (jsonErr) {
-              lastError = new Error(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`);
-              console.warn(lastError.message);
-              // Try next model/provider
+              // BUGFIX: cheaper models (e.g. Cloudflare's llama-3.1-8b) sometimes produce
+              // near-valid JSON with a trailing comma before a closing brace/bracket —
+              // a single fixable issue that otherwise burns a whole provider attempt.
+              // Try once more with trailing commas stripped before giving up on this model.
+              try {
+                const repaired = cleaned.replace(/,(\s*[}\]])/g, "$1");
+                const parsedData = JSON.parse(repaired);
+                console.warn(`JSON repaired (trailing comma) from ${provider}/${currentModel}`);
+                return { data: parsedData, provider: provider, model: currentModel, confidence: 0.85 };
+              } catch (repairErr) {
+                lastError = new Error(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`);
+                console.warn(lastError.message);
+                // Try next model/provider
+              }
             }
           } else if (success) {
             lastError = new Error(`Empty response from ${provider}/${currentModel}.`);
@@ -1406,6 +1422,7 @@ const AGENT_REGISTRY = {
         "Select up to 6 of the BEST, most distinct real moments from this list (avoid near-duplicates). " +
         "Rank as a countdown: rank 1 = single best/most impactful (final reveal), rank 6 = weakest of your chosen set (opens the countdown). " +
         "You MUST reuse the exact 'url' from the candidate list above for each pick — never invent a URL. " +
+        "IMPORTANT — moment_strength bar: viral countdown channels (like PolarRanks/Oogway Ranks) only use moments with a genuinely SHOCKING, jaw-dropping, or 'wait, WHAT?' quality — not mundane, mild, or merely-mildly-amusing fails. When scoring moment_strength, actively PENALIZE clips that are just an ordinary fail with nothing exceptional about the reaction, timing, or outcome. A high moment_strength score requires the clip to make someone stop scrolling.\n" +
         "For EVERY selected clip you MUST provide ALL of these non-empty, specific (not generic) reasoning fields:\n" +
         "- moment_idea: the SPECIFIC visual moment as a punchy countdown phrase (not the raw title)\n" +
         "- style_dna_match_reason: specifically why this fits the Editorial DNA / creative brief (not a generic 'it's funny')\n" +
@@ -1413,6 +1430,7 @@ const AGENT_REGISTRY = {
         "- viral_mechanism: the specific mechanic that makes it shareable (e.g. 'expectation subversion', 'relatable failure')\n" +
         "- emotion_trigger: the specific emotional trigger for the viewer\n" +
         "- source_confidence: why this looks like an original/traceable source (not just 'it has views')\n" +
+        "- suggested_caption_overlay: a punchy, HIGH-ENERGY caption with emoji the creator could overlay on this clip when editing the final countdown video (e.g. '😱💀 HE DIDN'T SEE THAT COMING...') — this is packaging guidance for the finished edit, not a claim about the raw source clip itself\n" +
         "- score_breakdown: object with style_dna_match, moment_strength, viewer_emotion, original_source, engagement — each 0-100, justified by the fields above\n" +
         "If you cannot honestly justify all of these for a candidate, DO NOT include it — fewer than 6 well-justified picks is better than 6 weak ones.\n" +
         "Also produce overall_opportunity_reasoning (2-3 sentences), trend_status (Growing/Stable/Declining/Emerging), " +
@@ -1446,6 +1464,7 @@ const AGENT_REGISTRY = {
                 viral_mechanism: { type: "string" },
                 emotion_trigger: { type: "string" },
                 source_confidence: { type: "string" },
+                suggested_caption_overlay: { type: "string" },
                 score_breakdown: { type: "object", properties: scoreProps }
               },
               required: ["rank", "moment_idea", "suggested_source_platform", "url_to_potential_original_clip", "style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence", "score_breakdown"]
@@ -1527,6 +1546,7 @@ const AGENT_REGISTRY = {
             viral_mechanism: r.viral_mechanism,
             emotion_trigger: r.emotion_trigger,
             source_confidence: r.source_confidence,
+            suggested_caption_overlay: r.suggested_caption_overlay || "",
             score_breakdown: scoreBreakdown,
             final_score: finalScore,
             confidence_score: finalScore, // kept for backward-compat with older frontend field name
