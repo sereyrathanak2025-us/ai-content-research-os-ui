@@ -16,7 +16,44 @@
       "remote": true
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "viral-radar",
+      "database_id": "<DATABASE_ID>"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MY_BUCKET",
+      "bucket_name": "viral-thumbnails"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  },
+  "media": {
+    "binding": "MEDIA"
+  },
+  "stream": {
+    "binding": "STREAM"
+  },
   "assets": {
     "directory": "public"
+  },
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
   }
 }
