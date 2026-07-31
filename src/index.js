@@ -322,9 +322,21 @@ const LLMRouter = {
         id: modelPreference.cloudflare || "@cf/meta/llama-3.1-8b-instruct-fast",
         fallback: ["@cf/meta/llama-3.1-8b-instruct-fast", "@cf/zai-org/glm-4.7-flash"]
       },
+      // BUGFIX/FEATURE: default chain changed to free OpenRouter models per Dev VOF's
+      // model-quality analysis. This avoids the OpenRouter 402 "insufficient credits"
+      // failures entirely (these models cost nothing) while still giving strong
+      // reasoning (DeepSeek R1) and reliable structured JSON output (Qwen, gpt-oss).
+      // Paid models remain available as an explicit user choice in the frontend
+      // dropdown, but are no longer the silent default.
       openrouter: {
-        id: modelPreference.openrouter || "openai/gpt-4o",
-        fallback: ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-pro"]
+        id: modelPreference.openrouter || "deepseek/deepseek-r1:free",
+        fallback: [
+          "deepseek/deepseek-r1:free",
+          "qwen/qwen3-235b-a22b:free",
+          "openai/gpt-oss-20b:free",
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "google/gemini-2.0-flash-exp:free"
+        ]
       },
       google: {
         // BUGFIX: "gemini-1.5-flash-latest" alias was returning 404 "not found for API
@@ -368,7 +380,7 @@ const LLMRouter = {
               if (!env.AI) throw new Error("Cloudflare AI binding not configured.");
               const cfResp = await env.AI.run(currentModel, {
                 messages: messages,
-                max_tokens: 2000,
+                max_tokens: 3000,
                 response_format: { type: "json_object" }
               });
               if (cfResp && (cfResp.response || cfResp.result)) {
@@ -389,7 +401,7 @@ const LLMRouter = {
                 body: JSON.stringify({
                   model: currentModel,
                   messages: messages,
-                  max_tokens: 2000,
+                  max_tokens: 3000,
                   response_format: { type: "json_object" }
                 })
               });
@@ -417,7 +429,7 @@ const LLMRouter = {
                   contents: googleMessages,
                   generationConfig: {
                     responseMimeType: "application/json",
-                    maxOutputTokens: 2000,
+                    maxOutputTokens: 3000,
                   }
                 })
               });
@@ -1143,7 +1155,7 @@ const AGENT_REGISTRY = {
       const momentOntology = runtimeState.moment_ontology;
       const constraints = runtimeState.global_constraints;
 
-      const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 5-10 Discovery Missions.\n" +
+      const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 4-6 Discovery Missions (keep this count — more than 6 tends to get truncated by smaller models).\n" +
       "IMPORTANT: build primary_queries/keywords from the SPECIFIC acceptable_event_types in the Editorial Intent (e.g. 'photobomb', 'object collision') — do NOT just restate the topic words verbatim as the only query, since that tends to surface pre-made compilation/ranking videos about the topic rather than raw individual moments.\n" +
       "Each mission should include: mission_focus, clip_criteria (from editorialIntent.desired_clip_characteristics), priority_score (1-100), confidence_score (1-100), estimated_cost (Low/Medium/High), expected_yield (Low/Medium/High), and platform_strategies[] (platform, search_approach, primary_queries[], secondary_queries[], hashtags[], keywords[], filters{}).\n" +
       "Integrate keywords from specific plugin knowledge bases like 'fails' if relevant: " + JSON.stringify(discoveryKeywordsFails || {}) + ".\n" +
