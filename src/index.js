@@ -196,7 +196,22 @@ const KNOWLEDGE_BASE_PLUGINS = {
       MAX_DUPLICATION_PERCENT: 5,
       NO_COMPILATION_KEYWORDS: ["compilation", "best of", "top 10", "epic moments"],
       NO_RANKING_KEYWORDS: ["rank", "#1", "worst", "best"],
-    }
+    },
+    // FEATURE: what actually makes a moment grab attention — used to steer LLM query
+    // generation toward the MECHANISM of virality, not just a topic label.
+    hook_types: [
+      "Expectation violated", "Object suddenly breaks", "Animal interrupts",
+      "Perfect timing", "Optical illusion", "Transformation",
+      "Impossible skill", "Chain reaction", "Instant reversal", "Delayed realization"
+    ],
+    // FEATURE: original single-moment footage overwhelmingly comes from a small set of
+    // raw/unedited source types — steering search toward these (rather than "funny
+    // fails" generically) surfaces original clips instead of other creators' edits.
+    original_source_types: [
+      "Reddit post", "Local news clip", "Instagram reel", "TikTok creator upload",
+      "Personal vlog", "Bodycam footage", "Dashcam footage",
+      "Security camera footage", "Livestream clip"
+    ]
   },
   // Example Plugin: 'fails'
   fails: {
@@ -212,10 +227,35 @@ const KNOWLEDGE_BASE_PLUGINS = {
         "rude people": ["getting what they deserve"]
       }
     },
-    discovery_keywords: {
-      "Funny Fails": ["fail compilation", "funny fails", "epic fail", "prank reaction"],
-      "Instant Karma": ["instant karma video", "bad driver karma", "rude person fail"]
-    },
+    // BUGFIX/FEATURE: previously `discovery_keywords` directly contradicted
+    // policy_rules.NO_COMPILATION_KEYWORDS — e.g. "fail compilation" was a literal
+    // search term here while "compilation" was simultaneously a reject keyword. The
+    // AI was told to search for the very thing it would later filter out, wasting
+    // search quota and tokens on results doomed to be discarded. Also, these were flat
+    // topic-label keywords ("funny fails") rather than MOMENT structures (expectation
+    // -> failure -> reaction) or ORIGINAL-SOURCE signals — so results skewed toward
+    // other creators' already-edited compilation/ranking content instead of raw single
+    // moments. Replaced with moment_patterns: each pattern names the narrative shape of
+    // the moment and gives searchSignals that point at RAW original footage (never
+    // "compilation"/"best of"/"top 10", which are already globally rejected above).
+    moment_patterns: [
+      {
+        pattern: "Expectation -> Failure -> Reaction",
+        searchSignals: ["original clip", "caught on camera", "full clip", "raw footage", "fail moment"]
+      },
+      {
+        pattern: "Calm -> Sudden chaos",
+        searchSignals: ["security camera", "dashcam", "livestream clip", "caught on camera"]
+      },
+      {
+        pattern: "Confidence -> Instant consequence",
+        searchSignals: ["instant karma", "caught on camera", "bodycam", "dashcam"]
+      },
+      {
+        pattern: "Rude behavior -> Public consequence",
+        searchSignals: ["instant karma clip", "caught on camera reaction", "security footage"]
+      }
+    ],
     // ... other plugin-specific data
   }
 };
@@ -322,20 +362,18 @@ const LLMRouter = {
         id: modelPreference.cloudflare || "@cf/meta/llama-3.1-8b-instruct-fast",
         fallback: ["@cf/meta/llama-3.1-8b-instruct-fast", "@cf/zai-org/glm-4.7-flash"]
       },
-      // BUGFIX/FEATURE: default chain changed to free OpenRouter models per Dev VOF's
-      // model-quality analysis. This avoids the OpenRouter 402 "insufficient credits"
-      // failures entirely (these models cost nothing) while still giving strong
-      // reasoning (DeepSeek R1) and reliable structured JSON output (Qwen, gpt-oss).
-      // Paid models remain available as an explicit user choice in the frontend
-      // dropdown, but are no longer the silent default.
+      // BUGFIX: deepseek/deepseek-r1:free and qwen/qwen3-235b-a22b:free both started
+      // returning 404 "This model is unavailable for free" from OpenRouter — their free
+      // tier availability changes without notice. Removed the dead slugs; gpt-oss-20b:free
+      // is confirmed working from live logs, so it leads the chain now. Paid models remain
+      // available as an explicit user choice in the frontend dropdown.
       openrouter: {
-        id: modelPreference.openrouter || "deepseek/deepseek-r1:free",
+        id: modelPreference.openrouter || "openai/gpt-oss-20b:free",
         fallback: [
-          "deepseek/deepseek-r1:free",
-          "qwen/qwen3-235b-a22b:free",
           "openai/gpt-oss-20b:free",
           "meta-llama/llama-3.3-70b-instruct:free",
-          "google/gemini-2.0-flash-exp:free"
+          "google/gemini-2.0-flash-exp:free",
+          "mistralai/mistral-7b-instruct:free"
         ]
       },
       google: {
@@ -381,6 +419,7 @@ const LLMRouter = {
               const cfResp = await env.AI.run(currentModel, {
                 messages: messages,
                 max_tokens: 3000,
+                temperature: 0,
                 response_format: { type: "json_object" }
               });
               if (cfResp && (cfResp.response || cfResp.result)) {
@@ -402,6 +441,7 @@ const LLMRouter = {
                   model: currentModel,
                   messages: messages,
                   max_tokens: 3000,
+                  temperature: 0,
                   response_format: { type: "json_object" }
                 })
               });
@@ -430,6 +470,7 @@ const LLMRouter = {
                   generationConfig: {
                     responseMimeType: "application/json",
                     maxOutputTokens: 3000,
+                    temperature: 0,
                   }
                 })
               });
@@ -1141,14 +1182,16 @@ const AGENT_REGISTRY = {
       const { capability_registry, knowledge_base, env, explainability_recorder } = context;
       const llmService = capability_registry.LLMServiceCapability;
       const platformProfiles = knowledge_base.execute('core', 'platform_profiles');
-      // BUGFIX: only pull in the 'fails' plugin discovery keywords when the topic is
+      const hookTypes = knowledge_base.execute('core', 'hook_types') || [];
+      const originalSourceTypes = knowledge_base.execute('core', 'original_source_types') || [];
+      // BUGFIX: only pull in the 'fails' plugin moment patterns when the topic is
       // actually about fails/pranks — previously this ran unconditionally on every
       // topic, biasing the LLM toward generating gym-fail/prank discovery missions
       // even for completely unrelated topics (e.g. "don't trust your eyes illusions").
       const dspTopicText = runtimeState.editorial_intent?.topic || runtimeState.input_contract?.topic || "";
       const dspBriefText = runtimeState.editorial_intent?.creative_brief_summary || runtimeState.input_contract?.creativeBrief || "";
-      const discoveryKeywordsFails = isPluginRelevant("fails", dspTopicText, dspBriefText)
-        ? knowledge_base.execute('fails', 'discovery_keywords')
+      const momentPatternsFails = isPluginRelevant("fails", dspTopicText, dspBriefText)
+        ? knowledge_base.execute('fails', 'moment_patterns')
         : null;
 
       const editorialIntent = runtimeState.editorial_intent;
@@ -1157,8 +1200,12 @@ const AGENT_REGISTRY = {
 
       const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 4-6 Discovery Missions (keep this count — more than 6 tends to get truncated by smaller models).\n" +
       "IMPORTANT: build primary_queries/keywords from the SPECIFIC acceptable_event_types in the Editorial Intent (e.g. 'photobomb', 'object collision') — do NOT just restate the topic words verbatim as the only query, since that tends to surface pre-made compilation/ranking videos about the topic rather than raw individual moments.\n" +
+      "Hook mechanisms to consider when framing missions (what actually makes a moment grab attention, not just a topic label): " + JSON.stringify(hookTypes) + ".\n" +
+      "Prefer search terms that point at RAW original footage types: " + JSON.stringify(originalSourceTypes) + " — these surface single original moments far more reliably than generic topic searches.\n" +
+      (momentPatternsFails
+        ? "Relevant moment patterns for this topic (each with narrative shape + searchSignals that are already policy-safe, i.e. never 'compilation'/'best of'/'top 10'): " + JSON.stringify(momentPatternsFails) + ". Use the searchSignals as a starting point for primary_queries/keywords, combined with the specific acceptable_event_types.\n"
+        : "") +
       "Each mission should include: mission_focus, clip_criteria (from editorialIntent.desired_clip_characteristics), priority_score (1-100), confidence_score (1-100), estimated_cost (Low/Medium/High), expected_yield (Low/Medium/High), and platform_strategies[] (platform, search_approach, primary_queries[], secondary_queries[], hashtags[], keywords[], filters{}).\n" +
-      "Integrate keywords from specific plugin knowledge bases like 'fails' if relevant: " + JSON.stringify(discoveryKeywordsFails || {}) + ".\n" +
       "Return ONLY JSON array of Discovery Mission objects.";
 
       const schema = {
