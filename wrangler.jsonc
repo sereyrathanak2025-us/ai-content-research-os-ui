@@ -20,7 +20,7 @@
     {
       "binding": "DB",
       "database_name": "viral-radar",
-      "database_id": "<DATABASE_ID>"
+      "database_id": "9dba5d8c-d5f1-4211-9310-3a5fbf9bbbba"
     }
   ],
   "r2_buckets": [
