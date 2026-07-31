@@ -20,3 +20,61 @@
     "directory": "public"
   }
 }
+
+
+mkdir -p src && cat << 'PATCH_EOF' > /tmp/patch_llm_router.mjs
+import { readFileSync, writeFileSync } from 'fs';
+
+const FILE = 'src/index.js';
+const src = readFileSync(FILE, 'utf8');
+
+const OLD_BLOCK = `      openrouter: {
+        id: modelPreference.openrouter || "deepseek/deepseek-r1:free",
+        fallback: [
+          "deepseek/deepseek-r1:free",
+          "qwen/qwen3-235b-a22b:free",
+          "openai/gpt-oss-20b:free",
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "google/gemini-2.0-flash-exp:free"
+        ]
+      },`;
+
+const NEW_BLOCK = `      // FIX: deepseek-r1:free, qwen3-235b-a22b:free, and gemini-2.0-flash-exp:free were
+      // confirmed dead in production logs (OpenRouter 404 "unavailable for free" / "no
+      // endpoints found") — every single request was burning 3 failed attempts before
+      // reaching a model that actually worked. Replaced with a fallback chain of models
+      // confirmed available on OpenRouter's free tier. The chain can also be overridden
+      // per-deployment via the OPENROUTER_MODELS env var (comma-separated) without a
+      // code change — useful since OpenRouter's free-tier availability shifts often.
+      openrouter: {
+        id: modelPreference.openrouter || (env.OPENROUTER_MODELS ? env.OPENROUTER_MODELS.split(",")[0].trim() : "openai/gpt-oss-120b:free"),
+        fallback: env.OPENROUTER_MODELS
+          ? env.OPENROUTER_MODELS.split(",").map(s => s.trim()).filter(Boolean)
+          : [
+              "openai/gpt-oss-120b:free",
+              "openai/gpt-oss-20b:free",
+              "meta-llama/llama-3.3-70b-instruct:free",
+              "mistralai/devstral-small:free",
+              "google/gemma-3-27b-it:free"
+            ]
+      },`;
+
+if (!src.includes(OLD_BLOCK)) {
+  console.error("❌ Anchor block not found in " + FILE + " — file may already be patched, or formatting (indentation/quotes) differs from expected. No changes written.");
+  process.exit(1);
+}
+
+const patched = src.replace(OLD_BLOCK, NEW_BLOCK);
+writeFileSync(FILE, patched, 'utf8');
+console.log("✅ Patched openrouter fallback chain in " + FILE);
+PATCH_EOF
+
+node /tmp/patch_llm_router.mjs
+
+echo ""
+echo "🔍 Verifying patch..."
+grep -n "openai/gpt-oss-120b:free" src/index.js
+grep -n "OPENROUTER_MODELS" src/index.js
+grep -c "deepseek/deepseek-r1:free" src/index.js | xargs -I{} echo "remaining deepseek-r1:free references (should be 0): {}"
+echo ""
+wc -l src/index.js
