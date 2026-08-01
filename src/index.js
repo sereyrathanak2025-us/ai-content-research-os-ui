@@ -19,7 +19,8 @@ function json(data, status = 200) {
 // fetch-style AbortSignal directly. This generic wrapper races any promise against a
 // timeout so a slow/stuck call fails fast instead of blocking the whole pipeline past
 // the frontend's overall request timeout.
-function withTimeout(promise, ms, label) {
+// FIX: Renamed function and adjusted parameters for clarity with new global/per-model timeouts.
+function callWithPromiseTimeout(promise, ms, label) {
   return Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
@@ -108,14 +109,23 @@ async function resolveYouTubeChannelId(ref, apiKey) {
   if (!ref) return null;
   if (ref.type === "id") return ref.value;
   try {
+    // FIX: Apply per-model timeout to external API calls as well.
     const param = ref.type === "user" ? "forUsername" : "forHandle";
-    const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&${param}=${encodeURIComponent(ref.value)}&key=${apiKey}`);
+    const resp = await callWithPromiseTimeout(
+      fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&${param}=${encodeURIComponent(ref.value)}&key=${apiKey}`),
+      LLM_PER_MODEL_TIMEOUT_MS,
+      `YouTube Channel ID Resolution (${ref.value})`
+    );
     if (resp.ok) {
       const data = await resp.json();
       if (data.items && data.items[0]) return data.items[0].id;
     }
     // Fallback: search by name (handles legacy custom URLs / misc formats).
-    const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(ref.value)}&key=${apiKey}`);
+    const searchResp = await callWithPromiseTimeout(
+      fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(ref.value)}&key=${apiKey}`),
+      LLM_PER_MODEL_TIMEOUT_MS,
+      `YouTube Channel Name Search (${ref.value})`
+    );
     if (searchResp.ok) {
       const searchData = await searchResp.json();
       const item = searchData.items && searchData.items[0];
@@ -136,19 +146,32 @@ function parseISO8601Duration(iso) {
 
 async function fetchRecentVideosForChannel(channelId, apiKey, maxResults) {
   try {
-    const chResp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`);
+    // FIX: Apply per-model timeout to external API calls as well.
+    const chResp = await callWithPromiseTimeout(
+      fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`),
+      LLM_PER_MODEL_TIMEOUT_MS,
+      `YouTube Channel Details (${channelId})`
+    );
     if (!chResp.ok) return [];
     const chData = await chResp.json();
     const uploadsPlaylistId = chData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
     if (!uploadsPlaylistId) return [];
 
-    const plResp = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`);
+    const plResp = await callWithPromiseTimeout(
+      fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`),
+      LLM_PER_MODEL_TIMEOUT_MS,
+      `YouTube Playlist Items (${uploadsPlaylistId})`
+    );
     if (!plResp.ok) return [];
     const plData = await plResp.json();
     const videoIds = (plData.items || []).map(i => i.contentDetails?.videoId).filter(Boolean);
     if (videoIds.length === 0) return [];
 
-    const vidResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(",")}&key=${apiKey}`);
+    const vidResp = await callWithPromiseTimeout(
+      fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(",")}&key=${apiKey}`),
+      LLM_PER_MODEL_TIMEOUT_MS,
+      `YouTube Video Details (${videoIds.slice(0,3).join(',')})`
+    );
     if (!vidResp.ok) return [];
     const vidData = await vidResp.json();
     return (vidData.items || []).map(v => ({
@@ -365,6 +388,10 @@ const ExplainabilityRecorder = {
 // CAPABILITY REGISTRY & LAYER
 // -----------------------------------------------------------------------------
 
+// FIX: New global and per-model timeouts
+const LLM_GLOBAL_CALL_TIMEOUT_MS = 25000; // 25 seconds for an entire LLM route attempt
+const LLM_PER_MODEL_TIMEOUT_MS = 3000;    // 3 seconds per individual model attempt
+
 // LLM Router Independence
 const LLMRouter = {
   async route(prompt, schema, modelPreference, env) {
@@ -408,136 +435,150 @@ const LLMRouter = {
 
     let lastError = null;
 
-    for (const provider of [...new Set(attempts)]) { // Use Set to ensure unique attempts
-      const modelCfg = models[provider];
-      if (!modelCfg) continue; // Skip if provider config not found
+    // FIX: Apply a global timeout to the entire LLM routing attempt
+    try {
+      const result = await callWithPromiseTimeout(
+        (async () => {
+          for (const provider of [...new Set(attempts)]) { // Use Set to ensure unique attempts
+            const modelCfg = models[provider];
+            if (!modelCfg) continue; // Skip if provider config not found
 
-      const modelList = [modelCfg.id, ...(modelCfg.fallback || [])].filter(Boolean);
+            const modelList = [modelCfg.id, ...(modelCfg.fallback || [])].filter(Boolean);
 
-      for (const currentModel of modelList) {
-        try {
-          let responseText = "";
-          let success = false;
-
-          const messages = [
-            { role: "system", content: "You are a viral content research analyst. Always respond with valid JSON only, no markdown, no extra text. Ensure JSON is properly formatted and complete. Adhere strictly to the provided JSON schema." },
-            { role: "user", content: prompt }
-          ];
-
-          switch (provider) {
-            case "cloudflare":
-              if (!env.AI) throw new Error("Cloudflare AI binding not configured.");
-              const cfResp = await withTimeout(env.AI.run(currentModel, {
-                messages: messages,
-                max_tokens: 3000,
-                temperature: 0,
-                response_format: { type: "json_object" }
-              }), 20000, `Cloudflare AI (${currentModel})`);
-              if (cfResp && (cfResp.response || cfResp.result)) {
-                responseText = typeof cfResp.response === 'string' ? cfResp.response : JSON.stringify(cfResp.response || cfResp.result);
-                success = true;
-              }
-              break;
-
-            case "openrouter":
-              if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
-              const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-                  "Content-Type": "application/json",
-                  "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" // Worker's domain
-                },
-                body: JSON.stringify({
-                  model: currentModel,
-                  messages: messages,
-                  max_tokens: 3000,
-                  temperature: 0,
-                  response_format: { type: "json_object" }
-                }),
-                // BUGFIX: free-tier OpenRouter models can queue for a long time with no
-                // upper bound. Without a per-attempt timeout, one slow free model could
-                // stall the whole request past the frontend's timeout. Fail this attempt
-                // fast and let the fallback chain move on.
-                signal: AbortSignal.timeout(20000)
-              });
-              if (!orResp.ok) {
-                  const errorBody = await orResp.json().catch(() => ({ message: "Unknown OpenRouter error" }));
-                  throw new Error(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
-              }
-              const orData = await orResp.json();
-              if (orData.choices && orData.choices[0] && orData.choices[0].message) {
-                  responseText = typeof orData.choices[0].message.content === 'string' ? orData.choices[0].message.content : JSON.stringify(orData.choices[0].message.content);
-                  success = true;
-              }
-              break;
-
-            case "google":
-              if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured.");
-              const googleMessages = messages.map(msg => ({
-                  role: msg.role === 'system' ? 'user' : msg.role, // Gemini doesn't have system role directly
-                  parts: [{ text: msg.content }]
-              }));
-              const googleResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: googleMessages,
-                  generationConfig: {
-                    responseMimeType: "application/json",
-                    maxOutputTokens: 3000,
-                    temperature: 0,
-                  }
-                }),
-                signal: AbortSignal.timeout(20000)
-              });
-              if (!googleResp.ok) {
-                  const errorBody = await googleResp.json().catch(() => ({ message: "Unknown Gemini error" }));
-                  throw new Error(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
-              }
-              const googleData = await googleResp.json();
-              if (googleData.candidates && googleData.candidates[0] && googleData.candidates[0].content && googleData.candidates[0].content.parts) {
-                  responseText = googleData.candidates[0].content.parts[0].text;
-                  success = true;
-              }
-              break;
-
-            default:
-              throw new Error(`Unsupported LLM provider: ${provider}`);
-          }
-
-          if (success && responseText.trim()) {
-            const cleaned = cleanJson(responseText);
-            try {
-              const parsedData = JSON.parse(cleaned);
-              return { data: parsedData, provider: provider, model: currentModel, confidence: 0.9 }; // Placeholder confidence
-            } catch (jsonErr) {
-              // BUGFIX: cheaper models (e.g. Cloudflare's llama-3.1-8b) sometimes produce
-              // near-valid JSON with a trailing comma before a closing brace/bracket —
-              // a single fixable issue that otherwise burns a whole provider attempt.
-              // Try once more with trailing commas stripped before giving up on this model.
+            for (const currentModel of modelList) {
               try {
-                const repaired = cleaned.replace(/,(\s*[}\]])/g, "$1");
-                const parsedData = JSON.parse(repaired);
-                console.warn(`JSON repaired (trailing comma) from ${provider}/${currentModel}`);
-                return { data: parsedData, provider: provider, model: currentModel, confidence: 0.85 };
-              } catch (repairErr) {
-                lastError = new Error(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`);
-                console.warn(lastError.message);
-                // Try next model/provider
+                let responseText = "";
+                let success = false;
+
+                const messages = [
+                  { role: "system", content: "You are a viral content research analyst. Always respond with valid JSON only, no markdown, no extra text. Ensure JSON is properly formatted and complete. Adhere strictly to the provided JSON schema." },
+                  { role: "user", content: prompt }
+                ];
+
+                switch (provider) {
+                  case "cloudflare":
+                    if (!env.AI) throw new Error("Cloudflare AI binding not configured.");
+                    // FIX: Use per-model timeout for individual LLM calls
+                    const cfResp = await callWithPromiseTimeout(env.AI.run(currentModel, {
+                      messages: messages,
+                      max_tokens: 3000,
+                      temperature: 0,
+                      response_format: { type: "json_object" }
+                    }), LLM_PER_MODEL_TIMEOUT_MS, `Cloudflare AI (${currentModel})`);
+                    if (cfResp && (cfResp.response || cfResp.result)) {
+                      responseText = typeof cfResp.response === 'string' ? cfResp.response : JSON.stringify(cfResp.response || cfResp.result);
+                      success = true;
+                    }
+                    break;
+
+                  case "openrouter":
+                    if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
+                    // FIX: Use per-model timeout for individual LLM calls
+                    const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                      method: "POST",
+                      headers: {
+                        "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" // Worker's domain
+                      },
+                      body: JSON.stringify({
+                        model: currentModel,
+                        messages: messages,
+                        max_tokens: 3000,
+                        temperature: 0,
+                        response_format: { type: "json_object" }
+                      }),
+                      signal: AbortSignal.timeout(LLM_PER_MODEL_TIMEOUT_MS) // FIX: Per-model timeout
+                    });
+                    if (!orResp.ok) {
+                        const errorBody = await orResp.json().catch(() => ({ message: "Unknown OpenRouter error" }));
+                        throw new Error(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+                    }
+                    const orData = await orResp.json();
+                    if (orData.choices && orData.choices[0] && orData.choices[0].message) {
+                        responseText = typeof orData.choices[0].message.content === 'string' ? orData.choices[0].message.content : JSON.stringify(orData.choices[0].message.content);
+                        success = true;
+                    }
+                    break;
+
+                  case "google":
+                    if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured.");
+                    const googleMessages = messages.map(msg => ({
+                        role: msg.role === 'system' ? 'user' : msg.role, // Gemini doesn't have system role directly
+                        parts: [{ text: msg.content }]
+                    }));
+                    // FIX: Use per-model timeout for individual LLM calls
+                    const googleResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        contents: googleMessages,
+                        generationConfig: {
+                          responseMimeType: "application/json",
+                          maxOutputTokens: 3000,
+                          temperature: 0,
+                        }
+                      }),
+                      signal: AbortSignal.timeout(LLM_PER_MODEL_TIMEOUT_MS) // FIX: Per-model timeout
+                    });
+                    if (!googleResp.ok) {
+                        const errorBody = await googleResp.json().catch(() => ({ message: "Unknown Gemini error" }));
+                        throw new Error(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+                    }
+                    const googleData = await googleResp.json();
+                    if (googleData.candidates && googleData.candidates[0] && googleData.candidates[0].content && googleData.candidates[0].content.parts) {
+                        responseText = googleData.candidates[0].content.parts[0].text;
+                        success = true;
+                    }
+                    break;
+
+                  default:
+                    throw new Error(`Unsupported LLM provider: ${provider}`);
+                }
+
+                if (success && responseText.trim()) {
+                  const cleaned = cleanJson(responseText);
+                  try {
+                    const parsedData = JSON.parse(cleaned);
+                    return { data: parsedData, provider: provider, model: currentModel, confidence: 0.9 }; // Placeholder confidence
+                  } catch (jsonErr) {
+                    // BUGFIX: cheaper models (e.g. Cloudflare's llama-3.1-8b) sometimes produce
+                    // near-valid JSON with a trailing comma before a closing brace/bracket —
+                    // a single fixable issue that otherwise burns a whole provider attempt.
+                    // Try once more with trailing commas stripped before giving up on this model.
+                    try {
+                      const repaired = cleaned.replace(/,(\s*[}\]])/g, "$1");
+                      const parsedData = JSON.parse(repaired);
+                      console.warn(`JSON repaired (trailing comma) from ${provider}/${currentModel}`);
+                      return { data: parsedData, provider: provider, model: currentModel, confidence: 0.85 };
+                    } catch (repairErr) {
+                      lastError = new Error(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`);
+                      console.warn(lastError.message);
+                      // Try next model/provider
+                    }
+                  }
+                } else if (success) {
+                  lastError = new Error(`Empty response from ${provider}/${currentModel}.`);
+                  console.warn(lastError.message);
+                }
+              } catch (e) {
+                lastError = e;
+                console.warn(`LLM call failed for ${provider}/${currentModel}:`, e.message);
+                // Continue to next model/provider if this individual call fails/times out
               }
             }
-          } else if (success) {
-            lastError = new Error(`Empty response from ${provider}/${currentModel}.`);
-            console.warn(lastError.message);
           }
-        } catch (e) {
-          lastError = e;
-          console.warn(`LLM call failed for ${provider}/${currentModel}:`, e.message);
-        }
-      }
+          // If all models fail within the global timeout
+          throw new Error("All LLM attempts failed: " + (lastError ? lastError.message : "No models responded."));
+        })(),
+        LLM_GLOBAL_CALL_TIMEOUT_MS,
+        "Global LLM Routing"
+      );
+      return result;
+    } catch (e) {
+      // This catch handles the global timeout as well as any unhandled errors from inner loops
+      throw new Error(`LLM routing attempt failed: ${e.message}`);
     }
-    throw new Error("All LLM attempts failed: " + (lastError ? lastError.message : "No models responded."));
   }
 };
 
@@ -595,7 +636,7 @@ const capabilityRegistry = {
           part: "snippet",
           q: query,
           key: env.YOUTUBE_API_KEY,
-          maxResults: String(filters.max_results || 10),
+          maxResults: String(filters.max_results || 5), // FIX: Reduced max_results to 5
           type: "video",
           videoDuration: "short",
           order: "viewCount", // default to viewCount for viral potential
@@ -604,7 +645,11 @@ const capabilityRegistry = {
         const params = new URLSearchParams(paramsObj);
 
         try {
-          const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+          const searchResp = await callWithPromiseTimeout(
+            fetch(`https://www.googleapis.com/youtube/v3/search?${params}`),
+            LLM_PER_MODEL_TIMEOUT_MS,
+            `YouTube Search API (${query})`
+          );
           if (!searchResp.ok) {
             const errBody = await searchResp.text().catch(() => "");
             console.warn("YT search failed:", searchResp.status, errBody.slice(0, 300));
@@ -614,7 +659,11 @@ const capabilityRegistry = {
           const ids = searchData.items.map(i => i.id.videoId).filter(Boolean).join(",");
           if (!ids) return [];
           
-          const detResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${env.YOUTUBE_API_KEY}`);
+          const detResp = await callWithPromiseTimeout(
+            fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${env.YOUTUBE_API_KEY}`),
+            LLM_PER_MODEL_TIMEOUT_MS,
+            `YouTube Video Details API (${ids.slice(0,3).join(',')})`
+          );
           if (!detResp.ok) return [];
           const detData = await detResp.json();
           
@@ -650,14 +699,19 @@ const capabilityRegistry = {
           const apifyUrl = `https://api.apify.com/v2/actors/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(env.APIFY_API_TOKEN)}`;
           const body = {
             searchQueries: [query],
-            resultsPerPage: Math.min(Number(filters.max_results) || 10, 30),
+            resultsPerPage: Math.min(Number(filters.max_results) || 5, 30), // FIX: Reduced max_results to 5
             searchSection: "/video"
           };
-          const resp = await fetch(apifyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          });
+          const resp = await callWithPromiseTimeout(
+            fetch(apifyUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(LLM_PER_MODEL_TIMEOUT_MS) // FIX: Per-model timeout
+            }),
+            LLM_PER_MODEL_TIMEOUT_MS,
+            `TikTok (Apify) Search API (${query})`
+          );
           if (!resp.ok) {
             const errBody = await resp.text().catch(() => "");
             console.warn("TikTok (Apify) search failed:", resp.status, errBody.slice(0, 300));
@@ -702,14 +756,19 @@ const capabilityRegistry = {
             searchCommunities: false,
             searchUsers: false,
             sort: "relevance",
-            maxItems: Math.min(Number(filters.max_results) || 10, 30),
+            maxItems: Math.min(Number(filters.max_results) || 5, 30), // FIX: Reduced max_results to 5
             skipComments: true
           };
-          const resp = await fetch(apifyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          });
+          const resp = await callWithPromiseTimeout(
+            fetch(apifyUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(LLM_PER_MODEL_TIMEOUT_MS) // FIX: Per-model timeout
+            }),
+            LLM_PER_MODEL_TIMEOUT_MS,
+            `Reddit (Apify) Search API (${query})`
+          );
           if (!resp.ok) {
             const errBody = await resp.text().catch(() => "");
             console.warn("Reddit (Apify) search failed:", resp.status, errBody.slice(0, 300));
@@ -1029,7 +1088,7 @@ const AGENT_REGISTRY = {
       
       const { data: topics, confidence, error, model, provider } = await llmService.execute(prompt, { type: "array", items: { type: "string" } }, runtimeState.input_contract.model_preference, env);
 
-      if (error) throw new Error("LLM for OpportunityGenerator failed: " + error);
+      if (error) throw new Error("LLM for OpportunityGenerator failed: + error");
       const safeTopics = coerceToArray(topics);
       explainability_recorder.execute("OpportunityGenerator: Generated topics", { topics: safeTopics, model, provider, confidence });
       
@@ -1323,7 +1382,7 @@ const AGENT_REGISTRY = {
 
           const clips = await searchExecution.execute(strategy.platform, query, {
             ...strategy.filters,
-            max_results: 10, // Limit results per query for Phase 1
+            max_results: 5, // FIX: Reduced max_results from 10 to 5 for faster execution
             max_age_months: runtimeState.editorial_intent?.desired_clip_characteristics?.max_age_months
           }, env);
 
@@ -1741,7 +1800,7 @@ async function orchestrate(workflowId, inputContract, env) {
     const agent = AGENT_REGISTRY[agentId];
     if (!agent) throw new Error(`Agent '${agentId}' not found in registry.`);
 
-    const startTime = Date.now();
+    const startTime = Date.Now(); // Use performance.now() in production for higher precision
     let agentOutput;
     try {
       // Agents read from the current workflow state
@@ -1783,11 +1842,7 @@ async function orchestrate(workflowId, inputContract, env) {
   };
 
   try {
-    // Phase 1 Workflow - Simplified Linear Flow
-    // PERF: these two agents are independent of each other (both only read
-    // input_contract) — running them in parallel instead of sequentially shaves real
-    // latency off the total pipeline time, which matters now that free-tier models can
-    // be slower to respond.
+    // Phase 1 Workflow - Changed to run EditorialDNAExtractionAgent and OpportunityGenerator in parallel
     await Promise.all([
       executeAgent("EditorialDNAExtractionAgent"),
       executeAgent("OpportunityGenerator")
