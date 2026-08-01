@@ -97,7 +97,7 @@ function parseYouTubeChannelRef(rawUrl) {
   u = u.replace(/\/+$/, ""); // drop trailing slash
   if (u.startsWith("@")) return { type: "handle", value: u.split("/")[0] };
   if (u.startsWith("channel/")) return { type: "id", value: u.slice("channel/".length).split("/")[0] };
-  if (u.startsWith("c/")) return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
+  if (u.startsWith("c/")) return return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
   if (u.startsWith("user/")) return { type: "user", value: u.slice("user/".length).split("/")[0] };
   if (rawUrl.trim().startsWith("@")) return { type: "handle", value: rawUrl.trim().split("/")[0] };
   // Bare name with no recognizable prefix: try it as a handle.
@@ -128,7 +128,7 @@ async function resolveYouTubeChannelId(ref, apiKey) {
     );
     if (searchResp.ok) {
       const searchData = await searchResp.json();
-      const item = searchData.items && searchData.items[0];
+      const item = searchData.items && searchDataData.items[0];
       if (item) return item.snippet?.channelId || item.id?.channelId || null;
     }
   } catch (e) {
@@ -1088,7 +1088,7 @@ const AGENT_REGISTRY = {
       
       const { data: topics, confidence, error, model, provider } = await llmService.execute(prompt, { type: "array", items: { type: "string" } }, runtimeState.input_contract.model_preference, env);
 
-      if (error) throw new Error("LLM for OpportunityGenerator failed: + error");
+      if (error) throw new Error("LLM for OpportunityGenerator failed: " + error);
       const safeTopics = coerceToArray(topics);
       explainability_recorder.execute("OpportunityGenerator: Generated topics", { topics: safeTopics, model, provider, confidence });
       
@@ -1157,12 +1157,26 @@ const AGENT_REGISTRY = {
 
       if (error) throw new Error("LLM for EditorialIntentAgent failed: " + error);
       
+      // FIX: Normalize LLM output fields right inside EditorialIntentAgent
+      const desiredFromLlm = llmData.desired_clip_characteristics || llmData.desiredClipCharacteristics || {};
+      const minDur = desiredFromLlm.min_duration_sec || desiredFromLlm.min_sec || desiredFromLlm.min_duration || desiredFromLlm.min_duration_seconds || null;
+      const maxDur = desiredFromLlm.max_duration_sec || desiredFromLlm.max_sec || desiredFromLlm.max_duration || desiredFromLlm.max_duration_seconds || null;
+      const contentTone = desiredFromLlm.content_tone || desiredFromLlm.tone || desiredFromLlm.contentTone || desiredFromLlm.pacing || null;
+
+      const normalizedDesired = {
+        ...desiredFromLlm,
+        min_duration_sec: minDur,
+        max_duration_sec: maxDur,
+        content_tone: contentTone
+      };
+      
       const finalEditorialIntent = {
           ...llmData,
           topic: llmData.topic || topic, // Fallback to original input
           creative_brief_summary: llmData.creative_brief_summary || creativeBrief, // Fallback to original input
           acceptable_event_types: coerceToArray(llmData.acceptable_event_types),
-          reject_content_types: coerceToArray(llmData.reject_content_types)
+          reject_content_types: coerceToArray(llmData.reject_content_types),
+          desired_clip_characteristics: normalizedDesired // Use normalized fields
       };
 
       explainability_recorder.execute("EditorialIntentAgent: Generated intent", { editorialIntent: finalEditorialIntent, model, provider, confidence });
@@ -1800,7 +1814,8 @@ async function orchestrate(workflowId, inputContract, env) {
     const agent = AGENT_REGISTRY[agentId];
     if (!agent) throw new Error(`Agent '${agentId}' not found in registry.`);
 
-    const startTime = Date.Now(); // Use performance.now() in production for higher precision
+    // FIX: Corrected Date.Now() to Date.now()
+    const startTime = Date.now(); // Use performance.now() in production for higher precision
     let agentOutput;
     try {
       // Agents read from the current workflow state
@@ -1825,6 +1840,8 @@ async function orchestrate(workflowId, inputContract, env) {
 
     } catch (e) {
       console.error("Orchestration: Agent '" + agentId + "' failed:", e.message);
+      // FIX: Add explainability log for agent failures
+      agentContext.explainability_recorder.execute("Orchestration: Agent failed", { agentId, error: e.message, stack: e.stack });
       runtimeState = stateAccess.execute(workflowId, "update", {
         status: "FAILED",
         agent_execution_log: [...runtimeState.agent_execution_log, {
@@ -1842,11 +1859,15 @@ async function orchestrate(workflowId, inputContract, env) {
   };
 
   try {
-    // Phase 1 Workflow - Changed to run EditorialDNAExtractionAgent and OpportunityGenerator in parallel
+    // FIX: Phase 1 Workflow - Changed to run EditorialDNAExtractionAgent and OpportunityGenerator in parallel
     await Promise.all([
       executeAgent("EditorialDNAExtractionAgent"),
       executeAgent("OpportunityGenerator")
     ]);
+    // FIX: Log if editorial_intent is missing after EditorialIntentAgent
+    if (!runtimeState.editorial_intent) {
+      agentContext.explainability_recorder.execute("orchestrate: editorial_intent missing after EditorialIntentAgent run", { workflowId, inputContract });
+    }
     await executeAgent("EditorialIntentAgent");
     await executeAgent("MomentOntologyAgent");
     await executeAgent("DiscoveryStrategyPlannerAgent");
@@ -1869,16 +1890,25 @@ async function orchestrate(workflowId, inputContract, env) {
         // names (it produces min_duration_sec/max_duration_sec and content_tone instead),
         // so "Clip Length" and "Hook Style" on the report always showed "N/A" even when
         // the LLM generated real duration/tone data. Map to the actual schema fields.
+        // FIX: Improved fallback for editorial_dna fields
         editorial_dna: (() => {
           const dcc = runtimeState.editorial_intent?.desired_clip_characteristics || {};
-          const clipLength = (dcc.min_duration_sec != null && dcc.max_duration_sec != null)
-            ? `${dcc.min_duration_sec}-${dcc.max_duration_sec}s`
+          const dnaRange = runtimeState.editorial_dna_profile?.clip_length_range;
+          const minSec = dcc.min_duration_sec ?? dcc.min_sec ?? dnaRange?.min_sec ?? null;
+          const maxSec = dcc.max_duration_sec ?? dcc.max_sec ?? dnaRange?.max_sec ?? null;
+
+          const clipLength = (minSec != null && maxSec != null)
+            ? `${minSec}-${maxSec}s`
             : 'N/A';
+          const hookStyle = dcc.content_tone || dcc.tone || runtimeState.editorial_dna_profile?.hook_patterns?.[0] || 'N/A';
+          const emotionFocus = (runtimeState.editorial_intent?.target_emotions || []).join(', ') || runtimeState.editorial_dna_profile?.emotion_patterns?.[0] || 'N/A';
+          const sourcePreference = (runtimeState.editorial_dna_profile?.source_platforms || []).join(', ') || 'Original Clips';
+
           return {
             clip_length: clipLength,
-            hook_style: dcc.content_tone || 'N/A',
-            emotion_focus: (runtimeState.editorial_intent?.target_emotions || []).join(', ') || 'N/A',
-            source_preference: 'Original Clips'
+            hook_style: hookStyle,
+            emotion_focus: emotionFocus,
+            source_preference: sourcePreference
           };
         })(),
         // BUGFIX: this previously read `global_constraints?.user_defined_constraints`,
@@ -1896,7 +1926,7 @@ async function orchestrate(workflowId, inputContract, env) {
           if (c.content_tone && c.content_tone !== 'any') applied.push(`Content tone: ${c.content_tone}`);
           if (c.target_language && c.target_language !== 'any') applied.push(`Language: ${c.target_language}`);
           if (Array.isArray(c.user_defined_constraints)) applied.push(...c.user_defined_constraints);
-          return applied;
+          return applied.length > 0 ? applied : ["No specific research constraints applied."];
         })()
       },
       raw_evidence_found: (() => {
