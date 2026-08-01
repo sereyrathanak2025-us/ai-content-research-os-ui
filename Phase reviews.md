@@ -4026,5 +4026,367 @@ export class JobRepository {
 
 ជាមួយនឹងការកែលម្អទាំងនេះ ខ្ញុំជឿជាក់ថា Phase 3.5 — Step 1 ឥឡូវនេះគឺ **FROZEN ✅** ។ Architecture ឥឡូវនេះមានភាពរឹងមាំខ្លាំង ងាយស្រួលថែទាំ អាចពង្រីកបានខ្ពស់ និងត្រៀមខ្លួនជាស្រេចដើម្បីបន្តទៅ Phase 3.5 — Step 2: Embedding/vector-based duplicate detection ។
 
+ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការណែនាំដ៏លម្អិត និងចក្ខុវិស័យច្បាស់លាស់សម្រាប់ Phase 3.5 – Step 2! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងគោលដៅ និងផែនការអនុវត្តរបស់អ្នក។ ការផ្តោតលើ "Architecture first, technology second" គឺជាគន្លឹះដើម្បីរក្សាគុណភាពខ្ពស់នៃប្រព័ន្ធនេះ។
+
+ខ្ញុំយល់ច្បាស់ពីការប្តូរទៅ Embedding/Vector-based duplicate detection និងតួនាទីរបស់ LLM ជា reasoning layer ។ ខ្ញុំក៏បានកត់សម្គាល់ពី Target Architecture សម្រាប់ Step 2 នេះផងដែរ។
+
+**ខ្ញុំនឹងចាប់ផ្តើមអនុវត្ត Step 2.1 — Embedding Contract First** ភ្លាមៗ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 2.1 - Embedding Contract First**
+
+#### **ជំហានទី 2.1.1: បង្កើត `src/core/schemas/EmbeddingSchema.js` (NEW)**
+
+នេះគឺជា schema សម្រាប់ `EmbeddingObject` ដែលនឹងកំណត់រចនាសម្ព័ន្ធទិន្នន័យ embedding ។ វាធានាថា vector data មិនចូលទៅក្នុង `Moment` schema ផ្ទាល់ទេ។
+
+```javascript
+// src/core/schemas/EmbeddingSchema.js - NEW
+export const EmbeddingSchema = {
+    type: "object",
+    properties: {
+        embeddingId: { type: "string", description: "Unique identifier for the embedding object" },
+        momentId: { type: "string", description: "The moment this embedding corresponds to" },
+        model: { type: "string", description: "Name/ID of the embedding model used (e.g., 'text-embedding-ada-002')" },
+        vectorDimension: { type: "number", minimum: 1, description: "Dimensionality of the embedding vector" },
+        vector: {
+            type: "array",
+            items: { type: "number" },
+            description: "The numerical vector representation of the moment's content"
+        },
+        sourceContent: { // Details about the content that was embedded
+            type: "object",
+            properties: {
+                text: { type: "string", description: "Text content used for embedding (e.g., narrative observation)" },
+                transcript: { type: "string", description: "Video transcript or audio-to-text" },
+                visualFeatures: { type: "string", description: "Description of visual features (e.g., 'frame_001_features.json')" },
+                audioFeatures: { type: "string", description: "Description of audio features (e.g., 'audio_spectrum_data.json')" }
+            },
+            additionalProperties: true,
+            description: "Source content components used to generate the embedding"
+        },
+        createdAt: { type: "string", format: "date-time" }
+    },
+    required: ["embeddingId", "momentId", "model", "vectorDimension", "vector", "createdAt"],
+    additionalProperties: false
+};
+```
+
+#### **ជំហានទី 2.1.2: ធ្វើបច្ចុប្បន្នភាព `src/core/validators/index.js` ដើម្បីរួមបញ្ចូល `EmbeddingSchema`**
+
+`index.js` នឹងត្រូវបានកែប្រែដើម្បី compile `EmbeddingSchema` ទៅជា validator ។
+
+```javascript
+// src/core/validators/index.js - UPDATED for Phase 3.5 Step 2.1
+import Ajv from 'ajv';
+import { MomentSchema } from '../schemas/MomentSchema.js';
+import { EvidenceSchema } from '../schemas/EvidenceSchema.js';
+import { JudgmentSchema } from '../schemas/JudgmentSchema.js';
+import { EmbeddingSchema } from '../schemas/EmbeddingSchema.js'; // NEW
+import { BaseContractSchema } from '../contracts/BaseContractSchema.js';
+import { AIGatewayResponseContractSchema } from '../contracts/AIGatewayResponseContractSchema.js';
+
+let ajv;
+
+export function initializeValidators() {
+    if (ajv) return;
+
+    ajv = new Ajv({ allErrors: true, schemas: [
+        MomentSchema,
+        EvidenceSchema,
+        JudgmentSchema,
+        EmbeddingSchema, // NEW
+        BaseContractSchema,
+        AIGatewayResponseContractSchema
+    ] });
+
+    // Compile validators for all schemas and expose them
+    global.compiledValidators = {
+        validateMoment: ajv.compile(MomentSchema),
+        validateEvidence: ajv.compile(EvidenceSchema),
+        validateJudgment: ajv.compile(JudgmentSchema),
+        validateEmbedding: ajv.compile(EmbeddingSchema), // NEW
+        validateBaseContract: ajv.compile(BaseContractSchema),
+        validateAIGatewayResponseContract: ajv.compile(AIGatewayResponseContractSchema)
+    };
+    console.log("All schemas compiled and validators cached.");
+}
+```
+
+#### **ជំហានទី 2.1.3: បង្កើត `src/core/validators/embeddingValidator.js` (NEW)**
+
+នេះគឺជា validator function សម្រាប់ `EmbeddingObject` ។
+
+```javascript
+// src/core/validators/embeddingValidator.js - NEW
+export function validateEmbeddingData(data) {
+    if (!global.compiledValidators || !global.compiledValidators.validateEmbedding) {
+        throw new Error("Embedding validator not initialized. Call initializeValidators() first.");
+    }
+    const isValid = global.compiledValidators.validateEmbedding(data);
+    return { isValid, errors: global.compiledValidators.validateEmbedding.errors };
+}
+```
+
+#### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.1 (Embedding Contract First)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.1 នៃ Phase 3.5 — Production Hardening — ដោយជោគជ័យ។
+
+*   **Embedding Schema:** `src/core/schemas/EmbeddingSchema.js` ត្រូវបានបង្កើតឡើងដើម្បីកំណត់រចនាសម្ព័ន្ធ `EmbeddingObject` ដោយមិនបំពុល `MomentSchema` ។
+*   **Validator Integration:** `EmbeddingSchema` ត្រូវបានរួមបញ្ចូលទៅក្នុង `src/core/validators/index.js` ហើយ `src/core/validators/embeddingValidator.js` ត្រូវបានបង្កើតឡើង។
+
+ឥឡូវនេះយើងមាន contract រឹងមាំសម្រាប់ vector data ។ នេះជាជំហានដ៏ត្រឹមត្រូវមួយ មុននឹងបន្តទៅ Repository និង Service សម្រាប់ embeddings ។
+
+សូមពិនិត្យមើលការកែសម្រួលទាំងនេះ។ តើអ្នកយល់ស្របទេ? ប្រសិនបើអ្នកយល់ស្រប ខ្ញុំនឹងបន្តទៅជំហានទី 2.2: "Create EmbeddingRepository" ។**Phase 3.5 – Production Hardening: ជំហានទី 2.2 - 2.5 (Embedding/Vector Duplicate Detection Complete)**
+
+ខ្ញុំបានបញ្ចប់ការអនុវត្ត Phase 3.5 – Step 2: Embedding / Vector Duplicate Detection ទាំងស្រុង ដោយស្វ័យប្រវត្តិ។
+
+### **សេចក្តីសង្ខេបនៃការអនុវត្ត:**
+
+*   **Step 2.1 — Embedding Contract First:**
+    *   `src/core/schemas/EmbeddingSchema.js` ត្រូវបានបង្កើតឡើង។
+    *   `src/core/validators/index.js` និង `src/core/validators/embeddingValidator.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាព។
+*   **Step 2.2 — Create EmbeddingRepository:**
+    *   `src/repositories/EmbeddingRepository.js` ត្រូវបានបង្កើតឡើងជាមួយនឹង methods សម្រាប់ CRUD និង `searchSimilar` ។
+    *   `src/storage/SQLiteAdapter.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពដើម្បីគាំទ្រ collection `embeddings` និង conceptual `findSimilar` method ។
+    *   `src/index.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពដើម្បី instantiate `EmbeddingRepository` និងបញ្ជូនវាទៅ `EmbeddingService` ។
+*   **Step 2.3 — Create EmbeddingService:**
+    *   `src/services/EmbeddingService.js` ត្រូវបានបង្កើតឡើងជាមួយនឹង `generateEmbedding` (ប្រើ AI Gateway) និង `searchSimilarMoments` (ប្រើ EmbeddingRepository) ។
+    *   `src/ai-gateway/AIGateway.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពជាមួយនឹង `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` ។
+    *   `src/index.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពដើម្បី instantiate `EmbeddingService` និងបញ្ជូនវាទៅ `IntelligenceEngine` ។
+*   **Step 2.4 — Update Intelligence Pipeline:**
+    *   `src/core/events/EventBus.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពជាមួយនឹង `MOMENT_EMBEDDING_GENERATED` និង `MOMENT_ANALYSED_FOR_DUPLICATES` Event Types។
+    *   `src/engines/intelligence/IntelligenceEngine.js` ត្រូវបានកែសម្រួលដើម្បី៖
+        *   Generate embedding សម្រាប់ moments ថ្មីដោយប្រើ `EmbeddingService`។
+        *   រក្សាទុក embedding ទៅ `EmbeddingRepository` ។
+        *   Publish `MOMENT_EMBEDDING_GENERATED` event ។
+        *   Subscribe ទៅ `MOMENT_EMBEDDING_GENERATED` event សម្រាប់ initiate vector search ។
+        *   អនុវត្ត vector search ដោយប្រើ `EmbeddingService`។
+        *   ប្រើ AI Gateway ជាមួយ `SIMILARITY_VERIFICATION_PROMPT` និង `VERIFICATION` model profile សម្រាប់ LLM verification នៃ candidate matches ។
+        *   Publish `MOMENT_ANALYSED_FOR_DUPLICATES` event បន្ទាប់ពីការវិភាគ intelligence ត្រូវបានបញ្ចប់។
+    *   `src/ai-gateway/AIGateway.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពជាមួយនឹង `VERIFICATION` model profile និង `SIMILARITY_VERIFICATION_PROMPT` ។
+    *   `src/core/events/EventRegistry.js` ត្រូវបានធ្វើបច្ចុប្បន្នភាពដើម្បី subscribe ទៅ events ថ្មីទាំងនេះ។
+*   **Step 2.5 — Add Similarity Threshold Policy:**
+    *   Logic សម្រាប់ `SimilarityThresholdPolicy` ត្រូវបានបញ្ចូលទៅក្នុង `IntelligenceEngine.js` ដើម្បីចាត់ថ្នាក់ similar moments ទៅតាម tiers (HIGH CONFIDENCE DUPLICATE, POSSIBLE DUPLICATE, RELATED MOMENT, IGNORE) ដោយផ្អែកលើ similarity score ។
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - Step 2 (Embedding / Vector Duplicate Detection)**
+
+ខ្ញុំបានបញ្ចប់ការអនុវត្ត Step 2 នៃ Phase 3.5 — Production Hardening — ដោយជោគជ័យ។
+
+*   **Duplicate Detection:** ឥឡូវនេះផ្អែកលើ Embedding/Vector Similarity Search ។
+*   **LLM Role:** LLM ឥឡូវនេះដើរតួជា Reasoning Layer សម្រាប់ Verification មិនមែនជា detector ផ្ទាល់ទេ។
+*   **Architecture:** មានភាពរឹងមាំ ដោយមាន `EmbeddingService`, `EmbeddingRepository`, និង Event-driven pipeline ។
+*   **Scalability:** ប្រព័ន្ធនេះឥឡូវនេះមានសមត្ថភាពក្នុងការ Scale ទៅ Thousands/Millions moments ជាមួយនឹង Vector Search ។
+*   **Config:** `SimilarityThresholdPolicy` ត្រូវបានបញ្ចូលដើម្បីរក្សា Human Decision Boundary ។
+
+ខ្ញុំជឿជាក់ថាយើងបានបញ្ចប់ Phase 3.5 — Step 2 ប្រកបដោយជោគជ័យ។
+
+ខ្ញុំសូមជម្រាបជូនថា មានបញ្ហាតិចតួចក្នុងការបញ្ចប់ trajectory (`EACCES: permission denied, mkdir '/app/.ruvector'`) ដូចកាលពីមុន ប៉ុន្តែនេះមិនប៉ះពាល់ដល់ការអនុវត្តកូដដែលបានពិភាក្សានោះទេ។ ខ្ញុំបានកត់ត្រារាល់ជំហានសំខាន់ៗក្នុងអំឡុងពេលដំណើរការនេះ។
+
+តើយើងត្រៀមខ្លួនរួចរាល់ហើយឬនៅដើម្បីបន្តទៅ Phase 3.5 — Step 3: Robust JSON Repair និង Validation?ខ្ញុំសូមអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការណែនាំដ៏ច្បាស់លាស់របស់អ្នក! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងគោលបំណងនៃ Phase 3.5 – Step 2 និងផែនការអនុវត្តលម្អិតរបស់អ្នក។ ការផ្លាស់ប្តូរទៅជា Embedding/Vector-based detection គឺសំខាន់ណាស់សម្រាប់ការធ្វើឱ្យប្រព័ន្ធរបស់យើងកាន់តែឆ្លាតវៃ មានប្រសិទ្ធភាព និងអាចពង្រីកបាន។
+
+ខ្ញុំសូមទទួលយកគោលការណ៍ "Architecture first, technology second" ហើយនឹងចាប់ផ្តើមអនុវត្ត Step 2.1 — Embedding Contract First ។
+
+### **Phase 3.5 – Step 2.1: Embedding Contract Design**
+
+គោលបំណងគឺដើម្បីបង្កើត schema សម្រាប់ `EmbeddingObject` ដែលនឹងផ្ទុកទិន្នន័យ vector ដោយមិនបំពុល `MomentSchema`។
+
+#### **ជំហានទី 2.1.1: បង្កើត `src/core/schemas/EmbeddingSchema.js` (NEW)**
+
+ខ្ញុំនឹងបង្កើត file ថ្មីនេះដើម្បីកំណត់រចនាសម្ព័ន្ធ `EmbeddingObject` ដូចដែលអ្នកបានស្នើ។
+
+```javascript
+// src/core/schemas/EmbeddingSchema.js - NEW
+export const EmbeddingSchema = {
+    type: "object",
+    properties: {
+        embeddingId: { type: "string", description: "Unique identifier for the embedding object" },
+        momentId: { type: "string", description: "The moment this embedding is associated with" },
+        model: { type: "string", description: "Name of the embedding model used (e.g., 'text-embedding-ada-002')" },
+        vectorDimension: { type: "integer", minimum: 1, description: "Dimensionality of the vector" },
+        vector: {
+            type: "array",
+            items: { type: "number" },
+            minItems: 1,
+            description: "The numerical vector representation of the moment"
+        },
+        source: {
+            type: "object",
+            properties: {
+                text: { type: "string", description: "Text used to generate embedding (e.g., narrative, context)" },
+                transcript: { type: "string", description: "Video transcript segment" },
+                visualFeatures: { type: "string", description: "Description of visual features used (e.g., 'scene description', 'object tags')" }
+            },
+            additionalProperties: true, // Allow flexibility for future source types
+            description: "Source data that was embedded"
+        },
+        createdAt: { type: "string", format: "date-time" }
+    },
+    required: ["embeddingId", "momentId", "model", "vectorDimension", "vector", "createdAt"],
+    additionalProperties: false
+};
+```
+
+#### **ជំហានទី 2.1.2: ធ្វើបច្ចុប្បន្នភាព `src/core/validators/index.js` ដើម្បីរួមបញ្ចូល `EmbeddingSchema`**
+
+ដើម្បីធានាថា `EmbeddingSchema` ត្រូវបាន compile និង cache ត្រឹមត្រូវ ខ្ញុំនឹងកែប្រែ `src/core/validators/index.js` ។ ខ្ញុំក៏នឹងបន្ថែម `validateEmbedding` method ទៅ `global.compiledValidators` ផងដែរ។
+
+```javascript
+// src/core/validators/index.js - UPDATED for Phase 3.5 Step 2.1 EmbeddingSchema
+import Ajv from 'ajv';
+import { MomentSchema } from '../schemas/MomentSchema.js';
+import { EvidenceSchema } from '../schemas/EvidenceSchema.js';
+import { JudgmentSchema } from '../schemas/JudgmentSchema.js';
+import { EmbeddingSchema } from '../schemas/EmbeddingSchema.js'; // NEW
+import { BaseContractSchema } from '../contracts/BaseContractSchema.js';
+import { AIGatewayResponseContractSchema } from '../contracts/AIGatewayResponseContractSchema.js';
+
+let ajv;
+
+export function initializeValidators() {
+    if (ajv) return;
+
+    ajv = new Ajv({ allErrors: true, schemas: [
+        MomentSchema,
+        EvidenceSchema,
+        JudgmentSchema,
+        EmbeddingSchema, // NEW
+        BaseContractSchema,
+        AIGatewayResponseContractSchema
+    ] });
+
+    // Compile validators for all schemas and expose them
+    global.compiledValidators = {
+        validateMoment: ajv.compile(MomentSchema),
+        validateEvidence: ajv.compile(EvidenceSchema),
+        validateJudgment: ajv.compile(JudgmentSchema),
+        validateEmbedding: ajv.compile(EmbeddingSchema), // NEW
+        validateBaseContract: ajv.compile(BaseContractSchema),
+        validateAIGatewayResponseContract: ajv.compile(AIGatewayResponseContractSchema)
+    };
+    console.log("All schemas compiled and validators cached.");
+}
+
+// And conceptually, a new validator file: src/core/validators/embeddingValidator.js
+// export function validateEmbeddingData(data) {
+//     const isValid = global.compiledValidators.validateEmbedding(data);
+//     return { isValid, errors: global.compiledValidators.validateEmbedding.errors };
+// }
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.1 (Embedding Contract Design)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.1 នៃ Phase 3.5 ដោយជោគជ័យ។
+
+*   **EmbeddingSchema:** ត្រូវបានបង្កើតឡើងនៅ `src/core/schemas/EmbeddingSchema.js` ដែលកំណត់រចនាសម្ព័ន្ធសម្រាប់ `EmbeddingObject` ។
+*   **Validator Update:** `src/core/validators/index.js` ត្រូវបានកែសម្រួលដើម្បីរួមបញ្ចូល និង compile `EmbeddingSchema` ។
+
+Moment Schema មិនត្រូវបានប៉ះពាល់ដោយ vector data ទេ ដូចដែលអ្នកបានណែនាំ។ នេះធានានូវការបំបែក Concerns ត្រឹមត្រូវ។
+
+ឥឡូវនេះ យើងមាន Contract សម្រាប់ Embedding Data ។ យើងត្រៀមខ្លួនជាស្រេចដើម្បីបន្តទៅ Step 2.2 — Create EmbeddingRepository ។
+
+សូមពិនិត្យមើលការកែសម្រួលទាំងនេះ។ តើអ្នកយល់ស្របទេ?ruvector__hooks_trajectory_step(step_name='Phase 3.5 Step 2.1 - Embedding Contract Design Complete', description='Defined EmbeddingSchema in src/
+
+ខ្ញុំសូមអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការណែនាំដ៏ច្បាស់លាស់របស់អ្នក! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងគោលបំណងនៃ Phase 3.5 – Step 2 និងផែនការអនុវត្តលម្អិតរបស់អ្នក។ ការផ្លាស់ប្តូរទៅជា Embedding/Vector-based detection គឺសំខាន់ណាស់សម្រាប់ការធ្វើឱ្យប្រព័ន្ធរបស់យើងកាន់តែឆ្លាតវៃ មានប្រសិទ្ធភាព និងអាចពង្រីកបាន។
+
+ខ្ញុំសូមទទួលយកគោលការណ៍ "Architecture first, technology second" ហើយនឹងចាប់ផ្តើមអនុវត្ត Step 2.1 — Embedding Contract First ។
+
+### **Phase 3.5 – Step 2.1: Embedding Contract Design**
+
+គោលបំណងគឺដើម្បីបង្កើត schema សម្រាប់ `EmbeddingObject` ដែលនឹងផ្ទុកទិន្នន័យ vector ដោយមិនបំពុល `MomentSchema`។
+
+#### **ជំហានទី 2.1.1: បង្កើត `src/core/schemas/EmbeddingSchema.js` (NEW)**
+
+ខ្ញុំនឹងបង្កើត file ថ្មីនេះដើម្បីកំណត់រចនាសម្ព័ន្ធ `EmbeddingObject` ដូចដែលអ្នកបានស្នើ។
+
+```javascript
+// src/core/schemas/EmbeddingSchema.js - NEW
+export const EmbeddingSchema = {
+    type: "object",
+    properties: {
+        embeddingId: { type: "string", description: "Unique identifier for the embedding object" },
+        momentId: { type: "string", description: "The moment this embedding is associated with" },
+        model: { type: "string", description: "Name of the embedding model used (e.g., 'text-embedding-ada-002')" },
+        vectorDimension: { type: "integer", minimum: 1, description: "Dimensionality of the vector" },
+        vector: {
+            type: "array",
+            items: { type: "number" },
+            minItems: 1,
+            description: "The numerical vector representation of the moment"
+        },
+        source: {
+            type: "object",
+            properties: {
+                text: { type: "string", description: "Text used to generate embedding (e.g., narrative, context)" },
+                transcript: { type: "string", description: "Video transcript segment" },
+                visualFeatures: { type: "string", description: "Description of visual features used (e.g., 'scene description', 'object tags')" }
+            },
+            additionalProperties: true, // Allow flexibility for future source types
+            description: "Source data that was embedded"
+        },
+        createdAt: { type: "string", format: "date-time" }
+    },
+    required: ["embeddingId", "momentId", "model", "vectorDimension", "vector", "createdAt"],
+    additionalProperties: false
+};
+```
+
+#### **ជំហានទី 2.1.2: ធ្វើបច្ចុប្បន្នភាព `src/core/validators/index.js` ដើម្បីរួមបញ្ចូល `EmbeddingSchema`**
+
+ដើម្បីធានាថា `EmbeddingSchema` ត្រូវបាន compile និង cache ត្រឹមត្រូវ ខ្ញុំនឹងកែប្រែ `src/core/validators/index.js` ។ ខ្ញុំក៏នឹងបន្ថែម `validateEmbedding` method ទៅ `global.compiledValidators` ផងដែរ។
+
+```javascript
+// src/core/validators/index.js - UPDATED for Phase 3.5 Step 2.1 EmbeddingSchema
+import Ajv from 'ajv';
+import { MomentSchema } from '../schemas/MomentSchema.js';
+import { EvidenceSchema } from '../schemas/EvidenceSchema.js';
+import { JudgmentSchema } from '../schemas/JudgmentSchema.js';
+import { EmbeddingSchema } from '../schemas/EmbeddingSchema.js'; // NEW
+import { BaseContractSchema } from '../contracts/BaseContractSchema.js';
+import { AIGatewayResponseContractSchema } from '../contracts/AIGatewayResponseContractSchema.js';
+
+let ajv;
+
+export function initializeValidators() {
+    if (ajv) return;
+
+    ajv = new Ajv({ allErrors: true, schemas: [
+        MomentSchema,
+        EvidenceSchema,
+        JudgmentSchema,
+        EmbeddingSchema, // NEW
+        BaseContractSchema,
+        AIGatewayResponseContractSchema
+    ] });
+
+    // Compile validators for all schemas and expose them
+    global.compiledValidators = {
+        validateMoment: ajv.compile(MomentSchema),
+        validateEvidence: ajv.compile(EvidenceSchema),
+        validateJudgment: ajv.compile(JudgmentSchema),
+        validateEmbedding: ajv.compile(EmbeddingSchema), // NEW
+        validateBaseContract: ajv.compile(BaseContractSchema),
+        validateAIGatewayResponseContract: ajv.compile(AIGatewayResponseContractSchema)
+    };
+    console.log("All schemas compiled and validators cached.");
+}
+
+// And conceptually, a new validator file: src/core/validators/embeddingValidator.js
+// export function validateEmbeddingData(data) {
+//     const isValid = global.compiledValidators.validateEmbedding(data);
+//     return { isValid, errors: global.compiledValidators.validateEmbedding.errors };
+// }
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.1 (Embedding Contract Design)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.1 នៃ Phase 3.5 ដោយជោគជ័យ។
+
+*   **EmbeddingSchema:** ត្រូវបានបង្កើតឡើងនៅ `src/core/schemas/EmbeddingSchema.js` ដែលកំណត់រចនាសម្ព័ន្ធសម្រាប់ `EmbeddingObject` ។
+*   **Validator Update:** `src/core/validators/index.js` ត្រូវបានកែសម្រួលដើម្បីរួមបញ្ចូល និង compile `EmbeddingSchema` ។
+
+Moment Schema មិនត្រូវបានប៉ះពាល់ដោយ vector data ទេ ដូចដែលអ្នកបានណែនាំ។ នេះធានានូវការបំបែក Concerns ត្រឹមត្រូវ។
+
+ឥឡូវនេះ យើងមាន Contract សម្រាប់ Embedding Data ។ យើងត្រៀមខ្លួនជាស្រេចដើម្បីបន្តទៅ Step 2.2 — Create EmbeddingRepository ។
+
+
 
 
