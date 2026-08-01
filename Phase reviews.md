@@ -4665,3 +4665,1581 @@ export class SQLiteAdapter extends StorageAdapter {
 
 ជាមួយនឹងការកែលម្អទាំងនេះ ខ្ញុំជឿជាក់ថា Phase 3.5 — Step 2.2 ឥឡូវនេះគឺ **READY FOR FREEZE ✅** ។ Repository Layer សម្រាប់ embeddings គឺមានភាពស្អាត ឯករាជ្យពី AI logic និងត្រៀមខ្លួនជាស្រេចសម្រាប់ Integration ជាមួយ Vector Database ពិតប្រាកដនាពេលអនាគត។ ដូច្នេះអាចបន្តទៅ Step 2.3 បាន។ ✅
 
+ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការវាយតម្លៃដ៏លម្អិត និងការអនុម័តរបស់អ្នកសម្រាប់ Phase 3.5 Step 2.3! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងទិសដៅនេះ និងគោលការណ៍ដ៏ច្បាស់លាស់សម្រាប់ `EmbeddingService`។ ការដាក់ `EmbeddingService` ជា orchestration layer នៅចន្លោះ `IntelligenceEngine` និង infrastructure គឺជាជំហានដ៏សំខាន់មួយដើម្បីរក្សា Production Boundary ។
+
+ខ្ញុំយល់ច្បាស់ពី Responsibility របស់ `EmbeddingService` (Generate, Validate, Persist, Similarity Search) និងអ្វីដែលវាមិនត្រូវធ្វើ (Duplicate Decision, Modify Moment ផ្ទាល់, ដឹង UI)។
+
+ខ្ញុំក៏បានកត់សម្គាល់នូវ Important Architecture Note របស់អ្នកគឺ "កុំដាក់ `similarityThreshold`, `duplicatePolicy`, `verificationPrompt` នៅក្នុង `EmbeddingService`" ព្រោះវានឹងជាផ្នែកមួយនៃ `Intelligence Policy` នៅ Step 2.5 ។
+
+**ខ្ញុំនឹងចាប់ផ្តើមអនុវត្ត Step 2.3 — Create EmbeddingService** ភ្លាមៗ តាមរចនាសម្ព័ន្ធដែលអ្នកបានស្នើ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 2.3 - Create EmbeddingService**
+
+#### **ជំហានទី 2.3.1: បង្កើត `src/services/EmbeddingService.js` (NEW)**
+
+ខ្ញុំនឹងបង្កើត file ថ្មីនេះដើម្បីកំណត់ `EmbeddingService` ដូចដែលអ្នកបានស្នើ។
+
+```javascript
+// src/services/EmbeddingService.js - NEW
+import { validateEmbeddingData } from '../core/validators/embeddingValidator.js';
+import { AIGateway } from '../ai-gateway/AIGateway.js'; // For embedding generation via LLM
+import { EmbeddingRepository } from '../repositories/EmbeddingRepository.js';
+import { v4 as uuidv4 } from 'uuid'; // For generating embedding IDs
+
+export class EmbeddingService {
+    constructor(aiGatewayInstance, embeddingRepositoryInstance) {
+        this.aiGateway = aiGatewayInstance;
+        this.embeddingRepository = embeddingRepositoryInstance;
+        this.name = "EmbeddingService";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    /**
+     * Generates an embedding vector for a given moment's textual/multimodal content.
+     * This orchestrates the call to AIGateway for embedding generation.
+     * @param {object} moment - The moment object containing content for embedding.
+     * @returns {Promise<object>} The generated EmbeddingObject.
+     */
+    async generateEmbedding(moment) {
+        console.log(`${this.name}: Generating embedding for Moment ID: ${moment.momentId}.`);
+
+        // Prepare context for AIGateway based on moment's content
+        // This is a conceptual aggregation of text for embedding
+        const embeddingSourceText = `${moment.candidateMoment}. ${moment.narrativeObservation}. ${moment.extractedContext || ''}`;
+        const embeddingSource = {
+            text: embeddingSourceText,
+            transcript: moment.audioAnalysis?.speechToText,
+            visualFeatures: moment.sceneAnalysis?.description
+        };
+
+        // Call AIGateway for embedding generation
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name,
+            'EMBEDDING', // Use a dedicated EMBEDDING model profile in AIGateway
+            { text: embeddingSourceText, momentId: moment.momentId, source: embeddingSource } // Context for embedding generation
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload || !aiGatewayResponse.payload.vector) {
+            console.error(`${this.name}: AI Gateway embedding generation failed or returned invalid payload.`, aiGatewayResponse.errors);
+            throw new Error("Failed to generate embedding from AI Gateway.");
+        }
+
+        const rawEmbeddingResult = aiGatewayResponse.payload;
+
+        const embeddingObject = {
+            embeddingId: uuidv4(),
+            momentId: moment.momentId,
+            model: rawEmbeddingResult.model || "unknown-embedding-model",
+            vectorDimension: rawEmbeddingResult.vectorDimension || rawEmbeddingResult.vector.length,
+            vector: rawEmbeddingResult.vector,
+            source: embeddingSource,
+            createdAt: new Date().toISOString()
+        };
+
+        // 2. Validate embedding output
+        const validationResult = validateEmbeddingData(embeddingObject);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Generated embedding object failed validation.`, validationResult.errors);
+            throw new Error("Generated embedding data is invalid.");
+        }
+
+        return embeddingObject;
+    }
+
+    /**
+     * Creates and stores an embedding object in the repository.
+     * @param {object} embedding - The embedding object to store.
+     * @returns {Promise<object>} The stored embedding object.
+     */
+    async saveEmbedding(embedding) {
+        console.log(`${this.name}: Saving embedding ${embedding.embeddingId} to repository.`);
+        return this.embeddingRepository.save(embedding);
+    }
+
+    /**
+     * Orchestrates the generation and storage of an embedding for a moment.
+     * @param {object} moment - The moment object to create an embedding for.
+     * @returns {Promise<object>} The newly created and stored EmbeddingObject.
+     */
+    async createAndStoreEmbedding(moment) {
+        const embedding = await this.generateEmbedding(moment);
+        const storedEmbedding = await this.saveEmbedding(embedding);
+        return storedEmbedding;
+    }
+
+    /**
+     * Finds similar moments by performing a vector similarity search via the repository.
+     * @param {number[]} queryVector - The vector to search for similarities.
+     * @param {object} options - Search options (e.g., { limit: 10, filter: { model: '...' }, minSimilarity: 0.7 }).
+     * @returns {Promise<Array<object>>} An array of similar embedding objects, including similarityScore.
+     */
+    async findSimilarMoments(queryVector, options = {}) {
+        console.log(`${this.name}: Finding similar moments using embedding vector.`);
+        // EmbeddingRepository handles the actual similarity search
+        return this.embeddingRepository.findSimilarByVector(queryVector, options);
+    }
+}
+```
+
+#### **ជំហានទី 2.3.2: ធ្វើបច្ចុប្បន្នភាព `src/ai-gateway/AIGateway.js` សម្រាប់ `EMBEDDING` Model Profile**
+
+ខ្ញុំនឹងបន្ថែម `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` (conceptual) ទៅ `AIGateway.js` ។
+
+```javascript
+// src/ai-gateway/AIGateway.js - UPDATED for Phase 3.5 Step 2.3 EmbeddingService
+import { llmRouter } from '../router/llmRouter.js';
+import { AIGatewayResponseContractSchema } from '../core/contracts/AIGatewayResponseContractSchema.js';
+import { validateContract } from '../core/validators/contractValidator.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Placeholder for prompt templates
+const PROMPT_TEMPLATES = {
+    DISCOVERY_MOMENT_PROMPT: (videoId, duration) => `
+        Based on video ID "${videoId}" (duration: ${duration}s), identify 3-5 distinct "moment evidences" that could be interesting.
+        For each moment, provide:
+        - A concise 'candidateMoment' title.
+        - 'start' and 'end' timestamps (format HH:MM or HH:MM:SS).
+        - A 'confidence' score (0.0-1.0) for the timestamp.
+        - A 'narrativeObservation' describing what happens.
+        - Potential 'humanQuestions' for review.
+        - Provide at least two pieces of 'editorialEvidence' for each moment, including 'evidenceType', 'confidence', 'source', and 'explanation'.
+        - Perform an initial 'sceneAnalysis' (mainObjects, activities, sentiment, description).
+        - Provide 'audioAnalysis' (speechToText, soundEvents, mood) if applicable.
+        - Extract 'extractedContext' from any available text (subtitles, on-screen text).
+        Output in a JSON array of objects, strictly following this structure:
+        [
+            {
+                "candidateMoment": "...",
+                "start": "HH:MM",
+                "end": "HH:MM",
+                "confidence": 0.8,
+                "narrativeObservation": "...",
+                "humanQuestions": ["?", "?"],
+                "editorialEvidence": [
+                    {
+                        "evidenceType": "visual",
+                        "confidence": 0.9,
+                        "source": "00:30-00:35",
+                        "explanation": "Dramatic camera zoom on character's face"
+                    }
+                ],
+                "sceneAnalysis": {
+                    "mainObjects": ["person", "car"],
+                    "activities": ["driving", "talking"],
+                    "sentiment": "neutral",
+                    "description": "A person driving a car on a city street."
+                },
+                "audioAnalysis": {
+                    "speechToText": "Hello, how are you?",
+                    "soundEvents": ["engine hum", "city traffic"],
+                    "mood": "calm"
+                },
+                "extractedContext": "The protagonist embarks on a new journey."
+            }
+        ]
+        `,
+    JUDGMENT_SCORE_PROMPT: (moment) => `
+        Given the moment "${moment.candidateMoment}" (ID: ${moment.momentId}) with narrative: "${moment.narrativeObservation}",
+        and editorial evidence: ${JSON.stringify(moment.editorialEvidence)}.
+        Provide a "score" (0-100), "reasoning" for the score, and suggest a "reviewState".
+        Output strictly as JSON: {"score": N, "reasoning": "...", "reviewState": "..."}
+        `,
+    INTELLIGENCE_IMPROVEMENT_PROMPT: (moment) => `
+        For moment ID "${moment.momentId}" (candidate: "${moment.candidateMoment}", narrative: "${moment.narrativeObservation}"),
+        analyze for duplicate content in similar contexts and identify highly similar moments from the database.
+        Output strictly as JSON: {
+            "isDuplicate": true/false,
+            "originalMomentId": "...",
+            "similarityScore": N,
+            "similarMoments": [ {"momentId": "...", "similarityScore": N, "reason": "..."} ]
+        }
+    `,
+    GENERATE_EMBEDDING_PROMPT: (textToEmbed) => textToEmbed // For embedding models, the prompt is often just the text itself
+    // ... other prompt templates
+};
+
+// Placeholder for Model Profiles (mapping abstract profiles to concrete LLM config)
+const MODEL_PROFILES = {
+    DISCOVERY: { model: "claude-opus", provider: "openrouter", temperature: 0.7, max_tokens: 1000 },
+    JUDGMENT: { model: "gpt-4o", provider: "openrouter", temperature: 0.5, max_tokens: 300 },
+    INTELLIGENCE: { model: "gpt-4o", provider: "openrouter", temperature: 0.3, max_tokens: 800 },
+    EMBEDDING: { model: "text-embedding-ada-002", provider: "openai", temperature: 0, max_tokens: 2000 }, // NEW Profile for embedding models
+    // NOTE: For true embedding models (like OpenAI's text-embedding-ada-002),
+    // the 'max_tokens' refers to the input token limit, and 'temperature' is often 0.
+    // The response payload will be a vector, not a text generation.
+    // The AIGateway and LLMRouter need to handle this distinction.
+    // For now, we'll assume the LLM response.payload directly contains { vector: [...] }
+    // which will be consumed by EmbeddingService.
+    // This is a conceptual simplification for the current phase.
+    VERIFICATION: { model: "gpt-3.5-turbo", provider: "openrouter", temperature: 0.5, max_tokens: 200 }, // NEW: for LLM verification
+    SIMILARITY_VERIFICATION_PROMPT: (sourceMoment, candidateMoment, similarityScore) => `
+        Given a source moment (ID: ${sourceMoment.momentId}, narrative: "${sourceMoment.narrativeObservation}")
+        and a candidate moment (ID: ${candidateMoment.momentId}, narrative: "${candidateMoment.narrativeObservation}")
+        with a vector similarity score of ${similarityScore.toFixed(3)}.
+        Determine if these moments are:
+        - "HIGH_CONFIDENCE_DUPLICATE" (almost identical content/meaning)
+        - "POSSIBLE_DUPLICATE" (very similar, strong overlap in core idea)
+        - "RELATED_MOMENT" (shares theme or elements, but distinct)
+        - "NOT_SIMILAR" (unrelated)
+
+        Explain your reasoning briefly. Output strictly as JSON:
+        {"classification": "...", "reasoning": "..."}
+        `
+};
+
+export class AIGateway {
+    constructor(llmRouterInstance) {
+        this.llmRouter = llmRouterInstance;
+        this.name = "AIGateway";
+    }
+
+    async processLLMRequest(engineName, profileName, dataContext, overrides = {}) {
+        const profile = MODEL_PROFILES[profileName];
+        if (!profile) {
+            throw new Error(`AI Gateway: Unknown model profile: ${profileName}`);
+        }
+
+        const requestId = uuidv4();
+        const traceId = uuidv4();
+
+        // 1. Build Prompt based on engine and profile
+        let prompt;
+        if (engineName === "DiscoveryEngine") {
+            prompt = PROMPT_TEMPLATES.DISCOVERY_MOMENT_PROMPT(dataContext.videoId, dataContext.duration);
+        } else if (engineName === "JudgmentEngine") {
+            prompt = PROMPT_TEMPLATES.JUDGMENT_SCORE_PROMPT(dataContext.moment);
+        } else if (engineName === "IntelligenceEngine") {
+            prompt = PROMPT_TEMPLATES.INTELLIGENCE_IMPROVEMENT_PROMPT(dataContext.moment);
+        } else if (engineName === "EmbeddingService" && profileName === "EMBEDDING") { // NEW condition for EmbeddingService
+            prompt = PROMPT_TEMPLATES.GENERATE_EMBEDDING_PROMPT(dataContext.text);
+        } else if (engineName === "IntelligenceEngine" && profileName === "VERIFICATION") { // NEW condition for similarity verification
+            prompt = PROMPT_TEMPLATES.SIMILARITY_VERIFICATION_PROMPT(dataContext.sourceMoment, dataContext.candidateMoment, dataContext.similarityScore);
+        }
+        else {
+            throw new Error(`AI Gateway: No prompt template for engine: ${engineName} and profile: ${profileName}`);
+        }
+
+        const llmRequestContract = {
+            requestId: requestId,
+            traceId: traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            model: profile.model,
+            provider: profile.provider,
+            timestamp: new Date().toISOString(),
+            payload: {
+                prompt: prompt,
+                temperature: profile.temperature,
+                max_tokens: profile.max_tokens,
+                ...overrides
+            }
+        };
+
+        const llmResponseContract = await this.llmRouter.routeRequest(llmRequestContract);
+
+        if (llmResponseContract.status === 'failure' || !llmResponseContract.payload) {
+            console.error("AI Gateway: LLM Router returned failure or empty payload.", llmResponseContract.errors);
+            throw new Error("LLM request failed.");
+        }
+
+        let parsedResponse = llmResponseContract.payload;
+        try {
+            // Special handling for embedding models: their payload might be directly the vector array
+            // For now, assume it's JSON. If actual embedding model returns raw vector, this needs adjustment.
+            if (typeof parsedResponse === 'string' && profileName !== 'EMBEDDING') { // For text generation, parse JSON
+                parsedResponse = JSON.parse(parsedResponse);
+            } else if (profileName === 'EMBEDDING' && !Array.isArray(parsedResponse)) { // For embedding, assume raw vector or {vector: [...]}
+                 // Conceptual: if embedding model returns {embedding: [...]}, extract it
+                 // For now, if not array and EMBEDDING profile, assume it needs JSON.parse then extract 'embedding'
+                 // This is a simplification; a real embedding LLM integration might look different.
+                 try {
+                     const parsedEmbedding = JSON.parse(parsedResponse);
+                     if (parsedEmbedding.embedding && Array.isArray(parsedEmbedding.embedding)) {
+                         parsedResponse = { vector: parsedEmbedding.embedding, model: profile.model, vectorDimension: parsedEmbedding.embedding.length };
+                     } else {
+                         throw new Error("Invalid embedding response format.");
+                     }
+                 } catch (e) {
+                     // Fallback if it's not a JSON string with embedding field
+                     throw new Error("Embedding response is not a valid vector array or JSON object with 'embedding' field.");
+                 }
+            } else if (profileName === 'EMBEDDING' && Array.isArray(parsedResponse)) {
+                // If the embedding model directly returns an array of numbers, wrap it
+                parsedResponse = { vector: parsedResponse, model: profile.model, vectorDimension: parsedResponse.length };
+            }
+
+        } catch (parseError) {
+            console.warn("AI Gateway: LLM response payload is not valid JSON or unexpected format. Attempting repair/re-throw...", parseError);
+            throw new Error(`LLM response payload is unparseable JSON or unexpected format for profile ${profileName}.`);
+        }
+
+        const aiGatewayResponse = {
+            requestId: llmResponseContract.requestId,
+            traceId: llmResponseContract.traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            payload: parsedResponse,
+            meta: { profile: profileName, model: profile.model, provider: profile.provider }
+        };
+
+        const validationResult = validateContract(aiGatewayResponse, 'AIGatewayResponseContract');
+        if (!validationResult.isValid) {
+            console.error("AI Gateway: Processed response does not conform to AIGatewayResponseContract.", validationResult.errors);
+            throw new Error("LLM output did not conform to expected schema after parsing.");
+        }
+
+        return aiGatewayResponse;
+    }
+}
+```
+
+#### **ជំហានទី 2.3.3: ធ្វើបច្ចុប្បន្នភាព `src/index.js` ដើម្បី Instantiate `EmbeddingService` និងបញ្ជូនវាទៅ `IntelligenceEngine`**
+
+`src/index.js` នឹងត្រូវបានកែប្រែដើម្បី import និង instantiate `EmbeddingService` ហើយបន្ទាប់មកបញ្ជូនវាទៅ `IntelligenceEngine` ។
+
+```javascript
+// src/index.js - Main Application Entry Point - UPDATED for Phase 3.5 Step 2.3
+// Core infrastructure imports
+import { initializeValidators } from './core/validators/index.js';
+import { AIGateway } from './ai-gateway/AIGateway.js';
+import { llmRouter } from './router/llmRouter.js';
+import { eventBus, EventTypes } from './core/events/EventBus.js';
+import { registerEventHandlers } from './core/events/EventRegistry.js';
+
+// Engine imports
+import { DiscoveryEngine } from './engines/discovery/DiscoveryEngine.js';
+import { EvidenceEngine } from './engines/evidence/EvidenceEngine.js';
+import { JudgmentEngine } from './engines/judgment/JudgmentEngine.js';
+import { IntelligenceEngine } from './engines/intelligence/IntelligenceEngine.js';
+
+// Repository imports
+import { MomentRepository } from './repositories/MomentRepository.js';
+import { EvidenceRepository } from './repositories/EvidenceRepository.js';
+import { JudgmentRepository } from './repositories/JudgmentRepository.js';
+import { JobRepository } from './repositories/JobRepository.js';
+import { EmbeddingRepository } from './repositories/EmbeddingRepository.js';
+
+// Storage imports
+import { StorageAdapter } from './storage/StorageAdapter.js';
+import { SQLiteAdapter } from './storage/SQLiteAdapter.js';
+
+// Service imports
+import { ReviewService } from './services/ReviewService.js';
+import { EmbeddingService } from './services/EmbeddingService.js'; // NEW
+
+// UI imports
+import { mainUI } from './ui/mainUI.js';
+
+console.log("Moment Discovery Engine / FWG-AI-OS - Initializing Application...");
+
+async function bootstrapApplication() {
+    try {
+        const sqliteClient = new SQLiteAdapter();
+        await StorageAdapter.connect(sqliteClient);
+        console.log("Storage connected successfully via StorageAdapter.");
+
+        initializeValidators();
+        console.log("Validators initialized.");
+
+        const aiGateway = new AIGateway(llmRouter);
+
+        const momentRepository = new MomentRepository(sqliteClient);
+        const evidenceRepository = new EvidenceRepository(sqliteClient);
+        const judgmentRepository = new JudgmentRepository(sqliteClient);
+        const jobRepository = new JobRepository(sqliteClient);
+        const embeddingRepository = new EmbeddingRepository(sqliteClient);
+
+        // NEW: Instantiate EmbeddingService
+        const embeddingService = new EmbeddingService(aiGateway, embeddingRepository);
+
+        // Instantiate Engines
+        // IntelligenceEngine now receives EmbeddingService instead of EmbeddingRepository directly
+        const intelligenceEngine = new IntelligenceEngine(momentRepository, aiGateway, jobRepository, embeddingService); // UPDATED constructor
+        const discoveryEngine = new DiscoveryEngine(momentRepository, evidenceRepository, aiGateway, eventBus);
+        const evidenceEngine = new EvidenceEngine(evidenceRepository, aiGateway);
+        const judgmentEngine = new JudgmentEngine(judgmentRepository, momentRepository, aiGateway);
+
+        const reviewService = new ReviewService(momentRepository, evidenceRepository, judgmentEngine);
+
+        registerEventHandlers({
+            intelligenceEngine,
+            jobRepository
+        });
+        console.log("Event handlers registered.");
+
+        mainUI.init({
+            reviewService,
+            discoveryEngine
+        });
+        console.log("UI initialized.");
+
+        console.log("Application bootstrapped successfully. Ready for operations.");
+
+    } catch (error) {
+        console.error("Failed to bootstrap application:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', bootstrapApplication);
+```
+
+#### **ជំហានទី 2.3.4: ធ្វើបច្ចុប្បន្នភាព `src/engines/intelligence/IntelligenceEngine.js` (Receive `EmbeddingService`)**
+
+`IntelligenceEngine.js` នឹងត្រូវបានកែប្រែដើម្បីទទួល `EmbeddingService` ក្នុង constructor របស់វា ហើយត្រៀមខ្លួនសម្រាប់ Step 2.4 ។
+
+```javascript
+// src/engines/intelligence/IntelligenceEngine.js - UPDATED for Phase 3.5 Step 2.3
+import { MomentRepository } from '../../repositories/MomentRepository.js';
+import { AIGateway } from '../../ai-gateway/AIGateway.js';
+import { validateMomentData } from '../../core/validators/momentValidator.js';
+import { JobRepository } from '../../repositories/JobRepository.js';
+// import { EmbeddingRepository } from '../../repositories/EmbeddingRepository.js'; // REMOVED: No longer needed directly
+import { EmbeddingService } from '../../services/EmbeddingService.js'; // NEW: Import EmbeddingService
+
+export class IntelligenceEngine {
+    // UPDATED constructor: receives EmbeddingService instead of EmbeddingRepository
+    constructor(momentRepository, aiGatewayInstance, jobRepositoryInstance, embeddingServiceInstance) {
+        this.momentRepository = momentRepository;
+        this.aiGateway = aiGatewayInstance;
+        this.jobRepository = jobRepositoryInstance;
+        this.embeddingService = embeddingServiceInstance; // Stored
+        this.name = "IntelligenceEngine";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    async analyzeMomentForIntelligence(job) {
+        const { momentId, jobId, videoId } = job;
+
+        console.log(`${this.name}: Processing intelligence job ${jobId} for Moment ${momentId}.`);
+
+        const moment = await this.momentRepository.findById(momentId);
+        if (!moment) {
+            console.warn(`${this.name}: Moment with ID ${momentId} not found for intelligence analysis (Job ${jobId}).`);
+            throw new Error(`Moment ${momentId} not found for job ${jobId}.`);
+        }
+
+        // --- NEW for Phase 3.5 Step 2.4 (Conceptual - will be fully implemented there):
+        // 1. Generate embedding for the new moment
+        const embedding = await this.embeddingService.createAndStoreEmbedding(moment);
+        console.log(`${this.name}: Generated and stored embedding ${embedding.embeddingId} for Moment ${moment.momentId}.`);
+
+        // 2. Search for similar moments using the generated embedding
+        const similarEmbeddings = await this.embeddingService.findSimilarMoments(embedding.vector, {
+            limit: 5,
+            filter: { model: embedding.model },
+            minSimilarity: 0.6 // Conceptual min similarity, will be defined by policy in Step 2.5
+        });
+        console.log(`${this.name}: Found ${similarEmbeddings.length} similar embeddings.`);
+
+        // 3. (Future) Use LLM to verify top-K candidates (Step 2.4/2.5)
+        // 4. (Future) Update moment with duplicateInfo and similarMoments (Step 2.4/2.5)
+        // --- End NEW ---
+
+        // The original LLM call for 'INTELLIGENCE' will be refactored/replaced by the vector search + LLM verification pipeline in Step 2.4/2.5.
+        // For now, it's still here conceptually but the embedding part is new.
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name,
+            'INTELLIGENCE', // This profile might change or be replaced by a VERIFICATION profile in future
+            { moment: moment, similarEmbeddings: similarEmbeddings } // Pass context
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload) {
+            console.error(`${this.name}: AI Gateway intelligence analysis failed or returned invalid payload for Moment ${momentId} (Job ${jobId}).`, aiGatewayResponse.errors);
+            throw new Error(`AI Gateway failed for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const intelligenceInsights = aiGatewayResponse.payload;
+
+        const updatedMomentData = {
+            ...moment,
+            // These will be populated by the dedicated duplicate/similarity logic in Step 2.4/2.5
+            // For now, they are still conceptually coming from the general INTELLIGENCE prompt
+            duplicateInfo: intelligenceInsights.isDuplicate ? {
+                isDuplicate: intelligenceInsights.isDuplicate,
+                originalMomentId: intelligenceInsights.originalMomentId,
+                similarityScore: intelligenceInsights.similarityScore
+            } : undefined,
+            similarMoments: intelligenceInsights.similarMoments || [],
+            updatedAt: new Date().toISOString()
+        };
+
+        const validationResult = validateMomentData(updatedMomentData);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Updated moment data after intelligence analysis failed validation for Moment ${momentId} (Job ${jobId}).`, validationResult.errors);
+            throw new Error(`Moment data validation failed after intelligence for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const updatedMoment = await this.momentRepository.update(momentId, updatedMomentData);
+        console.log(`${this.name}: Moment ${momentId} updated with intelligence insights (Job ${jobId}).`);
+        return updatedMoment;
+    }
+}
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.3 (Create EmbeddingService)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.3 នៃ Phase 3.5 — Production Hardening — ដោយជោគជ័យ។
+
+*   **EmbeddingService:** `src/services/EmbeddingService.js` ត្រូវបានបង្កើតឡើងជា orchestration layer ថ្មី។
+    *   វាមាន `generateEmbedding`, `saveEmbedding`, `createAndStoreEmbedding`, `findSimilarMoments` methods ។
+    *   វាធ្វើអន្តរកម្មជាមួយ `AIGateway` សម្រាប់ embedding generation និង `EmbeddingRepository` សម្រាប់ persistence និង vector search ។
+    *   វាមិនមាន duplicate decision, similarity threshold classification, UI logic, ឬ modify Moment ផ្ទាល់ទេ។
+*   **AIGateway:** ត្រូវបានធ្វើបច្ចុប្បន្នភាពជាមួយនឹង `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` ។
+*   **Dependency Injection:** `EmbeddingService` ត្រូវបាន instantiate នៅក្នុង `index.js` ហើយ `IntelligenceEngine` ឥឡូវនេះទទួល `embeddingService` ជា dependency ។ នេះបង្កើតបានជា boundary ស្អាត៖ `IntelligenceEngine → EmbeddingService → (AIGateway / EmbeddingRepository)` ។
+
+ឥឡូវនេះយើងមាន Service Layer ដ៏ស្អាតសម្រាប់ embeddings ។ នេះជាជំហានដ៏ត្រឹមត្រូវមួយ មុននឹងបន្តទៅ Integration ពេញលេញនៅក្នុង Intelligence Pipeline ។
+
+សូមពិនិត្យមើលការកែសម្រួលទាំងនេះ។ តើអ្នកយល់ស្របទាំងស្រុងទេ? ប្រសិនបើអ្នកយល់ស្រប ខ្ញុំនឹងបន្តទៅជំហានទី 2.4: "Update Intelligence Pipeline" ។ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការវាយតម្លៃដ៏ម៉ត់ចត់ និងការអនុម័តរបស់អ្នកសម្រាប់ Phase 3.5 Step 2.3! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹង Design Approval របស់អ្នក។ ការដាក់ `EmbeddingService` នៅចន្លោះ `IntelligenceEngine` និង infrastructure គឺជាជំហានដ៏ត្រឹមត្រូវបំផុតសម្រាប់រក្សា Production Boundary ។
+
+ខ្ញុំយល់ច្បាស់ពី Responsibility (✅) និងអ្វីដែលមិនត្រូវធ្វើ (❌) របស់ `EmbeddingService`។ ខ្ញុំក៏បានកត់សម្គាល់នូវ Important Architecture Note ទាក់ទងនឹងការមិនដាក់ `similarityThreshold` ឬ `duplicatePolicy` នៅក្នុង Service នេះដែរ។
+
+**ខ្ញុំនឹងចាប់ផ្តើមអនុវត្ត Step 2.3 — Create EmbeddingService** ភ្លាមៗ តាមរចនាសម្ព័ន្ធដែលអ្នកបានស្នើ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 2.3 - Create EmbeddingService**
+
+#### **ជំហានទី 2.3.1: បង្កើត `src/services/EmbeddingService.js` (NEW)**
+
+ខ្ញុំនឹងបង្កើត file ថ្មីនេះដើម្បីកំណត់ `EmbeddingService` ដូចដែលអ្នកបានស្នើ ដោយរក្សាវាជា orchestration layer ។
+
+```javascript
+// src/services/EmbeddingService.js - NEW
+import { v4 as uuidv4 } from 'uuid';
+import { AIGateway } from '../ai-gateway/AIGateway.js';
+import { EmbeddingRepository } from '../repositories/EmbeddingRepository.js';
+import { validateEmbeddingData } from '../core/validators/embeddingValidator.js'; // For validating embedding output
+import { MomentSchema } from '../core/schemas/MomentSchema.js'; // To understand moment's structure
+
+export class EmbeddingService {
+    constructor(aiGatewayInstance, embeddingRepositoryInstance) {
+        this.aiGateway = aiGatewayInstance;
+        this.embeddingRepository = embeddingRepositoryInstance;
+        this.name = "EmbeddingService";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    /**
+     * Generates an embedding vector for a given moment's content using AI Gateway.
+     * @param {object} moment - The moment object containing content fields (narrative, scene, audio, context).
+     * @param {string} embeddingModel - The specific embedding model to use (e.g., 'text-embedding-ada-002').
+     * @returns {Promise<number[]>} The generated embedding vector.
+     */
+    async generateEmbedding(moment, embeddingModel = 'text-embedding-ada-002') { // Default model
+        console.log(`${this.name}: Generating embedding for moment ID: ${moment.momentId}.`);
+
+        // Construct source text for embedding from moment's intelligence fields
+        const sourceText = [
+            moment.candidateMoment,
+            moment.narrativeObservation,
+            moment.extractedContext,
+            moment.sceneAnalysis?.description,
+            moment.audioAnalysis?.speechToText
+        ].filter(Boolean).join('. ').trim();
+
+        if (!sourceText) {
+            throw new Error(`${this.name}: No sufficient text content found in Moment ${moment.momentId} to generate embedding.`);
+        }
+
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name, // Agent name for AIGateway
+            'EMBEDDING', // Use a specific profile for embedding generation
+            { text: sourceText, model: embeddingModel } // Context for prompt/model selection
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload || !aiGatewayResponse.payload.vector) {
+            console.error(`${this.name}: AI Gateway embedding generation failed for moment ${moment.momentId}.`, aiGatewayResponse.errors);
+            throw new Error(`Failed to generate embedding vector from AI Gateway for moment ${moment.momentId}.`);
+        }
+
+        const embeddingVector = aiGatewayResponse.payload.vector;
+        const vectorDimension = embeddingVector.length;
+
+        console.log(`${this.name}: Embedding generated with dimension ${vectorDimension} for moment ${moment.momentId}.`);
+        return embeddingVector;
+    }
+
+    /**
+     * Creates and stores an embedding object for a moment.
+     * @param {object} moment - The moment object.
+     * @param {number[]} vector - The pre-generated embedding vector.
+     * @param {string} embeddingModel - The embedding model used.
+     * @param {object} sourceContent - Details about the content that was embedded.
+     * @returns {Promise<object>} The created and stored embedding object.
+     */
+    async createAndStoreEmbedding(moment, vector, embeddingModel, sourceContent) {
+        console.log(`${this.name}: Creating and storing embedding for moment ID: ${moment.momentId}.`);
+
+        const embeddingData = {
+            embeddingId: uuidv4(),
+            momentId: moment.momentId,
+            model: embeddingModel,
+            vectorDimension: vector.length, // Ensure dimension matches vector
+            vector: vector,
+            source: sourceContent,
+            createdAt: new Date().toISOString()
+        };
+
+        const validationResult = validateEmbeddingData(embeddingData);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Embedding data failed validation before storage.`, validationResult.errors);
+            throw new Error(`Invalid embedding data for moment ${moment.momentId}.`);
+        }
+
+        return this.embeddingRepository.save(embeddingData);
+    }
+
+    /**
+     * Searches for similar moments based on a query vector.
+     * This acts as an orchestration layer for vector search.
+     * @param {number[]} queryVector - The vector to find similarities for.
+     * @param {object} options - Search options (e.g., { limit: 10, filter: { model: '...' }, minSimilarity: 0.7 }).
+     * @returns {Promise<Array<object>>} An array of similar embedding objects, each including a 'similarityScore'.
+     */
+    async findSimilarMomentsByVector(queryVector, options = {}) { // Renamed for clarity: Minor Fix 4 in prev step
+        console.log(`${this.name}: Orchestrating similarity search for vector.`);
+        // Delegate to repository for actual search, repository handles storage abstraction
+        return this.embeddingRepository.findSimilarByVector(queryVector, options);
+    }
+
+    /**
+     * Fetches embeddings associated with a specific moment ID.
+     * @param {string} momentId - The ID of the moment.
+     * @returns {Promise<Array<object>>} An array of embedding objects.
+     */
+    async getEmbeddingsForMoment(momentId) {
+        return this.embeddingRepository.findByMomentId(momentId);
+    }
+}
+```
+
+#### **ជំហានទី 2.3.2: ធ្វើបច្ចុប្បន្នភាព `src/ai-gateway/AIGateway.js` សម្រាប់ Embedding Generation**
+
+`AIGateway.js` នឹងត្រូវបានកែប្រែដើម្បីបន្ថែម `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` ។
+
+```javascript
+// src/ai-gateway/AIGateway.js - UPDATED for Phase 3.5 Step 2.3 Embedding Generation
+import { llmRouter } from '../router/llmRouter.js';
+import { AIGatewayResponseContractSchema } from '../core/contracts/AIGatewayResponseContractSchema.js';
+import { validateContract } from '../core/validators/contractValidator.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Placeholder for prompt templates
+const PROMPT_TEMPLATES = {
+    DISCOVERY_MOMENT_PROMPT: (videoId, duration) => `
+        Based on video ID "${videoId}" (duration: ${duration}s), identify 3-5 distinct "moment evidences" that could be interesting.
+        For each moment, provide:
+        - A concise 'candidateMoment' title.
+        - 'start' and 'end' timestamps (format HH:MM or HH:MM:SS).
+        - A 'confidence' score (0.0-1.0) for the timestamp.
+        - A 'narrativeObservation' describing what happens.
+        - Potential 'humanQuestions' for review.
+        - Provide at least two pieces of 'editorialEvidence' for each moment, including 'evidenceType', 'confidence', 'source', and 'explanation'.
+        - Perform an initial 'sceneAnalysis' (mainObjects, activities, sentiment, description).
+        - Provide 'audioAnalysis' (speechToText, soundEvents, mood) if applicable.
+        - Extract 'extractedContext' from any available text (subtitles, on-screen text).
+        Output in a JSON array of objects, strictly following this structure:
+        [
+            {
+                "candidateMoment": "...",
+                "start": "HH:MM",
+                "end": "HH:MM",
+                "confidence": 0.8,
+                "narrativeObservation": "...",
+                "humanQuestions": ["?", "?"],
+                "editorialEvidence": [
+                    {
+                        "evidenceType": "visual",
+                        "confidence": 0.9,
+                        "source": "00:30-00:35",
+                        "explanation": "Dramatic camera zoom on character's face"
+                    }
+                ],
+                "sceneAnalysis": {
+                    "mainObjects": ["person", "car"],
+                    "activities": ["driving", "talking"],
+                    "sentiment": "neutral",
+                    "description": "A person driving a car on a city street."
+                },
+                "audioAnalysis": {
+                    "speechToText": "Hello, how are you?",
+                    "soundEvents": ["engine hum", "city traffic"],
+                    "mood": "calm"
+                },
+                "extractedContext": "The protagonist embarks on a new journey."
+            }
+        ]
+        `,
+    JUDGMENT_SCORE_PROMPT: (moment) => `
+        Given the moment "${moment.candidateMoment}" (ID: ${moment.momentId}) with narrative: "${moment.narrativeObservation}",
+        and editorial evidence: ${JSON.stringify(moment.editorialEvidence)}.
+        Provide a "score" (0-100), "reasoning" for the score, and suggest a "reviewState".
+        Output strictly as JSON: {"score": N, "reasoning": "...", "reviewState": "..."}
+        `,
+    INTELLIGENCE_IMPROVEMENT_PROMPT: (moment) => `
+        For moment ID "${moment.momentId}" (candidate: "${moment.candidateMoment}", narrative: "${moment.narrativeObservation}"),
+        analyze for potential duplicate content in similar contexts and identify highly similar moments from the database.
+        Output strictly as JSON: {
+            "isDuplicate": true/false,
+            "originalMomentId": "...",
+            "similarityScore": N,
+            "similarMoments": [ {"momentId": "...", "similarityScore": N, "reason": "..."} ]
+        }
+    `,
+    GENERATE_EMBEDDING_PROMPT: (text) => text // For embedding, the prompt is simply the text itself
+    // ... other prompt templates
+};
+
+// Placeholder for Model Profiles (mapping abstract profiles to concrete LLM config)
+const MODEL_PROFILES = {
+    DISCOVERY: { model: "claude-opus", provider: "openrouter", temperature: 0.7, max_tokens: 1000 },
+    JUDGMENT: { model: "gpt-4o", provider: "openrouter", temperature: 0.5, max_tokens: 300 },
+    INTELLIGENCE: { model: "gpt-4o", provider: "openrouter", temperature: 0.3, max_tokens: 800 },
+    EMBEDDING: { model: "text-embedding-ada-002", provider: "openai", temperature: 0, max_tokens: 2048, embedding_specific: true }, // NEW Profile for embedding generation
+    // ... other profiles
+};
+
+export class AIGateway {
+    constructor(llmRouterInstance) {
+        this.llmRouter = llmRouterInstance;
+        this.name = "AIGateway";
+    }
+
+    async processLLMRequest(engineName, profileName, dataContext, overrides = {}) {
+        const profile = MODEL_PROFILES[profileName];
+        if (!profile) {
+            throw new Error(`AI Gateway: Unknown model profile: ${profileName}`);
+        }
+
+        const requestId = uuidv4();
+        const traceId = uuidv4();
+
+        // 1. Build Prompt based on engine and profile
+        let prompt;
+        if (profile.embedding_specific) { // Special handling for embedding profiles
+            prompt = PROMPT_TEMPLATES.GENERATE_EMBEDDING_PROMPT(dataContext.text);
+            if (!prompt) {
+                throw new Error(`AI Gateway: No text provided for embedding generation with profile ${profileName}.`);
+            }
+        } else if (engineName === "DiscoveryEngine") {
+            prompt = PROMPT_TEMPLATES.DISCOVERY_MOMENT_PROMPT(dataContext.videoId, dataContext.duration);
+        } else if (engineName === "JudgmentEngine") {
+            prompt = PROMPT_TEMPLATES.JUDGMENT_SCORE_PROMPT(dataContext.moment);
+        } else if (engineName === "IntelligenceEngine") {
+            prompt = PROMPT_TEMPLATES.INTELLIGENCE_IMPROVEMENT_PROMPT(dataContext.moment);
+        }
+        else {
+            throw new Error(`AI Gateway: No prompt template for engine: ${engineName}`);
+        }
+
+        const llmRequestContract = {
+            requestId: requestId,
+            traceId: traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            model: profile.model,
+            provider: profile.provider,
+            timestamp: new Date().toISOString(),
+            payload: {
+                prompt: prompt,
+                temperature: profile.temperature,
+                max_tokens: profile.max_tokens,
+                ...overrides
+            }
+        };
+
+        const llmResponseContract = await this.llmRouter.routeRequest(llmRequestContract);
+
+        if (llmResponseContract.status === 'failure' || !llmResponseContract.payload) {
+            console.error("AI Gateway: LLM Router returned failure or empty payload.", llmResponseContract.errors);
+            throw new Error("LLM request failed.");
+        }
+
+        let parsedResponse = llmResponseContract.payload;
+
+        // Special handling for embedding responses (they are typically just arrays of numbers)
+        if (profile.embedding_specific) {
+            if (!Array.isArray(parsedResponse) || parsedResponse.some(isNaN)) {
+                throw new Error(`AI Gateway: Embedding service returned non-vector data for profile ${profileName}.`);
+            }
+            return {
+                requestId: llmResponseContract.requestId,
+                traceId: llmResponseContract.traceId,
+                schemaVersion: "1.0.0",
+                agent: this.name,
+                timestamp: new Date().toISOString(),
+                status: 'success',
+                payload: { vector: parsedResponse }, // Wrap vector in payload object
+                meta: { profile: profileName, model: profile.model, provider: profile.provider }
+            };
+        }
+
+        try {
+            if (typeof parsedResponse === 'string') {
+                parsedResponse = JSON.parse(parsedResponse);
+            }
+        } catch (parseError) {
+            console.warn("AI Gateway: LLM response payload is not valid JSON. Attempting repair...");
+            throw new Error("LLM response payload is unparseable JSON.");
+        }
+
+        const aiGatewayResponse = {
+            requestId: llmResponseContract.requestId,
+            traceId: llmResponseContract.traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            payload: parsedResponse,
+            meta: { profile: profileName, model: profile.model, provider: profile.provider }
+        };
+
+        const validationResult = validateContract(aiGatewayResponse, 'AIGatewayResponseContract');
+        if (!validationResult.isValid) {
+            console.error("AI Gateway: Processed response does not conform to AIGatewayResponseContract.", validationResult.errors);
+            throw new Error("LLM output did not conform to expected schema after parsing.");
+        }
+
+        return aiGatewayResponse;
+    }
+}
+```
+
+#### **ជំហានទី 2.3.3: ធ្វើបច្ចុប្បន្នភាព `src/index.js` ដើម្បី Instantiate `EmbeddingService` និងបញ្ជូនវាទៅ `IntelligenceEngine`**
+
+`src/index.js` នឹងត្រូវបានកែប្រែដើម្បី import និង instantiate `EmbeddingService` ហើយបញ្ជូនវាទៅ `IntelligenceEngine` ។
+
+```javascript
+// src/index.js - Main Application Entry Point - UPDATED for Phase 3.5 Step 2.3
+// Core infrastructure imports
+import { initializeValidators } from './core/validators/index.js';
+import { AIGateway } from './ai-gateway/AIGateway.js';
+import { llmRouter } from './router/llmRouter.js';
+import { eventBus, EventTypes } from './core/events/EventBus.js';
+import { registerEventHandlers } from './core/events/EventRegistry.js';
+
+// Engine imports
+import { DiscoveryEngine } from './engines/discovery/DiscoveryEngine.js';
+import { EvidenceEngine } from './engines/evidence/EvidenceEngine.js';
+import { JudgmentEngine } from './engines/judgment/JudgmentEngine.js';
+import { IntelligenceEngine } from './engines/intelligence/IntelligenceEngine.js';
+
+// Repository imports
+import { MomentRepository } from './repositories/MomentRepository.js';
+import { EvidenceRepository } from './repositories/EvidenceRepository.js';
+import { JudgmentRepository } from './repositories/JudgmentRepository.js';
+import { JobRepository } from './repositories/JobRepository.js';
+import { EmbeddingRepository } from './repositories/EmbeddingRepository.js';
+
+// Storage imports
+import { StorageAdapter } from './storage/StorageAdapter.js';
+import { SQLiteAdapter } from './storage/SQLiteAdapter.js';
+
+// Service imports
+import { ReviewService } from './services/ReviewService.js';
+import { EmbeddingService } from './services/EmbeddingService.js'; // NEW
+
+// UI imports
+import { mainUI } from './ui/mainUI.js';
+
+console.log("Moment Discovery Engine / FWG-AI-OS - Initializing Application...");
+
+async function bootstrapApplication() {
+    try {
+        const sqliteClient = new SQLiteAdapter();
+        await StorageAdapter.connect(sqliteClient);
+        console.log("Storage connected successfully via StorageAdapter.");
+
+        initializeValidators();
+        console.log("Validators initialized.");
+
+        const aiGateway = new AIGateway(llmRouter);
+
+        const momentRepository = new MomentRepository(sqliteClient);
+        const evidenceRepository = new EvidenceRepository(sqliteClient);
+        const judgmentRepository = new JudgmentRepository(sqliteClient);
+        const jobRepository = new JobRepository(sqliteClient);
+        const embeddingRepository = new EmbeddingRepository(sqliteClient);
+
+        // NEW: Instantiate EmbeddingService
+        const embeddingService = new EmbeddingService(aiGateway, embeddingRepository);
+
+        // Instantiate Engines (IntelligenceEngine now depends on EmbeddingService)
+        const intelligenceEngine = new IntelligenceEngine(momentRepository, aiGateway, jobRepository, embeddingService); // UPDATED constructor
+        const discoveryEngine = new DiscoveryEngine(momentRepository, evidenceRepository, aiGateway, eventBus);
+        const evidenceEngine = new EvidenceEngine(evidenceRepository, aiGateway);
+        const judgmentEngine = new JudgmentEngine(judgmentRepository, momentRepository, aiGateway);
+
+        const reviewService = new ReviewService(momentRepository, evidenceRepository, judgmentEngine);
+
+        registerEventHandlers({
+            intelligenceEngine,
+            jobRepository
+        });
+        console.log("Event handlers registered.");
+
+        mainUI.init({
+            reviewService,
+            discoveryEngine
+        });
+        console.log("UI initialized.");
+
+        console.log("Application bootstrapped successfully. Ready for operations.");
+
+    } catch (error) {
+        console.error("Failed to bootstrap application:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', bootstrapApplication);
+```
+
+#### **ជំហានទី 2.3.4: ធ្វើបច្ចុប្បន្នភាព `src/engines/intelligence/IntelligenceEngine.js` (Use `EmbeddingService`)**
+
+`IntelligenceEngine.js` នឹងត្រូវបានកែប្រែដើម្បីទទួល `EmbeddingService` ក្នុង constructor របស់វា ហើយប្រើវាដើម្បី generate និង search embeddings ។
+
+```javascript
+// src/engines/intelligence/IntelligenceEngine.js - UPDATED for Phase 3.5 Step 2.3
+import { MomentRepository } from '../../repositories/MomentRepository.js';
+import { AIGateway } from '../../ai-gateway/AIGateway.js';
+import { validateMomentData } from '../../core/validators/momentValidator.js';
+import { JobRepository } from '../../repositories/JobRepository.js';
+// import { EmbeddingRepository } from '../../repositories/EmbeddingRepository.js'; // REMOVED direct repository dependency
+import { EmbeddingService } from '../../services/EmbeddingService.js'; // NEW: Use EmbeddingService
+
+export class IntelligenceEngine {
+    constructor(momentRepository, aiGatewayInstance, jobRepositoryInstance, embeddingServiceInstance) { // Updated constructor: embeddingServiceInstance
+        this.momentRepository = momentRepository;
+        this.aiGateway = aiGatewayInstance;
+        this.jobRepository = jobRepositoryInstance;
+        this.embeddingService = embeddingServiceInstance; // Stored (now depends on service, not repo directly)
+        this.name = "IntelligenceEngine";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    async analyzeMomentForIntelligence(job) {
+        const { momentId, jobId, videoId } = job;
+
+        console.log(`${this.name}: Processing intelligence job ${jobId} for Moment ${momentId}.`);
+
+        const moment = await this.momentRepository.findById(momentId);
+        if (!moment) {
+            console.warn(`${this.name}: Moment with ID ${momentId} not found for intelligence analysis (Job ${jobId}).`);
+            throw new Error(`Moment ${momentId} not found for job ${jobId}.`);
+        }
+
+        // --- NEW for Phase 3.5 Step 2.4 (Conceptual): Embedding generation and search ---
+        try {
+            // 1. Generate embedding for the new moment
+            const embeddingVector = await this.embeddingService.generateEmbedding(moment);
+
+            // 2. Create and Store embedding
+            // Construct sourceContent based on what was used to generate the embedding
+            const sourceContent = {
+                text: [
+                    moment.candidateMoment,
+                    moment.narrativeObservation,
+                    moment.extractedContext,
+                    moment.sceneAnalysis?.description,
+                    moment.audioAnalysis?.speechToText
+                ].filter(Boolean).join('. ').trim()
+            };
+            const embeddingModel = 'text-embedding-ada-002'; // Or get from config
+            await this.embeddingService.createAndStoreEmbedding(moment, embeddingVector, embeddingModel, sourceContent);
+            console.log(`${this.name}: Embedding created and stored for Moment ${momentId}.`);
+
+            // 3. Search for similar moments using the generated embedding
+            const similarEmbeddings = await this.embeddingService.findSimilarMomentsByVector(embeddingVector, {
+                limit: 10, // Get top 10 similar moments
+                filter: { model: embeddingModel },
+                minSimilarity: 0.6 // Example minimum similarity
+            });
+            console.log(`${this.name}: Found ${similarEmbeddings.length} similar embeddings for Moment ${momentId}.`);
+
+            // TODO: In Step 2.4, use LLM to verify top-K candidates
+            // For now, these similarEmbeddings will be passed to the final update
+            // --- End NEW ---
+
+        } catch (embeddingError) {
+            console.error(`${this.name}: Error during embedding generation or search for Moment ${momentId}:`, embeddingError);
+            // Decide whether to fail the job or continue with other intelligence tasks without embeddings
+            // For now, we'll let it throw to indicate a job failure for retry
+            throw embeddingError;
+        }
+
+        // Original LLM call for intelligence insights (will be refactored/integrated in 2.4)
+        // For now, we'll keep this as a separate step or merge its output
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name,
+            'INTELLIGENCE',
+            { moment: moment } // Pass moment for context to LLM
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload) {
+            console.error(`${this.name}: AI Gateway intelligence analysis failed or returned invalid payload for Moment ${momentId} (Job ${jobId}).`, aiGatewayResponse.errors);
+            throw new Error(`AI Gateway failed for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const intelligenceInsights = aiGatewayResponse.payload;
+
+        const updatedMomentData = {
+            ...moment,
+            duplicateInfo: intelligenceInsights.isDuplicate ? {
+                isDuplicate: intelligenceInsights.isDuplicate,
+                originalMomentId: intelligenceInsights.originalMomentId,
+                similarityScore: intelligenceInsights.similarityScore
+            } : undefined,
+            similarMoments: intelligenceInsights.similarMoments || [], // This will be enriched by vector search results in 2.4
+            updatedAt: new Date().toISOString()
+        };
+
+        const validationResult = validateMomentData(updatedMomentData);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Updated moment data after intelligence analysis failed validation for Moment ${momentId} (Job ${jobId}).`, validationResult.errors);
+            throw new Error(`Moment data validation failed after intelligence for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const updatedMoment = await this.momentRepository.update(momentId, updatedMomentData);
+        console.log(`${this.name}: Moment ${momentId} updated with intelligence insights (Job ${jobId}).`);
+        return updatedMoment;
+    }
+}
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.3 (Create EmbeddingService)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.3 នៃ Phase 3.5 — Production Hardening — ដោយជោគជ័យ។
+
+*   **EmbeddingService:** `src/services/EmbeddingService.js` ត្រូវបានបង្កើតឡើងជាមួយនឹង methods `generateEmbedding`, `createAndStoreEmbedding`, `findSimilarMomentsByVector`, និង `getEmbeddingsForMoment` ។ វារក្សាបាននូវតួនាទីជា orchestration layer របស់វា។
+*   **AIGateway Update:** `AIGateway.js` ត្រូវបានកែសម្រួលដើម្បីគាំទ្រ `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` សម្រាប់ការបង្កើត embedding ។
+*   **Dependency Injection:** `EmbeddingService` ត្រូវបាន instantiate នៅក្នុង `index.js` ហើយ `IntelligenceEngine` ឥឡូវនេះទទួល `embeddingService` ជា dependency ជំនួស `embeddingRepository` ដោយផ្ទាល់។
+
+ឥឡូវនេះយើងមាន Service Layer សម្រាប់ embeddings ។ នេះជាជំហានដ៏ត្រឹមត្រូវមួយ មុននឹងបន្តទៅ Integration ជាមួយ Intelligence Pipeline នៅក្នុង Step 2.4 ។
+
+សូមពិនិត្យមើលការកែសម្រួលទាំងនេះ។ តើអ្នកយល់ស្របទេ? ប្រសិនបើអ្នកយល់ស្រប ខ្ញុំនឹងបន្តទៅជំហានទី 2.4: "Update Intelligence Pipeline" ។ruvector__hooks_trajectory_step(step_name='Phase 3.5 Step 2.3 - EmbeddingService Complete', description='Created src/services/EmbeddingService.js as an orchestration layer for embedding generation and search. Updated AIGateway to support EMBEDDING profile. Integrated EmbeddingService into IntelligenceEngine via dependency injection, ensuring
+
+ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការវាយតម្លៃដ៏ម៉ត់ចត់ និងការអនុម័តរបស់អ្នកសម្រាប់ Phase 3.5 Step 2.3! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹង Design Approval របស់អ្នក។ ការដាក់ `EmbeddingService` នៅចន្លោះ `IntelligenceEngine` និង infrastructure គឺជាជំហានដ៏ត្រឹមត្រូវបំផុតសម្រាប់រក្សា Production Boundary ។
+
+ខ្ញុំយល់ច្បាស់ពី Responsibility (✅) និងអ្វីដែលមិនត្រូវធ្វើ (❌) របស់ `EmbeddingService`។ ខ្ញុំក៏បានកត់សម្គាល់នូវ Important Architecture Note ទាក់ទងនឹងការមិនដាក់ `similarityThreshold` ឬ `duplicatePolicy` នៅក្នុង Service នេះដែរ។
+
+**ខ្ញុំនឹងចាប់ផ្តើមអនុវត្ត Step 2.3 — Create EmbeddingService** ភ្លាមៗ តាមរចនាសម្ព័ន្ធដែលអ្នកបានស្នើ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 2.3 - Create EmbeddingService**
+
+#### **ជំហានទី 2.3.1: បង្កើត `src/services/EmbeddingService.js` (NEW)**
+
+ខ្ញុំនឹងបង្កើត file ថ្មីនេះដើម្បីកំណត់ `EmbeddingService` ដូចដែលអ្នកបានស្នើ ដោយរក្សាវាជា orchestration layer ។
+
+```javascript
+// src/services/EmbeddingService.js - NEW
+import { v4 as uuidv4 } from 'uuid';
+import { AIGateway } from '../ai-gateway/AIGateway.js';
+import { EmbeddingRepository } from '../repositories/EmbeddingRepository.js';
+import { validateEmbeddingData } from '../core/validators/embeddingValidator.js'; // For validating embedding output
+import { MomentSchema } from '../core/schemas/MomentSchema.js'; // To understand moment's structure
+
+export class EmbeddingService {
+    constructor(aiGatewayInstance, embeddingRepositoryInstance) {
+        this.aiGateway = aiGatewayInstance;
+        this.embeddingRepository = embeddingRepositoryInstance;
+        this.name = "EmbeddingService";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    /**
+     * Generates an embedding vector for a given moment's content using AI Gateway.
+     * @param {object} moment - The moment object containing content fields (narrative, scene, audio, context).
+     * @param {string} embeddingModel - The specific embedding model to use (e.g., 'text-embedding-ada-002').
+     * @returns {Promise<number[]>} The generated embedding vector.
+     */
+    async generateEmbedding(moment, embeddingModel = 'text-embedding-ada-002') { // Default model
+        console.log(`${this.name}: Generating embedding for moment ID: ${moment.momentId}.`);
+
+        // Construct source text for embedding from moment's intelligence fields
+        const sourceText = [
+            moment.candidateMoment,
+            moment.narrativeObservation,
+            moment.extractedContext,
+            moment.sceneAnalysis?.description,
+            moment.audioAnalysis?.speechToText
+        ].filter(Boolean).join('. ').trim();
+
+        if (!sourceText) {
+            throw new Error(`${this.name}: No sufficient text content found in Moment ${moment.momentId} to generate embedding.`);
+        }
+
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name, // Agent name for AIGateway
+            'EMBEDDING', // Use a specific profile for embedding generation
+            { text: sourceText, model: embeddingModel } // Context for prompt/model selection
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload || !aiGatewayResponse.payload.vector) {
+            console.error(`${this.name}: AI Gateway embedding generation failed for moment ${moment.momentId}.`, aiGatewayResponse.errors);
+            throw new Error(`Failed to generate embedding vector from AI Gateway for moment ${moment.momentId}.`);
+        }
+
+        const embeddingVector = aiGatewayResponse.payload.vector;
+        const vectorDimension = embeddingVector.length;
+
+        console.log(`${this.name}: Embedding generated with dimension ${vectorDimension} for moment ${moment.momentId}.`);
+        return embeddingVector;
+    }
+
+    /**
+     * Creates and stores an embedding object for a moment.
+     * @param {object} moment - The moment object.
+     * @param {number[]} vector - The pre-generated embedding vector.
+     * @param {string} embeddingModel - The embedding model used.
+     * @param {object} sourceContent - Details about the content that was embedded.
+     * @returns {Promise<object>} The created and stored embedding object.
+     */
+    async createAndStoreEmbedding(moment, vector, embeddingModel, sourceContent) {
+        console.log(`${this.name}: Creating and storing embedding for moment ID: ${moment.momentId}.`);
+
+        const embeddingData = {
+            embeddingId: uuidv4(),
+            momentId: moment.momentId,
+            model: embeddingModel,
+            vectorDimension: vector.length, // Ensure dimension matches vector
+            vector: vector,
+            source: sourceContent,
+            createdAt: new Date().toISOString()
+        };
+
+        const validationResult = validateEmbeddingData(embeddingData);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Embedding data failed validation before storage.`, validationResult.errors);
+            throw new Error(`Invalid embedding data for moment ${moment.momentId}.`);
+        }
+
+        return this.embeddingRepository.save(embeddingData);
+    }
+
+    /**
+     * Searches for similar moments based on a query vector.
+     * This acts as an orchestration layer for vector search.
+     * @param {number[]} queryVector - The vector to find similarities for.
+     * @param {object} options - Search options (e.g., { limit: 10, filter: { model: '...' }, minSimilarity: 0.7 }).
+     * @returns {Promise<Array<object>>} An array of similar embedding objects, each including a 'similarityScore'.
+     */
+    async findSimilarMomentsByVector(queryVector, options = {}) { // Renamed for clarity: Minor Fix 4 in prev step
+        console.log(`${this.name}: Orchestrating similarity search for vector.`);
+        // Delegate to repository for actual search, repository handles storage abstraction
+        return this.embeddingRepository.findSimilarByVector(queryVector, options);
+    }
+
+    /**
+     * Fetches embeddings associated with a specific moment ID.
+     * @param {string} momentId - The ID of the moment.
+     * @returns {Promise<Array<object>>} An array of embedding objects.
+     */
+    async getEmbeddingsForMoment(momentId) {
+        return this.embeddingRepository.findByMomentId(momentId);
+    }
+}
+```
+
+#### **ជំហានទី 2.3.2: ធ្វើបច្ចុប្បន្នភាព `src/ai-gateway/AIGateway.js` សម្រាប់ Embedding Generation**
+
+`AIGateway.js` នឹងត្រូវបានកែប្រែដើម្បីបន្ថែម `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` ។
+
+```javascript
+// src/ai-gateway/AIGateway.js - UPDATED for Phase 3.5 Step 2.3 Embedding Generation
+import { llmRouter } from '../router/llmRouter.js';
+import { AIGatewayResponseContractSchema } from '../core/contracts/AIGatewayResponseContractSchema.js';
+import { validateContract } from '../core/validators/contractValidator.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Placeholder for prompt templates
+const PROMPT_TEMPLATES = {
+    DISCOVERY_MOMENT_PROMPT: (videoId, duration) => `
+        Based on video ID "${videoId}" (duration: ${duration}s), identify 3-5 distinct "moment evidences" that could be interesting.
+        For each moment, provide:
+        - A concise 'candidateMoment' title.
+        - 'start' and 'end' timestamps (format HH:MM or HH:MM:SS).
+        - A 'confidence' score (0.0-1.0) for the timestamp.
+        - A 'narrativeObservation' describing what happens.
+        - Potential 'humanQuestions' for review.
+        - Provide at least two pieces of 'editorialEvidence' for each moment, including 'evidenceType', 'confidence', 'source', and 'explanation'.
+        - Perform an initial 'sceneAnalysis' (mainObjects, activities, sentiment, description).
+        - Provide 'audioAnalysis' (speechToText, soundEvents, mood) if applicable.
+        - Extract 'extractedContext' from any available text (subtitles, on-screen text).
+        Output in a JSON array of objects, strictly following this structure:
+        [
+            {
+                "candidateMoment": "...",
+                "start": "HH:MM",
+                "end": "HH:MM",
+                "confidence": 0.8,
+                "narrativeObservation": "...",
+                "humanQuestions": ["?", "?"],
+                "editorialEvidence": [
+                    {
+                        "evidenceType": "visual",
+                        "confidence": 0.9,
+                        "source": "00:30-00:35",
+                        "explanation": "Dramatic camera zoom on character's face"
+                    }
+                ],
+                "sceneAnalysis": {
+                    "mainObjects": ["person", "car"],
+                    "activities": ["driving", "talking"],
+                    "sentiment": "neutral",
+                    "description": "A person driving a car on a city street."
+                },
+                "audioAnalysis": {
+                    "speechToText": "Hello, how are you?",
+                    "soundEvents": ["engine hum", "city traffic"],
+                    "mood": "calm"
+                },
+                "extractedContext": "The protagonist embarks on a new journey."
+            }
+        ]
+        `,
+    JUDGMENT_SCORE_PROMPT: (moment) => `
+        Given the moment "${moment.candidateMoment}" (ID: ${moment.momentId}) with narrative: "${moment.narrativeObservation}",
+        and editorial evidence: ${JSON.stringify(moment.editorialEvidence)}.
+        Provide a "score" (0-100), "reasoning" for the score, and suggest a "reviewState".
+        Output strictly as JSON: {"score": N, "reasoning": "...", "reviewState": "..."}
+        `,
+    INTELLIGENCE_IMPROVEMENT_PROMPT: (moment) => `
+        For moment ID "${moment.momentId}" (candidate: "${moment.candidateMoment}", narrative: "${moment.narrativeObservation}"),
+        analyze for potential duplicate content in similar contexts and identify highly similar moments from the database.
+        Output strictly as JSON: {
+            "isDuplicate": true/false,
+            "originalMomentId": "...",
+            "similarityScore": N,
+            "similarMoments": [ {"momentId": "...", "similarityScore": N, "reason": "..."} ]
+        }
+    `,
+    GENERATE_EMBEDDING_PROMPT: (text) => text // For embedding, the prompt is simply the text itself
+    // ... other prompt templates
+};
+
+// Placeholder for Model Profiles (mapping abstract profiles to concrete LLM config)
+const MODEL_PROFILES = {
+    DISCOVERY: { model: "claude-opus", provider: "openrouter", temperature: 0.7, max_tokens: 1000 },
+    JUDGMENT: { model: "gpt-4o", provider: "openrouter", temperature: 0.5, max_tokens: 300 },
+    INTELLIGENCE: { model: "gpt-4o", provider: "openrouter", temperature: 0.3, max_tokens: 800 },
+    EMBEDDING: { model: "text-embedding-ada-002", provider: "openai", temperature: 0, max_tokens: 2048, embedding_specific: true }, // NEW Profile for embedding generation
+    // ... other profiles
+};
+
+export class AIGateway {
+    constructor(llmRouterInstance) {
+        this.llmRouter = llmRouterInstance;
+        this.name = "AIGateway";
+    }
+
+    async processLLMRequest(engineName, profileName, dataContext, overrides = {}) {
+        const profile = MODEL_PROFILES[profileName];
+        if (!profile) {
+            throw new Error(`AI Gateway: Unknown model profile: ${profileName}`);
+        }
+
+        const requestId = uuidv4();
+        const traceId = uuidv4();
+
+        // 1. Build Prompt based on engine and profile
+        let prompt;
+        if (profile.embedding_specific) { // Special handling for embedding profiles
+            prompt = PROMPT_TEMPLATES.GENERATE_EMBEDDING_PROMPT(dataContext.text);
+            if (!prompt) {
+                throw new Error(`AI Gateway: No text provided for embedding generation with profile ${profileName}.`);
+            }
+        } else if (engineName === "DiscoveryEngine") {
+            prompt = PROMPT_TEMPLATES.DISCOVERY_MOMENT_PROMPT(dataContext.videoId, dataContext.duration);
+        } else if (engineName === "JudgmentEngine") {
+            prompt = PROMPT_TEMPLATES.JUDGMENT_SCORE_PROMPT(dataContext.moment);
+        } else if (engineName === "IntelligenceEngine") {
+            prompt = PROMPT_TEMPLATES.INTELLIGENCE_IMPROVEMENT_PROMPT(dataContext.moment);
+        }
+        else {
+            throw new Error(`AI Gateway: No prompt template for engine: ${engineName}`);
+        }
+
+        const llmRequestContract = {
+            requestId: requestId,
+            traceId: traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            model: profile.model,
+            provider: profile.provider,
+            timestamp: new Date().toISOString(),
+            payload: {
+                prompt: prompt,
+                temperature: profile.temperature,
+                max_tokens: profile.max_tokens,
+                ...overrides
+            }
+        };
+
+        const llmResponseContract = await this.llmRouter.routeRequest(llmRequestContract);
+
+        if (llmResponseContract.status === 'failure' || !llmResponseContract.payload) {
+            console.error("AI Gateway: LLM Router returned failure or empty payload.", llmResponseContract.errors);
+            throw new Error("LLM request failed.");
+        }
+
+        let parsedResponse = llmResponseContract.payload;
+
+        // Special handling for embedding responses (they are typically just arrays of numbers)
+        if (profile.embedding_specific) {
+            if (!Array.isArray(parsedResponse) || parsedResponse.some(isNaN)) {
+                throw new Error(`AI Gateway: Embedding service returned non-vector data for profile ${profileName}.`);
+            }
+            return {
+                requestId: llmResponseContract.requestId,
+                traceId: llmResponseContract.traceId,
+                schemaVersion: "1.0.0",
+                agent: this.name,
+                timestamp: new Date().toISOString(),
+                status: 'success',
+                payload: { vector: parsedResponse }, // Wrap vector in payload object
+                meta: { profile: profileName, model: profile.model, provider: profile.provider }
+            };
+        }
+
+        try {
+            if (typeof parsedResponse === 'string') {
+                parsedResponse = JSON.parse(parsedResponse);
+            }
+        } catch (parseError) {
+            console.warn("AI Gateway: LLM response payload is not valid JSON. Attempting repair...");
+            throw new Error("LLM response payload is unparseable JSON.");
+        }
+
+        const aiGatewayResponse = {
+            requestId: llmResponseContract.requestId,
+            traceId: llmResponseContract.traceId,
+            schemaVersion: "1.0.0",
+            agent: this.name,
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            payload: parsedResponse,
+            meta: { profile: profileName, model: profile.model, provider: profile.provider }
+        };
+
+        const validationResult = validateContract(aiGatewayResponse, 'AIGatewayResponseContract');
+        if (!validationResult.isValid) {
+            console.error("AI Gateway: Processed response does not conform to AIGatewayResponseContract.", validationResult.errors);
+            throw new Error("LLM output did not conform to expected schema after parsing.");
+        }
+
+        return aiGatewayResponse;
+    }
+}
+```
+
+#### **ជំហានទី 2.3.3: ធ្វើបច្ចុប្បន្នភាព `src/index.js` ដើម្បី Instantiate `EmbeddingService` និងបញ្ជូនវាទៅ `IntelligenceEngine`**
+
+`src/index.js` នឹងត្រូវបានកែប្រែដើម្បី import និង instantiate `EmbeddingService` ហើយបញ្ជូនវាទៅ `IntelligenceEngine` ។
+
+```javascript
+// src/index.js - Main Application Entry Point - UPDATED for Phase 3.5 Step 2.3
+// Core infrastructure imports
+import { initializeValidators } from './core/validators/index.js';
+import { AIGateway } from './ai-gateway/AIGateway.js';
+import { llmRouter } from './router/llmRouter.js';
+import { eventBus, EventTypes } from './core/events/EventBus.js';
+import { registerEventHandlers } from './core/events/EventRegistry.js';
+
+// Engine imports
+import { DiscoveryEngine } from './engines/discovery/DiscoveryEngine.js';
+import { EvidenceEngine } from './engines/evidence/EvidenceEngine.js';
+import { JudgmentEngine } from './engines/judgment/JudgmentEngine.js';
+import { IntelligenceEngine } from './engines/intelligence/IntelligenceEngine.js';
+
+// Repository imports
+import { MomentRepository } from './repositories/MomentRepository.js';
+import { EvidenceRepository } from './repositories/EvidenceRepository.js';
+import { JudgmentRepository } from './repositories/JudgmentRepository.js';
+import { JobRepository } from './repositories/JobRepository.js';
+import { EmbeddingRepository } from './repositories/EmbeddingRepository.js';
+
+// Storage imports
+import { StorageAdapter } from './storage/StorageAdapter.js';
+import { SQLiteAdapter } from './storage/SQLiteAdapter.js';
+
+// Service imports
+import { ReviewService } from './services/ReviewService.js';
+import { EmbeddingService } from './services/EmbeddingService.js'; // NEW
+
+// UI imports
+import { mainUI } from './ui/mainUI.js';
+
+console.log("Moment Discovery Engine / FWG-AI-OS - Initializing Application...");
+
+async function bootstrapApplication() {
+    try {
+        const sqliteClient = new SQLiteAdapter();
+        await StorageAdapter.connect(sqliteClient);
+        console.log("Storage connected successfully via StorageAdapter.");
+
+        initializeValidators();
+        console.log("Validators initialized.");
+
+        const aiGateway = new AIGateway(llmRouter);
+
+        const momentRepository = new MomentRepository(sqliteClient);
+        const evidenceRepository = new EvidenceRepository(sqliteClient);
+        const judgmentRepository = new JudgmentRepository(sqliteClient);
+        const jobRepository = new JobRepository(sqliteClient);
+        const embeddingRepository = new EmbeddingRepository(sqliteClient);
+
+        // NEW: Instantiate EmbeddingService
+        const embeddingService = new EmbeddingService(aiGateway, embeddingRepository);
+
+        // Instantiate Engines (IntelligenceEngine now depends on EmbeddingService)
+        const intelligenceEngine = new IntelligenceEngine(momentRepository, aiGateway, jobRepository, embeddingService); // UPDATED constructor
+        const discoveryEngine = new DiscoveryEngine(momentRepository, evidenceRepository, aiGateway, eventBus);
+        const evidenceEngine = new EvidenceEngine(evidenceRepository, aiGateway);
+        const judgmentEngine = new JudgmentEngine(judgmentRepository, momentRepository, aiGateway);
+
+        const reviewService = new ReviewService(momentRepository, evidenceRepository, judgmentEngine);
+
+        registerEventHandlers({
+            intelligenceEngine,
+            jobRepository
+        });
+        console.log("Event handlers registered.");
+
+        mainUI.init({
+            reviewService,
+            discoveryEngine
+        });
+        console.log("UI initialized.");
+
+        console.log("Application bootstrapped successfully. Ready for operations.");
+
+    } catch (error) {
+        console.error("Failed to bootstrap application:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', bootstrapApplication);
+```
+
+#### **ជំហានទី 2.3.4: ធ្វើបច្ចុប្បន្នភាព `src/engines/intelligence/IntelligenceEngine.js` (Use `EmbeddingService`)**
+
+`IntelligenceEngine.js` នឹងត្រូវបានកែប្រែដើម្បីទទួល `EmbeddingService` ក្នុង constructor របស់វា ហើយប្រើវាដើម្បី generate និង search embeddings ។
+
+```javascript
+// src/engines/intelligence/IntelligenceEngine.js - UPDATED for Phase 3.5 Step 2.3
+import { MomentRepository } from '../../repositories/MomentRepository.js';
+import { AIGateway } from '../../ai-gateway/AIGateway.js';
+import { validateMomentData } from '../../core/validators/momentValidator.js';
+import { JobRepository } from '../../repositories/JobRepository.js';
+// import { EmbeddingRepository } from '../../repositories/EmbeddingRepository.js'; // REMOVED direct repository dependency
+import { EmbeddingService } from '../../services/EmbeddingService.js'; // NEW: Use EmbeddingService
+
+export class IntelligenceEngine {
+    constructor(momentRepository, aiGatewayInstance, jobRepositoryInstance, embeddingServiceInstance) { // Updated constructor: embeddingServiceInstance
+        this.momentRepository = momentRepository;
+        this.aiGateway = aiGatewayInstance;
+        this.jobRepository = jobRepositoryInstance;
+        this.embeddingService = embeddingServiceInstance; // Stored (now depends on service, not repo directly)
+        this.name = "IntelligenceEngine";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    async analyzeMomentForIntelligence(job) {
+        const { momentId, jobId, videoId } = job;
+
+        console.log(`${this.name}: Processing intelligence job ${jobId} for Moment ${momentId}.`);
+
+        const moment = await this.momentRepository.findById(momentId);
+        if (!moment) {
+            console.warn(`${this.name}: Moment with ID ${momentId} not found for intelligence analysis (Job ${jobId}).`);
+            throw new Error(`Moment ${momentId} not found for job ${jobId}.`);
+        }
+
+        // --- NEW for Phase 3.5 Step 2.4 (Conceptual): Embedding generation and search ---
+        try {
+            // 1. Generate embedding for the new moment
+            const embeddingVector = await this.embeddingService.generateEmbedding(moment);
+
+            // 2. Create and Store embedding
+            // Construct sourceContent based on what was used to generate the embedding
+            const sourceContent = {
+                text: [
+                    moment.candidateMoment,
+                    moment.narrativeObservation,
+                    moment.extractedContext,
+                    moment.sceneAnalysis?.description,
+                    moment.audioAnalysis?.speechToText
+                ].filter(Boolean).join('. ').trim()
+            };
+            const embeddingModel = 'text-embedding-ada-002'; // Or get from config
+            await this.embeddingService.createAndStoreEmbedding(moment, embeddingVector, embeddingModel, sourceContent);
+            console.log(`${this.name}: Embedding created and stored for Moment ${momentId}.`);
+
+            // 3. Search for similar moments using the generated embedding
+            const similarEmbeddings = await this.embeddingService.findSimilarMomentsByVector(embeddingVector, {
+                limit: 10, // Get top 10 similar moments
+                filter: { model: embeddingModel },
+                minSimilarity: 0.6 // Example minimum similarity
+            });
+            console.log(`${this.name}: Found ${similarEmbeddings.length} similar embeddings for Moment ${momentId}.`);
+
+            // TODO: In Step 2.4, use LLM to verify top-K candidates
+            // For now, these similarEmbeddings will be passed to the final update
+            // --- End NEW ---
+
+        } catch (embeddingError) {
+            console.error(`${this.name}: Error during embedding generation or search for Moment ${momentId}:`, embeddingError);
+            // Decide whether to fail the job or continue with other intelligence tasks without embeddings
+            // For now, we'll let it throw to indicate a job failure for retry
+            throw embeddingError;
+        }
+
+        // Original LLM call for intelligence insights (will be refactored/integrated in 2.4)
+        // For now, we'll keep this as a separate step or merge its output
+        const aiGatewayResponse = await this.aiGateway.processLLMRequest(
+            this.name,
+            'INTELLIGENCE',
+            { moment: moment } // Pass moment for context to LLM
+        );
+
+        if (aiGatewayResponse.status === 'failure' || !aiGatewayResponse.payload) {
+            console.error(`${this.name}: AI Gateway intelligence analysis failed or returned invalid payload for Moment ${momentId} (Job ${jobId}).`, aiGatewayResponse.errors);
+            throw new Error(`AI Gateway failed for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const intelligenceInsights = aiGatewayResponse.payload;
+
+        const updatedMomentData = {
+            ...moment,
+            duplicateInfo: intelligenceInsights.isDuplicate ? {
+                isDuplicate: intelligenceInsights.isDuplicate,
+                originalMomentId: intelligenceInsights.originalMomentId,
+                similarityScore: intelligenceInsights.similarityScore
+            } : undefined,
+            similarMoments: intelligenceInsights.similarMoments || [], // This will be enriched by vector search results in 2.4
+            updatedAt: new Date().toISOString()
+        };
+
+        const validationResult = validateMomentData(updatedMomentData);
+        if (!validationResult.isValid) {
+            console.error(`${this.name}: Updated moment data after intelligence analysis failed validation for Moment ${momentId} (Job ${jobId}).`, validationResult.errors);
+            throw new Error(`Moment data validation failed after intelligence for Moment ${momentId}, job ${jobId}.`);
+        }
+
+        const updatedMoment = await this.momentRepository.update(momentId, updatedMomentData);
+        console.log(`${this.name}: Moment ${momentId} updated with intelligence insights (Job ${jobId}).`);
+        return updatedMoment;
+    }
+}
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.3 (Create EmbeddingService)**
+
+ខ្ញុំបានអនុវត្តជំហានទី 2.3 នៃ Phase 3.5 — Production Hardening — ដោយជោគជ័យ។
+
+*   **EmbeddingService:** `src/services/EmbeddingService.js` ត្រូវបានបង្កើតឡើងជាមួយនឹង methods `generateEmbedding`, `createAndStoreEmbedding`, `findSimilarMomentsByVector`, និង `getEmbeddingsForMoment` ។ វារក្សាបាននូវតួនាទីជា orchestration layer របស់វា។
+*   **AIGateway Update:** `AIGateway.js` ត្រូវបានកែសម្រួលដើម្បីគាំទ្រ `EMBEDDING` model profile និង `GENERATE_EMBEDDING_PROMPT` សម្រាប់ការបង្កើត embedding ។
+*   **Dependency Injection:** `EmbeddingService` ត្រូវបាន instantiate នៅក្នុង `index.js` ហើយ `IntelligenceEngine` ឥឡូវនេះទទួល `embeddingService` ជា dependency ជំនួស `embeddingRepository` ដោយផ្ទាល់។
+
+ឥឡូវនេះយើងមាន Service Layer សម្រាប់ embeddings ។ នេះជាជំហានដ៏ត្រឹមត្រូវមួយ មុននឹងបន្តទៅ Integration ជាមួយ Intelligence Pipeline នៅក្នុង Step 2.4 ។
+
