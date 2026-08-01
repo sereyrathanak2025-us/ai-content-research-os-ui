@@ -97,7 +97,8 @@ function parseYouTubeChannelRef(rawUrl) {
   u = u.replace(/\/+$/, ""); // drop trailing slash
   if (u.startsWith("@")) return { type: "handle", value: u.split("/")[0] };
   if (u.startsWith("channel/")) return { type: "id", value: u.slice("channel/".length).split("/")[0] };
-  if (u.startsWith("c/")) return return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
+  // FIX: Removed duplicate 'return' keyword
+  if (u.startsWith("c/")) return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
   if (u.startsWith("user/")) return { type: "user", value: u.slice("user/".length).split("/")[0] };
   if (rawUrl.trim().startsWith("@")) return { type: "handle", value: rawUrl.trim().split("/")[0] };
   // Bare name with no recognizable prefix: try it as a handle.
@@ -128,7 +129,7 @@ async function resolveYouTubeChannelId(ref, apiKey) {
     );
     if (searchResp.ok) {
       const searchData = await searchResp.json();
-      const item = searchData.items && searchDataData.items[0];
+      const item = searchData.items && searchData.items[0];
       if (item) return item.snippet?.channelId || item.id?.channelId || null;
     }
   } catch (e) {
@@ -270,7 +271,7 @@ const KNOWLEDGE_BASE_PLUGINS = {
     // -> failure -> reaction) or ORIGINAL-SOURCE signals — so results skewed toward
     // other creators' already-edited compilation/ranking content instead of raw single
     // moments. Replaced with moment_patterns: each pattern names the narrative shape of
-    // the moment and gives searchSignals that point at RAW original footage (never
+    // the moment and and gives searchSignals that point at RAW original footage (never
     // "compilation"/"best of"/"top 10", which are already globally rejected above).
     moment_patterns: [
       {
@@ -1647,7 +1648,7 @@ const AGENT_REGISTRY = {
       // a real collected clip, AND (b) every required reasoning field is present and
       // non-empty. There is no views/likes-only fallback path — if nothing survives,
       // ranked_clip_opportunities is honestly empty.
-      const REQUIRED_REASONING_FIELDS = ["style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence"];
+      const REQUIRED_REASONING_FIELDS = ["moment_idea", "style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence"];
       const rawRanked = coerceToArray(data?.ranked_clip_opportunities);
       const rejectedForMissingReasoning = [];
       const finalRanked = rawRanked
@@ -1864,11 +1865,12 @@ async function orchestrate(workflowId, inputContract, env) {
       executeAgent("EditorialDNAExtractionAgent"),
       executeAgent("OpportunityGenerator")
     ]);
+    
+    await executeAgent("EditorialIntentAgent");
     // FIX: Log if editorial_intent is missing after EditorialIntentAgent
     if (!runtimeState.editorial_intent) {
       agentContext.explainability_recorder.execute("orchestrate: editorial_intent missing after EditorialIntentAgent run", { workflowId, inputContract });
     }
-    await executeAgent("EditorialIntentAgent");
     await executeAgent("MomentOntologyAgent");
     await executeAgent("DiscoveryStrategyPlannerAgent");
     await executeAgent("SourceHunterAgent");
