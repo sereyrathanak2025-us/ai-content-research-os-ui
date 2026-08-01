@@ -443,7 +443,10 @@
         // and Apify-based TikTok/Reddit search (which can take 15-30s+ per platform to
         // run synchronously) added, full runs routinely exceed 60s and the frontend was
         // aborting requests that were still completing fine on the backend.
-        const DEFAULT_TIMEOUT = 150000; // 150s
+        // With per-LLM-call timeouts (20s each) now bounding worst-case latency per
+        // agent, and 7 agents in the pipeline, 150s could still be tight in a bad case
+        // (multiple fallback attempts per agent). Bumped for safety margin.
+        const DEFAULT_TIMEOUT = 210000; // 210s
         const WORKER_BASE_URL = window.location.origin;
 
         const LLM_PROVIDERS_CONFIG = {
