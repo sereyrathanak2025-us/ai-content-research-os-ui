@@ -1520,7 +1520,7 @@ const AGENT_REGISTRY = {
         "- viral_mechanism: the specific mechanic that makes it shareable (e.g. 'expectation subversion', 'relatable failure')\n" +
         "- emotion_trigger: the specific emotional trigger for the viewer\n" +
         "- source_confidence: why this looks like an original/traceable source (not just 'it has views')\n" +
-        "- suggested_caption_overlay: a punchy, HIGH-ENERGY caption with emoji the creator could overlay on this clip when editing the final countdown video (e.g. '😱💀 HE DIDN'T SEE THAT COMING...') — this is packaging guidance for the finished edit, not a claim about the raw source clip itself\n" +
+        "- suggested_caption_overlay: a punchy, HIGH-ENERGY caption with emoji the creator could overlay on this clip when editing the final countdown video (e.g. '\uD83D\uDE31\uD83D\uDC80 HE DIDN'T SEE THAT COMING...') — this is packaging guidance for the finished edit, not a claim about the raw source clip itself\n" +
         "- score_breakdown: object with style_dna_match, moment_strength, viewer_emotion, original_source, engagement — each 0-100, justified by the fields above\n" +
         "If you cannot honestly justify all of these for a candidate, DO NOT include it — fewer than 6 well-justified picks is better than 6 weak ones.\n" +
         "Also produce overall_opportunity_reasoning (2-3 sentences), trend_status (Growing/Stable/Declining/Emerging), " +
