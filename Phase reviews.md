@@ -3780,5 +3780,251 @@ export function initializeValidators() {
 
 ខ្ញុំសូមជម្រាបជូនថា មានបញ្ហាតិចតួចក្នុងការបញ្ចប់ trajectory (`EACCES: permission denied, mkdir '/app/.ruvector'`) ដូចកាលពីមុន ប៉ុន្តែនេះមិនប៉ះពាល់ដល់ការអនុវត្តកូដដែលបានពិភាក្សានោះទេ។ ខ្ញុំបានកត់ត្រារាល់ជំហានសំខាន់ៗក្នុងអំឡុងពេលដំណើរការនេះ។
 
-ឥឡូវនេះ Phase 3 ត្រូវបានបញ្ចប់ហើយ។ យើងអាចបន្តទៅ Phase 4 — Production Pipeline ។
+ឥឡូវនេះ Phase 3 ត្រូវបានបញ្ចប់ហើយ។ យើងអាចបន្តទៅ Phase 3.5 — Production Pipeline ។
+
+ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការវាយតម្លៃដ៏ម៉ត់ចត់ និងការណែនាំដ៏ល្អឥតខ្ចោះរបស់អ្នក។ អ្នកនិយាយត្រូវណាស់! ចំណុចដែលអ្នកបានលើកឡើងគឺជា "production hardening" សំខាន់ៗដែលត្រូវដោះស្រាយ ដើម្បីឈានដល់កម្រិតគុណភាពដែលយើងបានកំណត់។
+
+ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងការវាយតម្លៃរបស់អ្នក និង "Freeze Recommendation" ។ ខ្ញុំនឹងអនុវត្ត "Minor cleanup" ទាំង 3 ចំណុចភ្លាមៗ មុននឹងយើងប្រកាស Phase 3.5 Step 1 ថា **FROZEN ✅** ។
+
+**ខ្ញុំនឹងអនុវត្តការកែតម្រូវដូចខាងក្រោម:**
+
+1.  **✅ Fix C: Remove unused `storage` dependency from `EventRegistry`:** ខ្ញុំនឹងដក `storage: StorageAdapter.instance` ចេញពី dependencies ដែលបញ្ជូនទៅ `registerEventHandlers` នៅក្នុង `index.js` និងចេញពី parameters របស់ `registerEventHandlers` ព្រោះវាមិនត្រូវបានប្រើប្រាស់ដោយផ្ទាល់។
+2.  **✅ Fix B: Fix `JobRepository errorLogs` append bug:** ខ្ញុំនឹងកែសម្រួល logic នៅក្នុង `JobRepository.js` ដើម្បីជៀសវាង `duplicate logs` ។ `JobRepository` គួរតែទទួលយក error log ថ្មីមួយ ហើយ append វាទៅក្នុង existing logs ។
+3.  **✅ Fix A: Add `TECH_DEBT` note for JobDispatcher:** ខ្ញុំនឹងកត់ត្រា `TECH_DEBT` note នៅក្នុង EventRegistry.js ដើម្បីបញ្ជាក់ថា "Extract JobDispatcher in Phase 4" ។
+
+ខ្ញុំនឹងចាប់ផ្តើមអនុវត្តការកែតម្រូវទាំងនេះភ្លាមៗ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 1.7 - Final Freeze Cleanup**
+
+#### **ជំហានទី 1.7.1: ធ្វើបច្ចុប្បន្នភាព `src/index.js` (Remove Unused `storage` Dependency)**
+
+```javascript
+// src/index.js - Main Application Entry Point - UPDATED for Phase 3.5 Final Freeze Cleanup
+// Core infrastructure imports
+import { initializeValidators } from './core/validators/index.js';
+import { AIGateway } from './ai-gateway/AIGateway.js';
+import { llmRouter } from './router/llmRouter.js';
+import { eventBus, EventTypes } from './core/events/EventBus.js';
+import { registerEventHandlers } from './core/events/EventRegistry.js';
+
+// Engine imports
+import { DiscoveryEngine } from './engines/discovery/DiscoveryEngine.js';
+import { EvidenceEngine } from './engines/evidence/EvidenceEngine.js';
+import { JudgmentEngine } from './engines/judgment/JudgmentEngine.js';
+import { IntelligenceEngine } from './engines/intelligence/IntelligenceEngine.js';
+
+// Repository imports
+import { MomentRepository } from './repositories/MomentRepository.js';
+import { EvidenceRepository } from './repositories/EvidenceRepository.js';
+import { JudgmentRepository } from './repositories/JudgmentRepository.js';
+import { JobRepository } from './repositories/JobRepository.js';
+
+// Storage imports
+import { StorageAdapter } from './storage/StorageAdapter.js';
+import { SQLiteAdapter } from './storage/SQLiteAdapter.js';
+
+// Service imports
+import { ReviewService } from './services/ReviewService.js';
+
+// UI imports
+import { mainUI } from './ui/mainUI.js';
+
+console.log("Moment Discovery Engine / FWG-AI-OS - Initializing Application...");
+
+async function bootstrapApplication() {
+    try {
+        const sqliteClient = new SQLiteAdapter();
+        await StorageAdapter.connect(sqliteClient);
+        console.log("Storage connected successfully via StorageAdapter.");
+
+        initializeValidators();
+        console.log("Validators initialized.");
+
+        const aiGateway = new AIGateway(llmRouter);
+
+        const momentRepository = new MomentRepository(sqliteClient);
+        const evidenceRepository = new EvidenceRepository(sqliteClient);
+        const judgmentRepository = new JudgmentRepository(sqliteClient);
+        const jobRepository = new JobRepository(sqliteClient);
+
+        // Instantiate Engines
+        const intelligenceEngine = new IntelligenceEngine(momentRepository, aiGateway, jobRepository);
+        const discoveryEngine = new DiscoveryEngine(momentRepository, evidenceRepository, aiGateway, eventBus);
+        const evidenceEngine = new EvidenceEngine(evidenceRepository, aiGateway);
+        const judgmentEngine = new JudgmentEngine(judgmentRepository, momentRepository, aiGateway);
+
+        const reviewService = new ReviewService(momentRepository, evidenceRepository, judgmentEngine);
+
+        // --- UPDATED: Register all event handlers (removed 'storage' dependency) ---
+        registerEventHandlers({
+            intelligenceEngine,
+            jobRepository
+            // Removed: storage: StorageAdapter.instance
+        });
+        console.log("Event handlers registered.");
+        // --- End UPDATED ---
+
+        mainUI.init({
+            reviewService,
+            discoveryEngine
+        });
+        console.log("UI initialized.");
+
+        console.log("Application bootstrapped successfully. Ready for operations.");
+
+    } catch (error) {
+        console.error("Failed to bootstrap application:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', bootstrapApplication);
+```
+
+#### **ជំហានទី 1.7.2: ធ្វើបច្ចុប្បន្នភាព `src/core/events/EventRegistry.js` (Update Parameters & Add TECH_DEBT Note)**
+
+`EventRegistry.js` នឹងត្រូវបានកែប្រែដើម្បីលែងទទួល `storage` parameter ហើយបន្ថែម `TECH_DEBT` note ។
+
+```javascript
+// src/core/events/EventRegistry.js - UPDATED for Phase 3.5 Final Freeze Cleanup
+import { eventBus, EventTypes } from './EventBus.js';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * Registers all application event handlers.
+ * This centralizes event subscriptions and decouples index.js from knowing specific engine logic.
+ * @param {object} dependencies - Object containing instances of engines/services/repositories that need to listen to events.
+ */
+export function registerEventHandlers(dependencies) {
+    // UPDATED: Removed 'storage' from dependencies destructuring
+    const { intelligenceEngine, jobRepository } = dependencies;
+
+    console.log("EventRegistry: Registering event handlers...");
+
+    // TECH_DEBT: For Phase 4, extract JobDispatcher logic from here.
+    // EventRegistry should only register handlers, not manage job lifecycle (retry, status updates).
+    // The JobDispatcher would subscribe to MOMENT_CREATED, create/update jobs, and dispatch to IntelligenceWorker.
+
+    // Subscribe IntelligenceEngine to MOMENT_CREATED event
+    eventBus.on(EventTypes.MOMENT_CREATED, async (payload) => {
+        const { momentId, videoId } = payload;
+        const JOB_RETRY_LIMIT = 3;
+
+        console.log(`EventRegistry: Received MOMENT_CREATED event for Moment ID: ${momentId}. Dispatching intelligence job.`);
+
+        let job = {
+            jobId: uuidv4(),
+            eventType: EventTypes.MOMENT_CREATED,
+            momentId: momentId,
+            videoId: videoId,
+            status: 'pending',
+            retryCount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            errorLogs: []
+        };
+        job = await jobRepository.create(job);
+        console.log(`EventRegistry: Job ${job.jobId} for Moment ${momentId} created and persisted.`);
+
+        const processJob = async (currentJobToProcess) => { // Rename for clarity
+            await jobRepository.update(currentJobToProcess.jobId, { status: 'processing', updatedAt: new Date().toISOString() });
+            try {
+                await intelligenceEngine.analyzeMomentForIntelligence(currentJobToProcess);
+                await jobRepository.update(currentJobToProcess.jobId, { status: 'completed', updatedAt: new Date().toISOString() });
+                console.log(`EventRegistry: Intelligence job ${currentJobToProcess.jobId} for Moment ${currentJobToProcess.momentId} completed.`);
+            } catch (error) {
+                console.error(`EventRegistry: Intelligence job ${currentJobToProcess.jobId} for Moment ${currentJobToProcess.momentId} failed:`, error.message);
+
+                const newErrorLog = { timestamp: new Date().toISOString(), message: error.message, stack: error.stack };
+                const updatedJobFromRepo = await jobRepository.findById(currentJobToProcess.jobId); // Fetch latest job state
+                const newRetryCount = updatedJobFromRepo.retryCount + 1;
+                // No need to merge errorLogs here, JobRepository will append if given an array (Fix B part 2)
+
+                if (newRetryCount <= JOB_RETRY_LIMIT) {
+                    console.log(`EventRegistry: Retrying job ${currentJobToProcess.jobId}. Retry count: ${newRetryCount}.`);
+                    await jobRepository.update(currentJobToProcess.jobId, {
+                        status: 'retrying',
+                        retryCount: newRetryCount,
+                        errorLogs: [newErrorLog], // Pass only the new error log to be appended by repo (Fix B part 1)
+                        updatedAt: new Date().toISOString()
+                    });
+                    setTimeout(() => processJob({ ...updatedJobFromRepo, retryCount: newRetryCount, errorLogs: [...(updatedJobFromRepo.errorLogs || []), newErrorLog] }), 5000 * newRetryCount);
+                } else {
+                    await jobRepository.update(currentJobToProcess.jobId, {
+                        status: 'failed',
+                        errorLogs: [newErrorLog], // Pass final error log
+                        updatedAt: new Date().toISOString()
+                    });
+                    console.error(`EventRegistry: Job ${currentJobToProcess.jobId} for Moment ${currentJobToProcess.momentId} permanently failed after ${newRetryCount} retries.`);
+                }
+            }
+        };
+
+        setTimeout(() => processJob(job), 0);
+    });
+}
+```
+
+#### **ជំហានទី 1.7.3: ធ្វើបច្ចុប្បន្នភាព `src/repositories/JobRepository.js` (Fix `errorLogs` append bug)**
+
+`JobRepository.js` នឹងត្រូវបានកែប្រែដើម្បី implement `errorLogs` append logic ឱ្យបានត្រឹមត្រូវ។
+
+```javascript
+// src/repositories/JobRepository.js - UPDATED for Phase 3.5: Fix errorLogs append bug
+import { StorageAdapter } from '../storage/StorageAdapter.js';
+
+export class JobRepository {
+    constructor(storageClient) {
+        this.storageClient = storageClient;
+        this.collectionName = 'intelligence_jobs';
+        console.log(`JobRepository: Initialized.`);
+    }
+
+    async create(jobData) {
+        console.log(`JobRepository: Creating job ${jobData.jobId} in storage.`);
+        // Ensure errorLogs is initialized as an empty array if not present
+        const dataToInsert = { ...jobData, errorLogs: jobData.errorLogs || [] };
+        return this.storageClient.insert(this.collectionName, dataToInsert);
+    }
+
+    async findById(jobId) {
+        console.log(`JobRepository: Finding job by ID: ${jobId}.`);
+        return this.storageClient.get(this.collectionName, jobId);
+    }
+
+    async update(jobId, updates) {
+        console.log(`JobRepository: Updating job ${jobId} in storage.`);
+        const existingJob = await this.findById(jobId);
+        if (!existingJob) {
+            throw new Error(`Job ${jobId} not found for update.`);
+        }
+
+        let updatedErrorLogs = existingJob.errorLogs || [];
+        if (updates.errorLogs && Array.isArray(updates.errorLogs)) {
+            // Append new error logs to existing ones
+            updatedErrorLogs = [...updatedErrorLogs, ...updates.errorLogs];
+            delete updates.errorLogs; // Remove from updates object to avoid overwriting
+        }
+
+        const dataToUpdate = { ...updates, errorLogs: updatedErrorLogs };
+        return this.storageClient.update(this.collectionName, jobId, dataToUpdate);
+    }
+
+    async find(query = {}, options = { limit: 10, offset: 0 }) {
+        console.log(`JobRepository: Finding jobs with query: ${JSON.stringify(query)}, options: ${JSON.stringify(options)}.`);
+        return this.storageClient.find(this.collectionName, query, options);
+    }
+}
+```
+
+### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 1.7 (Final Freeze Cleanup)**
+
+ខ្ញុំបានអនុវត្តរាល់ "Minor cleanup" ទាំង 3 ចំណុចដែលអ្នកបានណែនាំ។
+
+*   **Fix C:** Unused `storage` dependency ត្រូវបានដកចេញពី `EventRegistry` ។
+*   **Fix B:** Logic សម្រាប់ `errorLogs` នៅក្នុង `JobRepository` ត្រូវបានកែសម្រួលដើម្បីជៀសវាង `duplicate logs` ដោយ append error log ថ្មីឱ្យបានត្រឹមត្រូវ។
+*   **Fix A:** `TECH_DEBT` note ត្រូវបានបន្ថែមទៅ `EventRegistry.js` ដើម្បីបញ្ជាក់ពីការបំបែក `JobDispatcher` នាពេលអនាគត។
+
+ជាមួយនឹងការកែលម្អទាំងនេះ ខ្ញុំជឿជាក់ថា Phase 3.5 — Step 1 ឥឡូវនេះគឺ **FROZEN ✅** ។ Architecture ឥឡូវនេះមានភាពរឹងមាំខ្លាំង ងាយស្រួលថែទាំ អាចពង្រីកបានខ្ពស់ និងត្រៀមខ្លួនជាស្រេចដើម្បីបន្តទៅ Phase 3.5 — Step 2: Embedding/vector-based duplicate detection ។
+
+
 
