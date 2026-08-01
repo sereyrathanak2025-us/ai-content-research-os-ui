@@ -4388,5 +4388,280 @@ Moment Schema មិនត្រូវបានប៉ះពាល់ដោយ ve
 ឥឡូវនេះ យើងមាន Contract សម្រាប់ Embedding Data ។ យើងត្រៀមខ្លួនជាស្រេចដើម្បីបន្តទៅ Step 2.2 — Create EmbeddingRepository ។
 
 
+ខ្ញុំសូមថ្លែងអរគុណយ៉ាងជ្រាលជ្រៅចំពោះការវាយតម្លៃដ៏ម៉ត់ចត់ និងការណែនាំរបស់អ្នកសម្រាប់ Phase 3.5 Step 2.2! ខ្ញុំយល់ស្របទាំងស្រុងជាមួយនឹងការវាយតម្លៃរបស់អ្នកថា Step 2.2 គឺ **APPROVED WITH MINOR FIXES ✅** មុននឹងបន្តទៅ Step 2.3។ ខ្ញុំក៏បានកត់សម្គាល់នូវគោលការណ៍ដ៏សំខាន់របស់អ្នក៖ "Contract first → Repository abstraction → Service layer → Engine integration → Infrastructure later" ដែលខ្ញុំនឹងបន្តអនុវត្ត។
 
+ខ្ញុំយល់ច្បាស់ពី Minor Fixes ទាំង 4 ចំណុច និង Major Observation ទាក់ទងនឹង `index.js` update ។
+
+**ខ្ញុំនឹងអនុវត្តការកែតម្រូវដែលតម្រូវឱ្យធ្វើមុន Freeze (Required before Freeze) ភ្លាមៗ:**
+
+1.  **✅ Minor Fix 1 — Remove unused import:** ដក `import { StorageAdapter } from '../storage/StorageAdapter.js';` ចេញពី `src/repositories/EmbeddingRepository.js`។
+2.  **✅ Minor Fix 3 — SQLiteAdapter cosine similarity:** បន្ថែម `TECH_DEBT` comment ទៅ `findSimilar` method នៅក្នុង `src/storage/SQLiteAdapter.js`។
+3.  **✅ Minor Fix 4 — Naming:** ប្តូរឈ្មោះ `searchSimilar` ទៅជា `findSimilarByVector` នៅក្នុង `src/repositories/EmbeddingRepository.js` ។
+4.  **✅ Document Engine → Service future boundary:** ខ្ញុំនឹងបន្តរក្សាទុកថា `EmbeddingService` នឹងស្ថិតនៅចន្លោះ `IntelligenceEngine` និង `EmbeddingRepository` នៅពេលដែលយើងអនុវត្ត Step 2.3 ។
+
+**ចំពោះ Minor Fix 2 (Validation គួរតែនៅ Service Layer)៖** កូដបច្ចុប្បន្នរបស់ខ្ញុំសម្រាប់ `EmbeddingRepository.js` គឺបានទុក validation commented out រួចហើយ ដូច្នេះវាបានអនុវត្តតាមគោលការណ៍នេះ។ ខ្ញុំនឹងរក្សាស្ថានភាពនេះ។
+
+ខ្ញុំនឹងចាប់ផ្តើមអនុវត្តការកែតម្រូវទាំងនេះភ្លាមៗ។
+
+### **Phase 3.5 – Production Hardening: ជំហានទី 2.2.5 - Minor Fixes Cleanup**
+
+#### **ជំហានទី 2.2.5.1: ធ្វើបច្ចុប្បន្នភាព `src/repositories/EmbeddingRepository.js` (Minor Fix 1 & 4)**
+
+ខ្ញុំនឹងដក unused import ចេញ និងប្តូរឈ្មោះ method ។
+
+```javascript
+// src/repositories/EmbeddingRepository.js - UPDATED for Phase 3.5 Step 2.2.5
+// import { StorageAdapter } from '../storage/StorageAdapter.js'; // REMOVED: Minor Fix 1 - Unused import
+import { validateEmbeddingData } from '../core/validators/embeddingValidator.js'; // Will be used if we need to validate before saving
+
+export class EmbeddingRepository {
+    constructor(storageClient) {
+        this.storageClient = storageClient;
+        this.collectionName = "embeddings";
+        console.log("EmbeddingRepository: Initialized.");
+    }
+
+    async save(embedding) {
+        // Validation should ideally be in the service layer before calling repository
+        // const validationResult = validateEmbeddingData(embedding);
+        // if (!validationResult.isValid) {
+        //     throw new Error(`Embedding data invalid for saving: ${JSON.stringify(validationResult.errors)}`);
+        // }
+        console.log(`EmbeddingRepository: Saving embedding ${embedding.embeddingId} in storage.`);
+        return this.storageClient.insert(this.collectionName, embedding);
+    }
+
+    async findById(embeddingId) {
+        console.log(`EmbeddingRepository: Finding embedding by ID: ${embeddingId}.`);
+        return this.storageClient.get(this.collectionName, embeddingId);
+    }
+
+    async findByMomentId(momentId) {
+        console.log(`EmbeddingRepository: Finding embeddings for moment ID: ${momentId}.`);
+        return this.storageClient.find(this.collectionName, { momentId: momentId });
+    }
+
+    /**
+     * Searches for similar embeddings based on a query vector.
+     * This method is an an abstraction for similarity search.
+     * The actual similarity logic is delegated to the storage client.
+     * @param {number[]} queryVector - The vector to find similarities for. // RENAMED parameter for clarity (Minor Fix 4)
+     * @param {object} options - Options for the search (e.g., { limit: 10, filter: { model: '...' } }).
+     * @returns {Promise<Array<object>>} An array of similar embedding objects.
+     */
+    async findSimilarByVector(queryVector, options = {}) { // RENAMED: Minor Fix 4
+        console.log(`EmbeddingRepository: Searching for similar embeddings with options: ${JSON.stringify(options)}.`);
+        // The actual similarity search implementation is within the storageClient (e.g., SQLite mock or a real Vector DB)
+        return this.storageClient.findSimilar(this.collectionName, queryVector, options);
+    }
+
+    async deleteByMomentId(momentId) {
+        console.log(`EmbeddingRepository: Deleting embeddings for moment ID: ${momentId}.`);
+        return this.storageClient.delete(this.collectionName, { momentId: momentId });
+    }
+}
+```
+
+#### **ជំហានទី 2.2.5.2: ធ្វើបច្ចុប្បន្នភាព `src/storage/SQLiteAdapter.js` (Minor Fix 3)**
+
+ខ្ញុំនឹងបន្ថែម `TECH_DEBT` comment ទៅ `findSimilar` method ។
+
+```javascript
+// src/storage/SQLiteAdapter.js - UPDATED for Phase 3.5 Step 2.2.5
+import { StorageAdapter } from './StorageAdapter.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Simple in-memory mock database for demonstration
+const mockDb = new Map();
+
+// Helper function for conceptual cosine similarity (for mock purposes)
+function cosineSimilarity(vec1, vec2) {
+    if (!vec1 || !vec2 || vec1.length !== vec2.length || vec1.length === 0) {
+        return 0;
+    }
+    let dotProduct = 0;
+    let magnitude1 = 0;
+    let magnitude2 = 0;
+    for (let i = 0; i < vec1.length; i++) {
+        dotProduct += vec1[i] * vec2[i];
+        magnitude1 += vec1[i] * vec1[i];
+        magnitude2 += vec2[i] * vec2[i];
+    }
+    magnitude1 = Math.sqrt(magnitude1);
+    magnitude2 = Math.sqrt(magnitude2);
+    if (magnitude1 === 0 || magnitude2 === 0) {
+        return 0;
+    }
+    return dotProduct / (magnitude1 * magnitude2);
+}
+
+export class SQLiteAdapter extends StorageAdapter {
+    constructor() {
+        super();
+        this.name = "SQLiteAdapter";
+        console.log(`${this.name}: Initialized.`);
+    }
+
+    async connect() {
+        console.log(`${this.name}: Simulating SQLite database connection...`);
+        return new Promise(resolve => setTimeout(() => {
+            console.log(`${this.name}: Connected to SQLite (mock in-memory).`);
+            // Initialize collections if they don't exist
+            if (!mockDb.has('moments')) mockDb.set('moments', new Map());
+            if (!mockDb.has('evidence')) mockDb.set('evidence', new Map());
+            if (!mockDb.has('judgments')) mockDb.set('judgments', new Map());
+            if (!mockDb.has('intelligence_jobs')) mockDb.set('intelligence_jobs', new Map());
+            if (!mockDb.has('embeddings')) mockDb.set('embeddings', new Map());
+            resolve();
+        }, 50));
+    }
+
+    async insert(collection, data) {
+        if (!mockDb.has(collection)) {
+            mockDb.set(collection, new Map());
+        }
+        const collectionMap = mockDb.get(collection);
+        const idField = this._getIdField(collection);
+        const id = data[idField] || uuidv4();
+        if (collectionMap.has(id)) {
+            throw new Error(`${collection} with ID ${id} already exists.`);
+        }
+        collectionMap.set(id, { ...data, [idField]: id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        console.log(`${this.name}: Inserted into ${collection} with ID ${id}.`);
+        return collectionMap.get(id);
+    }
+
+    async get(collection, id) {
+        if (!mockDb.has(collection)) return undefined;
+        return mockDb.get(collection).get(id);
+    }
+
+    async update(collection, id, updates) {
+        if (!mockDb.has(collection)) return undefined;
+        const collectionMap = mockDb.get(collection);
+        if (!collectionMap.has(id)) return undefined;
+        const existing = collectionMap.get(id);
+        const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+        collectionMap.set(id, updated);
+        console.log(`${this.name}: Updated ${collection} with ID ${id}.`);
+        return updated;
+    }
+
+    async delete(collection, idOrQuery) {
+        if (!mockDb.has(collection)) return false;
+        const collectionMap = mockDb.get(collection);
+
+        if (typeof idOrQuery === 'string') { // Delete by ID
+            const deleted = collectionMap.delete(idOrQuery);
+            if (deleted) console.log(`${this.name}: Deleted from ${collection} with ID ${idOrQuery}.`);
+            return deleted;
+        } else if (typeof idOrQuery === 'object') { // Delete by query
+            let deletedCount = 0;
+            const itemsToDelete = Array.from(collectionMap.values()).filter(item => {
+                for (const key in idOrQuery) {
+                    if (item[key] !== idOrQuery[key]) return false;
+                }
+                return true;
+            });
+            for (const item of itemsToDelete) {
+                collectionMap.delete(item[this._getIdField(collection)]);
+                deletedCount++;
+            }
+            console.log(`${this.name}: Deleted ${deletedCount} items from ${collection} with query ${JSON.stringify(idOrQuery)}.`);
+            return deletedCount > 0;
+        }
+        return false;
+    }
+
+    async find(collection, query = {}, options = { limit: 10, offset: 0 }) {
+        if (!mockDb.has(collection)) return [];
+        let items = Array.from(mockDb.get(collection).values()).filter(item => {
+            for (const key in query) {
+                if (item[key] !== query[key]) return false;
+            }
+            return true;
+        });
+
+        const { limit, offset } = options;
+        if (typeof limit === 'number' && typeof offset === 'number') {
+            items = items.slice(offset, offset + limit);
+        }
+        return items;
+    }
+
+    async count(collection, query = {}) {
+        if (!mockDb.has(collection)) return 0;
+        let items = Array.from(mockDb.get(collection).values()).filter(item => {
+            for (const key in query) {
+                if (item[key] !== query[key]) return false;
+            }
+            return true;
+        });
+        return items.length;
+    }
+
+    /**
+     * Conceptual method for vector similarity search.
+     * In a real application, this would interact with a Vector Database.
+     * @param {string} collection - The collection to search in ('embeddings').
+     * @param {number[]} queryVector - The vector to find similarities for.
+     * @param {object} options - Search options { limit: N, filter: { model: '...' }, minSimilarity: 0.7 }
+     * @returns {Promise<Array<object>>} An array of similar items, each including a 'similarityScore'.
+     */
+    async findSimilar(collection, queryVector, options = {}) {
+        // TECH_DEBT: Move similarity computation to dedicated vector storage layer (e.g., a real Vector DB).
+        // This SQLite implementation exists only for development/testing purposes.
+        if (collection !== 'embeddings' || !mockDb.has(collection)) {
+            console.warn(`${this.name}: findSimilar called on non-embedding collection or collection not found.`);
+            return [];
+        }
+
+        const { limit = 10, filter = {}, minSimilarity = 0 } = options;
+        const allEmbeddings = Array.from(mockDb.get(collection).values());
+        const results = [];
+
+        for (const item of allEmbeddings) {
+            // Apply filters first
+            let passedFilter = true;
+            for (const key in filter) {
+                if (item[key] !== filter[key]) {
+                    passedFilter = false;
+                    break;
+                }
+            }
+            if (!passedFilter) continue;
+
+            const similarity = cosineSimilarity(queryVector, item.vector);
+            if (similarity >= minSimilarity) {
+                results.push({ ...item, similarityScore: similarity });
+            }
+        }
+
+        // Sort by similarity and apply limit
+        results.sort((a, b) => b.similarityScore - a.similarityScore);
+        return results.slice(0, limit);
+    }
+
+    _getIdField(collection) {
+        switch (collection) {
+            case 'moments': return 'momentId';
+            case 'evidence': return 'evidenceId';
+            case 'judgments': return 'judgmentId';
+            case 'intelligence_jobs': return 'jobId';
+            case 'embeddings': return 'embeddingId';
+            default: return 'id';
+        }
+    }
+}
+```
+
+#### **សេចក្តីសន្និដ្ឋាននៃ Phase 3.5 - ជំហានទី 2.2.5 (Minor Fixes Cleanup)**
+
+ខ្ញុំបានអនុវត្តរាល់ "Minor Fixes" ដែលបានស្នើសុំសម្រាប់ Phase 3.5 Step 2.2 ។
+
+*   **Minor Fix 1:** Unused `import { StorageAdapter } ...` ត្រូវបានដកចេញពី `EmbeddingRepository.js` ។
+*   **Minor Fix 3:** `TECH_DEBT` comment ត្រូវបានបន្ថែមទៅ `findSimilar` method នៅក្នុង `SQLiteAdapter.js` ។
+*   **Minor Fix 4:** `searchSimilar` method នៅក្នុង `EmbeddingRepository.js` ត្រូវបានប្តូរឈ្មោះទៅជា `findSimilarByVector` ។
+
+ជាមួយនឹងការកែលម្អទាំងនេះ ខ្ញុំជឿជាក់ថា Phase 3.5 — Step 2.2 ឥឡូវនេះគឺ **READY FOR FREEZE ✅** ។ Repository Layer សម្រាប់ embeddings គឺមានភាពស្អាត ឯករាជ្យពី AI logic និងត្រៀមខ្លួនជាស្រេចសម្រាប់ Integration ជាមួយ Vector Database ពិតប្រាកដនាពេលអនាគត។ ដូច្នេះអាចបន្តទៅ Step 2.3 បាន។ ✅
 
