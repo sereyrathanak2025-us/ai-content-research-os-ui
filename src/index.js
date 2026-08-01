@@ -15,6 +15,17 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...CORS } });
 }
 
+// BUGFIX: some provider calls (Cloudflare's env.AI.run binding) don't accept a
+// fetch-style AbortSignal directly. This generic wrapper races any promise against a
+// timeout so a slow/stuck call fails fast instead of blocking the whole pipeline past
+// the frontend's overall request timeout.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+  ]);
+}
+
 function cleanJson(text) {
   let t = (typeof text === 'string' ? text : JSON.stringify(text)).trim();
   t = t.replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
@@ -354,9 +365,6 @@ const ExplainabilityRecorder = {
 // CAPABILITY REGISTRY & LAYER
 // -----------------------------------------------------------------------------
 
-// FIX: Added a 15-second timeout for each LLM call
-const LLM_CALL_TIMEOUT_MS = 15000; // 15 seconds
-
 // LLM Router Independence
 const LLMRouter = {
   async route(prompt, schema, modelPreference, env) {
@@ -419,61 +427,48 @@ const LLMRouter = {
           switch (provider) {
             case "cloudflare":
               if (!env.AI) throw new Error("Cloudflare AI binding not configured.");
-              try {
-                const cfPromise = env.AI.run(currentModel, {
-                  messages: messages,
-                  max_tokens: 3000,
-                  temperature: 0,
-                  response_format: { type: "json_object" }
-                });
-                const cfResp = await Promise.race([
-                    cfPromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("LLM call timed out (Cloudflare)")), LLM_CALL_TIMEOUT_MS))
-                ]);
-                if (cfResp && (cfResp.response || cfResp.result)) {
-                  responseText = typeof cfResp.response === 'string' ? cfResp.response : JSON.stringify(cfResp.response || cfResp.result);
-                  success = true;
-                }
-              } catch (e) {
-                if (e.name === 'AbortError' || e.message.includes('timed out')) {
-                    throw new Error(`Cloudflare AI call timed out for model ${currentModel}.`);
-                }
-                throw e;
+              const cfResp = await withTimeout(env.AI.run(currentModel, {
+                messages: messages,
+                max_tokens: 3000,
+                temperature: 0,
+                response_format: { type: "json_object" }
+              }), 20000, `Cloudflare AI (${currentModel})`);
+              if (cfResp && (cfResp.response || cfResp.result)) {
+                responseText = typeof cfResp.response === 'string' ? cfResp.response : JSON.stringify(cfResp.response || cfResp.result);
+                success = true;
               }
               break;
 
             case "openrouter":
               if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
-              const orController = new AbortController();
-              const orTimeoutId = setTimeout(() => orController.abort(), LLM_CALL_TIMEOUT_MS);
-              try {
-                const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                  method: "POST",
-                  headers: {
-                    "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" // Worker's domain
-                  },
-                  body: JSON.stringify({
-                    model: currentModel,
-                    messages: messages,
-                    max_tokens: 3000,
-                    temperature: 0,
-                    response_format: { type: "json_object" }
-                  }),
-                  signal: orController.signal
-                });
-                if (!orResp.ok) {
-                    const errorBody = await orResp.json().catch(() => ({ message: "Unknown OpenRouter error" }));
-                    throw new Error(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
-                }
-                const orData = await orResp.json();
-                if (orData.choices && orData.choices[0] && orData.choices[0].message) {
-                    responseText = typeof orData.choices[0].message.content === 'string' ? orData.choices[0].message.content : JSON.stringify(orData.choices[0].message.content);
-                    success = true;
-                }
-              } finally {
-                  clearTimeout(orTimeoutId);
+              const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+                  "Content-Type": "application/json",
+                  "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" // Worker's domain
+                },
+                body: JSON.stringify({
+                  model: currentModel,
+                  messages: messages,
+                  max_tokens: 3000,
+                  temperature: 0,
+                  response_format: { type: "json_object" }
+                }),
+                // BUGFIX: free-tier OpenRouter models can queue for a long time with no
+                // upper bound. Without a per-attempt timeout, one slow free model could
+                // stall the whole request past the frontend's timeout. Fail this attempt
+                // fast and let the fallback chain move on.
+                signal: AbortSignal.timeout(20000)
+              });
+              if (!orResp.ok) {
+                  const errorBody = await orResp.json().catch(() => ({ message: "Unknown OpenRouter error" }));
+                  throw new Error(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+              }
+              const orData = await orResp.json();
+              if (orData.choices && orData.choices[0] && orData.choices[0].message) {
+                  responseText = typeof orData.choices[0].message.content === 'string' ? orData.choices[0].message.content : JSON.stringify(orData.choices[0].message.content);
+                  success = true;
               }
               break;
 
@@ -483,33 +478,27 @@ const LLMRouter = {
                   role: msg.role === 'system' ? 'user' : msg.role, // Gemini doesn't have system role directly
                   parts: [{ text: msg.content }]
               }));
-              const googleController = new AbortController();
-              const googleTimeoutId = setTimeout(() => googleController.abort(), LLM_CALL_TIMEOUT_MS);
-              try {
-                const googleResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    contents: googleMessages,
-                    generationConfig: {
-                      responseMimeType: "application/json",
-                      maxOutputTokens: 3000,
-                      temperature: 0,
-                    }
-                  }),
-                  signal: googleController.signal
-                });
-                if (!googleResp.ok) {
-                    const errorBody = await googleResp.json().catch(() => ({ message: "Unknown Gemini error" }));
-                    throw new Error(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
-                }
-                const googleData = await googleResp.json();
-                if (googleData.candidates && googleData.candidates[0] && googleData.candidates[0].content && googleData.candidates[0].content.parts) {
-                    responseText = googleData.candidates[0].content.parts[0].text;
-                    success = true;
-                }
-              } finally {
-                  clearTimeout(googleTimeoutId);
+              const googleResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: googleMessages,
+                  generationConfig: {
+                    responseMimeType: "application/json",
+                    maxOutputTokens: 3000,
+                    temperature: 0,
+                  }
+                }),
+                signal: AbortSignal.timeout(20000)
+              });
+              if (!googleResp.ok) {
+                  const errorBody = await googleResp.json().catch(() => ({ message: "Unknown Gemini error" }));
+                  throw new Error(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+              }
+              const googleData = await googleResp.json();
+              if (googleData.candidates && googleData.candidates[0] && googleData.candidates[0].content && googleData.candidates[0].content.parts) {
+                  responseText = googleData.candidates[0].content.parts[0].text;
+                  success = true;
               }
               break;
 
@@ -1794,7 +1783,11 @@ async function orchestrate(workflowId, inputContract, env) {
   };
 
   try {
-    // FIX: Phase 1 Workflow - Changed to run EditorialDNAExtractionAgent and OpportunityGenerator in parallel
+    // Phase 1 Workflow - Simplified Linear Flow
+    // PERF: these two agents are independent of each other (both only read
+    // input_contract) — running them in parallel instead of sequentially shaves real
+    // latency off the total pipeline time, which matters now that free-tier models can
+    // be slower to respond.
     await Promise.all([
       executeAgent("EditorialDNAExtractionAgent"),
       executeAgent("OpportunityGenerator")
