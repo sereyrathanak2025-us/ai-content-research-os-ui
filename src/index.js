@@ -9,16 +9,219 @@
 // 2) SourceHunterAgent could crash with "Cannot read properties of undefined (reading 'join')"
 //    if the LLM omitted primary_queries or keywords on a platform_strategy.
 
+// --- CORE UTILITIES: Replicated from src/core/* for Worker self-containment ---
+
+// 1. Runtime Configuration (Based on src/config/runtimeConfig.js)
+const RUNTIME_CONFIG = {
+    // Cloudflare Workers pass environment variables via the `env` object in the fetch handler.
+    // For local development, these might still come from process.env if a bundler polyfills it.
+    // We will rely on `env` object directly when used by capabilities/agents.
+    // These constants serve as defaults or for initial setup where `env` is not yet available.
+    ENVIRONMENT: 'production', // Default to production for worker, override via `env` if needed
+    SERVICE_NAME: 'FWG-AI-OS-Worker',
+    APP_VERSION: 'worker-v1.0.0', // Placeholder version
+    GIT_SHA: 'unknown',
+};
+
+// 2. Logger Service (Simplified based on src/core/utils/logger.js)
+// This is a minimal, self-contained logger for the Worker context.
+class ConsoleLogger {
+    constructor(context = {}) {
+        this.context = context;
+        this.name = context.component || 'Worker';
+    }
+
+    _log(level, message, data = {}) {
+        const timestamp = new Date().toISOString();
+        const fullContext = { ...this.context, ...data };
+        // Cloudflare Workers console.log supports multiple arguments
+        console.log(`[${timestamp}] [${this.name}] [${level.toUpperCase()}] ${message}`, fullContext);
+    }
+
+    child(newContext) {
+        return new ConsoleLogger({ ...this.context, ...newContext });
+    }
+
+    info(message, data) { this._log('info', message, data); }
+    warn(message, data) { this._log('warn', message, data); }
+    error(message, data) { this._log('error', message, data); }
+    debug(message, data) {
+        // Only log debug in non-production environments or if explicitly enabled
+        if (RUNTIME_CONFIG.ENVIRONMENT !== 'production') {
+            this._log('debug', message, data);
+        }
+    }
+    critical(message, data) { this._log('critical', message, data); }
+}
+const workerLogger = new ConsoleLogger({ component: 'MainWorker' });
+
+
+// 3. AppError Hierarchy (Replicated from src/core/errors/AppErrors.js)
+class AppError extends Error {
+    constructor(message, code = 'GENERIC_ERROR', context = {}) {
+        super(message);
+        this.name = this.constructor.name;
+        this.code = code;
+        this.context = context;
+        // captureStackTrace is V8 specific, often not available in pure CF Worker runtime.
+        // if (Error.captureStackTrace) { Error.captureStackTrace(this, this.constructor); }
+    }
+}
+class ConfigurationError extends AppError {
+    constructor(message = "Invalid configuration.", code = 'CONFIGURATION_ERROR', context = {}) {
+        super(message, code, context);
+        this.name = 'ConfigurationError';
+    }
+}
+class LLMError extends AppError {
+    constructor(message = "LLM interaction failed", code = 'LLM_FAILURE', context = {}) {
+        super(message, code, context);
+        this.name = 'LLMError';
+    }
+}
+class EmbeddingError extends LLMError { // Specialization of LLMError as it involves LLM for generation
+    constructor(message = "Embedding generation or search failed", code = 'EMBEDDING_FAILURE', context = {}) {
+        super(message, code, context);
+        this.name = 'EmbeddingError';
+    }
+}
+class ValidationError extends AppError {
+    constructor(message = "Validation failed", details = {}, code = 'VALIDATION_ERROR', context = {}) {
+        super(message, code, { ...context, details });
+        this.name = 'ValidationError';
+    }
+}
+class JobProcessingError extends AppError {
+    constructor(message = "Job processing failed", code = 'JOB_PROCESSING_FAILURE', context = {}) {
+        super(message, code, context);
+        this.name = 'JobProcessingError';
+    }
+}
+class RepositoryError extends AppError {
+    constructor(message = "Repository operation failed", code = 'REPOSITORY_FAILURE', context = {}) {
+        super(message, code, context);
+        this.name = 'RepositoryError';
+    }
+}
+class MomentNotFoundError extends AppError {
+    constructor(message = "Moment not found", momentId, code = 'MOMENT_NOT_FOUND', context = {}) {
+        super(message, code, { ...context, momentId });
+        this.name = 'MomentNotFoundError';
+    }
+}
+class DuplicateLockError extends AppError {
+    constructor(message = "Job cannot acquire lock as another job is processing the same moment", lockKey, code = 'DUPLICATE_LOCK_ERROR', context = {}) {
+        super(message, code, { ...context, lockKey });
+        this.name = 'DuplicateLockError';
+    }
+}
+class LLMResponseFormatError extends LLMError {
+    constructor(message = "LLM response format invalid", code = 'LLM_RESPONSE_FORMAT_ERROR', context = {}) {
+        super(message, code, context);
+        this.name = 'LLMResponseFormatError';
+    }
+}
+
+
+// 4. MetricsCollector (Replicated from src/core/utils/metrics.js)
+// Note: This is an in-memory collector. For real production, integrate with external
+// metrics services (e.g., StatsD, Prometheus exporter) via Cloudflare Workers bindings.
+const ALLOWED_METRIC_LABELS = [
+    'component', 'engine', 'profile', 'model', 'provider', 'eventType',
+    'status', 'errorType', 'reason', 'isRetryable', 'retryCount', 'resultsCount',
+    'metricName', 'policy'
+];
+
+class MetricsCollector {
+    constructor(loggerInstance) {
+        if (!loggerInstance) {
+            throw new ConfigurationError("MetricsCollector requires a logger instance.", 'METRICS_CONFIG_ERROR');
+        }
+        this.counters = {};
+        this.histograms = {};
+        this.gauges = {};
+        this.logger = loggerInstance.child({ component: 'MetricsCollector' });
+        this.name = 'MetricsCollector';
+        this.logger.info(`${this.name}: Initialized.`);
+    }
+
+    _getMetricKey(name, labels) {
+        const filteredLabels = {};
+        for (const key in labels) {
+            if (Object.prototype.hasOwnProperty.call(labels, key)) {
+                if (ALLOWED_METRIC_LABELS.includes(key)) {
+                    const labelValue = labels[key];
+                    if (typeof labelValue === 'string' || typeof labelValue === 'number' || typeof labelValue === 'boolean') {
+                        filteredLabels[key] = labelValue;
+                    } else {
+                        this.logger.debug(`Non-primitive label value for key '${key}' in metric '${name}' was converted to string.`, { labelKey: key, metricName: name, originalValueType: typeof labelValue });
+                        filteredLabels[key] = `${labelValue}`;
+                    }
+                } else {
+                    this.logger.debug(`High cardinality label '${key}' for metric '${name}' was filtered out.`, { labelKey: key, metricName: name });
+                }
+            }
+        }
+        if (Object.keys(filteredLabels).length === 0) return name;
+        const sortedLabels = Object.keys(filteredLabels).sort().map(key => `${key}=${filteredLabels[key]}`).join(',');
+        return `${name}{${sortedLabels}}`;
+    }
+
+    increment(name, value = 1, labels = {}) {
+        if (value === 0) { this.logger.debug(`Counter increment for '${name}' is 0, skipping.`, { name, value, labels }); return; }
+        if (!Number.isFinite(value) || value < 0) { throw new AppError(`Invalid value for counter '${name}'. Must be a non-negative, finite number.`, 'METRIC_VALUE_ERROR', { name, value }); }
+        const key = this._getMetricKey(name, labels);
+        this.counters[key] = (this.counters[key] || 0) + value;
+        this.logger.debug(`Incremented counter: ${name}`, { value, labels, current: this.counters[key] });
+    }
+
+    observe(name, value, labels = {}) {
+        if (!Number.isFinite(value)) { throw new AppError(`Invalid value for histogram '${name}'. Must be a finite number.`, 'METRIC_VALUE_ERROR', { name, value }); }
+        const key = this._getMetricKey(name, labels);
+        if (!this.histograms[key]) { this.histograms[key] = { count: 0, sum: 0, min: Infinity, max: -Infinity }; }
+        const metric = this.histograms[key];
+        metric.count++; metric.sum += value;
+        metric.min = Math.min(metric.min, value); metric.max = Math.max(metric.max, value);
+        this.logger.debug(`Observed histogram: ${name}`, { value, labels, count: metric.count, sum: metric.sum });
+    }
+
+    setGauge(name, value, labels = {}) {
+        if (!Number.isFinite(value)) { throw new AppError(`Invalid value for gauge '${name}'. Must be a finite number.`, 'METRIC_VALUE_ERROR', { name, value }); }
+        const key = this._getMetricKey(name, labels);
+        this.gauges[key] = value;
+        this.logger.debug(`Set gauge: ${name}`, { value, labels });
+    }
+
+    getMetricsSnapshot() {
+        return {
+            timestamp: new Date().toISOString(),
+            service: RUNTIME_CONFIG.SERVICE_NAME,
+            environment: RUNTIME_CONFIG.ENVIRONMENT,
+            version: RUNTIME_CONFIG.APP_VERSION,
+            git_sha: RUNTIME_CONFIG.GIT_SHA,
+            metrics: {
+                counters: { ...this.counters },
+                histograms: Object.fromEntries(
+                    Object.entries(this.histograms).map(([key, data]) => [
+                        key, { count: data.count, sum: data.sum, min: Number.isFinite(data.min) ? data.min : 0, max: Number.isFinite(data.max) ? data.max : 0, avg: data.count > 0 ? data.sum / data.count : 0 }
+                    ])
+                ),
+                gauges: { ...this.gauges }
+            }
+        };
+    }
+}
+const workerMetricsCollector = new MetricsCollector(workerLogger.child({ component: 'MainWorkerMetrics' }));
+
+
+// --- END CORE UTILITIES ---
+
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...CORS } });
 }
 
-// BUGFIX: some provider calls (Cloudflare's env.AI.run binding) don't accept a
-// fetch-style AbortSignal directly. This generic wrapper races any promise against a
-// timeout so a slow/stuck call fails fast instead of blocking the whole pipeline past
-// the frontend's overall request timeout.
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -29,10 +232,6 @@ function withTimeout(promise, ms, label) {
 function cleanJson(text) {
   let t = (typeof text === 'string' ? text : JSON.stringify(text)).trim();
   t = t.replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
-  // BUGFIX: previously this only ever looked for { }, which silently mangled
-  // any response whose JSON root was an array (e.g. "[{...},{...}]") by
-  // stripping the outer brackets and leaving invalid, comma-separated JSON.
-  // Now we detect whichever root (object or array) actually starts first.
   const firstBrace = t.indexOf("{");
   const firstBracket = t.indexOf("[");
   let s = -1, e = -1;
@@ -45,86 +244,79 @@ function cleanJson(text) {
   return t;
 }
 
-// BUGFIX: some providers' JSON-mode APIs (response_format: json_object) only
-// allow a top-level JSON *object*, so even when a prompt asks for "a JSON
-// array", the model may wrap it, e.g. { "missions": [...] } or { "result": [...] }.
-// This coerces that shape back into a plain array so callers can safely use
-// array methods (.sort, .map, .flatMap, etc.) without crashing.
 function coerceToArray(data) {
   if (Array.isArray(data)) return data;
   if (data && typeof data === 'object') {
     const arrayValues = Object.values(data).filter(v => Array.isArray(v));
     if (arrayValues.length > 0) {
-      // Prefer the longest array in case of multiple array-valued keys
       return arrayValues.reduce((a, b) => (b.length > a.length ? b : a));
     }
   }
   return [];
 }
 
-// BUGFIX: the 'fails' knowledge base plugin (gym fails, pranks, instant karma, etc.)
-// was unconditionally injected into every single research run's prompts, regardless
-// of the actual topic. That's why unrelated "gym prank"/"fail" clips showed up mixed
-// into results for completely unrelated topics like "don't trust your eyes illusions"
-// — the LLM was explicitly told to "integrate keywords from the fails plugin if
-// relevant", and it often did even when the topic had nothing to do with fails.
-// This checks whether the topic/creative brief actually relates to a plugin's theme
-// before including its keywords, so niche plugins stop polluting unrelated research.
 const PLUGIN_TRIGGER_WORDS = {
   fails: ["fail", "fails", "prank", "karma", "clumsy", "embarrass", "blooper", "epic fail", "instant karma"]
 };
 function isPluginRelevant(pluginName, ...texts) {
   const triggers = PLUGIN_TRIGGER_WORDS[pluginName];
-  if (!triggers) return true; // unknown plugin: no gating, include as before
+  if (!triggers) return true;
   const haystack = texts.filter(Boolean).join(" ").toLowerCase();
   return triggers.some(word => haystack.includes(word));
 }
 
 // -----------------------------------------------------------------------------
-// YOUTUBE CHANNEL HELPERS — used by EditorialDNAExtractionAgent
-// FEATURE: previously "Style DNA Sources" (reference channel links) were only ever
-// passed to the LLM as a literal text string ("reference channels: youtube.com/@x") —
-// the AI never actually saw what those channels post. These helpers fetch the REAL,
-// current videos from a channel via the YouTube Data API so the LLM can infer an
-// actual editorial pattern (clip length, format, emotion, editing style) from real
-// evidence instead of guessing from a URL.
+// YOUTUBE CHANNEL HELPERS
 // -----------------------------------------------------------------------------
 function parseYouTubeChannelRef(rawUrl) {
   let u = (rawUrl || "").trim();
   u = u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/^m\./i, "").replace(/^youtube\.com\//i, "");
-  u = u.split(/[?#]/)[0]; // drop query/hash
-  u = u.replace(/\/+$/, ""); // drop trailing slash
+  u = u.split(/[?#]/)[0];
+  u = u.replace(/\/+$/, "");
   if (u.startsWith("@")) return { type: "handle", value: u.split("/")[0] };
   if (u.startsWith("channel/")) return { type: "id", value: u.slice("channel/".length).split("/")[0] };
   if (u.startsWith("c/")) return { type: "handle", value: "@" + u.slice("c/".length).split("/")[0] };
   if (u.startsWith("user/")) return { type: "user", value: u.slice("user/".length).split("/")[0] };
   if (rawUrl.trim().startsWith("@")) return { type: "handle", value: rawUrl.trim().split("/")[0] };
-  // Bare name with no recognizable prefix: try it as a handle.
   const bare = u.split("/")[0];
   return bare ? { type: "handle", value: bare.startsWith("@") ? bare : "@" + bare } : null;
 }
 
-async function resolveYouTubeChannelId(ref, apiKey) {
+async function resolveYouTubeChannelId(ref, apiKey, logger, metricsCollector) { // Added logger, metricsCollector
   if (!ref) return null;
   if (ref.type === "id") return ref.value;
+  const startTime = Date.now();
+  let status = 'failed';
+  let errorType = 'UnknownError';
   try {
     const param = ref.type === "user" ? "forUsername" : "forHandle";
     const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&${param}=${encodeURIComponent(ref.value)}&key=${apiKey}`);
     if (resp.ok) {
       const data = await resp.json();
-      if (data.items && data.items[0]) return data.items[0].id;
+      if (data.items && data.items[0]) {
+        status = 'success';
+        return data.items[0].id;
+      }
     }
-    // Fallback: search by name (handles legacy custom URLs / misc formats).
     const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(ref.value)}&key=${apiKey}`);
     if (searchResp.ok) {
       const searchData = await searchResp.json();
       const item = searchData.items && searchData.items[0];
-      if (item) return item.snippet?.channelId || item.id?.channelId || null;
+      if (item) {
+        status = 'success';
+        return item.snippet?.channelId || item.id?.channelId || null;
+      }
     }
+    status = 'not_found';
+    return null;
   } catch (e) {
-    console.warn("resolveYouTubeChannelId failed:", e.message);
+    logger.warn("resolveYouTubeChannelId failed:", { error: e.message, ref: ref }); // Updated logger
+    errorType = e.name || 'YouTubeAPIError';
+    throw e;
+  } finally {
+    metricsCollector.observe('youtube_channel_resolve_latency_ms', Date.now() - startTime, { status: status, errorType: errorType, component: 'YouTubeHelpers' });
+    metricsCollector.increment('youtube_channel_resolve_total', 1, { status: status, component: 'YouTubeHelpers' });
   }
-  return null;
 }
 
 function parseISO8601Duration(iso) {
@@ -134,23 +326,42 @@ function parseISO8601Duration(iso) {
   return h * 3600 + mi * 60 + s;
 }
 
-async function fetchRecentVideosForChannel(channelId, apiKey, maxResults) {
+async function fetchRecentVideosForChannel(channelId, apiKey, maxResults, logger, metricsCollector) { // Added logger, metricsCollector
+  const startTime = Date.now();
+  let status = 'failed';
+  let errorType = 'UnknownError';
+  let videoCount = 0;
+
   try {
     const chResp = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`);
-    if (!chResp.ok) return [];
+    if (!chResp.ok) {
+      throw new AppError(`YouTube channels API failed with status ${chResp.status}`, 'YOUTUBE_CHANNELS_API_FAILED', { status: chResp.status });
+    }
     const chData = await chResp.json();
     const uploadsPlaylistId = chData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploadsPlaylistId) return [];
+    if (!uploadsPlaylistId) {
+      status = 'no_uploads_playlist';
+      return [];
+    }
 
     const plResp = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`);
-    if (!plResp.ok) return [];
+    if (!plResp.ok) {
+      throw new AppError(`YouTube playlist items API failed with status ${plResp.status}`, 'YOUTUBE_PLAYLIST_API_FAILED', { status: plResp.status });
+    }
     const plData = await plResp.json();
     const videoIds = (plData.items || []).map(i => i.contentDetails?.videoId).filter(Boolean);
-    if (videoIds.length === 0) return [];
+    if (videoIds.length === 0) {
+      status = 'no_videos_in_playlist';
+      return [];
+    }
 
     const vidResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(",")}&key=${apiKey}`);
-    if (!vidResp.ok) return [];
+    if (!vidResp.ok) {
+      throw new AppError(`YouTube videos API failed with status ${vidResp.status}`, 'YOUTUBE_VIDEOS_API_FAILED', { status: vidResp.status });
+    }
     const vidData = await vidResp.json();
+    status = 'success';
+    videoCount = vidData.items.length;
     return (vidData.items || []).map(v => ({
       title: v.snippet.title,
       description: (v.snippet.description || "").slice(0, 200),
@@ -158,8 +369,12 @@ async function fetchRecentVideosForChannel(channelId, apiKey, maxResults) {
       views: parseInt(v.statistics?.viewCount || "0", 10)
     }));
   } catch (e) {
-    console.warn("fetchRecentVideosForChannel failed:", e.message);
-    return [];
+    logger.warn("fetchRecentVideosForChannel failed:", { error: e.message, channelId: channelId }); // Updated logger
+    errorType = e.name || 'YouTubeAPIError';
+    throw e;
+  } finally {
+    metricsCollector.observe('youtube_fetch_recent_videos_latency_ms', Date.now() - startTime, { status: status, errorType: errorType, videoCount: videoCount, component: 'YouTubeHelpers' });
+    metricsCollector.increment('youtube_fetch_recent_videos_total', 1, { status: status, component: 'YouTubeHelpers' });
   }
 }
 
@@ -202,29 +417,23 @@ const KNOWLEDGE_BASE_PLUGINS = {
     },
     policy_rules: {
       MIN_EVIDENCE_QUALITY_SCORE: 60,
-      MAX_COPYRIGHT_RISK_SCORE: 70, // 0-100, 100 is highest risk
+      MAX_COPYRIGHT_RISK_SCORE: 70,
       MIN_PLATFORM_DIVERSITY: 2,
       MAX_DUPLICATION_PERCENT: 5,
       NO_COMPILATION_KEYWORDS: ["compilation", "best of", "top 10", "epic moments"],
       NO_RANKING_KEYWORDS: ["rank", "#1", "worst", "best"],
     },
-    // FEATURE: what actually makes a moment grab attention — used to steer LLM query
-    // generation toward the MECHANISM of virality, not just a topic label.
     hook_types: [
       "Expectation violated", "Object suddenly breaks", "Animal interrupts",
       "Perfect timing", "Optical illusion", "Transformation",
       "Impossible skill", "Chain reaction", "Instant reversal", "Delayed realization"
     ],
-    // FEATURE: original single-moment footage overwhelmingly comes from a small set of
-    // raw/unedited source types — steering search toward these (rather than "funny
-    // fails" generically) surfaces original clips instead of other creators' edits.
     original_source_types: [
       "Reddit post", "Local news clip", "Instagram reel", "TikTok creator upload",
       "Personal vlog", "Bodycam footage", "Dashcam footage",
       "Security camera footage", "Livestream clip"
     ]
   },
-  // Example Plugin: 'fails'
   fails: {
     content_taxonomy: ["Funny Fails", "Epic Fails", "Instant Karma", "Unexpected Fails"],
     moment_taxonomy: {
@@ -238,17 +447,6 @@ const KNOWLEDGE_BASE_PLUGINS = {
         "rude people": ["getting what they deserve"]
       }
     },
-    // BUGFIX/FEATURE: previously `discovery_keywords` directly contradicted
-    // policy_rules.NO_COMPILATION_KEYWORDS — e.g. "fail compilation" was a literal
-    // search term here while "compilation" was simultaneously a reject keyword. The
-    // AI was told to search for the very thing it would later filter out, wasting
-    // search quota and tokens on results doomed to be discarded. Also, these were flat
-    // topic-label keywords ("funny fails") rather than MOMENT structures (expectation
-    // -> failure -> reaction) or ORIGINAL-SOURCE signals — so results skewed toward
-    // other creators' already-edited compilation/ranking content instead of raw single
-    // moments. Replaced with moment_patterns: each pattern names the narrative shape of
-    // the moment and gives searchSignals that point at RAW original footage (never
-    // "compilation"/"best of"/"top 10", which are already globally rejected above).
     moment_patterns: [
       {
         pattern: "Expectation -> Failure -> Reaction",
@@ -267,49 +465,41 @@ const KNOWLEDGE_BASE_PLUGINS = {
         searchSignals: ["instant karma clip", "caught on camera reaction", "security footage"]
       }
     ],
-    // ... other plugin-specific data
   }
 };
 
 // -----------------------------------------------------------------------------
 // RUNTIME STATE LAYER (Simulated - In-memory for Phase 1)
+// TODO Architectural Blocker: For Production, this must be persisted using
+// Cloudflare Durable Objects or D1 to ensure state is not lost across Worker invocations.
 // -----------------------------------------------------------------------------
-const workflowStates = {}; // Stores RuntimeState for active workflows { workflow_id: RuntimeState }
+const workflowStates = {};
 
-// Represents a snapshot of the workflow state
 class RuntimeState {
   constructor(id, initialInput) {
     this.workflow_id = id;
     this.timestamp = new Date().toISOString();
-    this.status = "INITIALIZED"; // INITIALIZED, RUNNING, PAUSED, COMPLETED, FAILED
+    this.status = "INITIALIZED";
     this.input_contract = initialInput;
-    this.editorial_dna_profile = null; // Populated by EditorialDNAExtractionAgent, from real channel data
+    this.editorial_dna_profile = null;
     this.editorial_intent = null;
     this.moment_ontology = null;
     this.discovery_missions = [];
-    this.discovery_queue_status = { pending: 0, completed: 0, failed: 0, results: [] }; // results: RawClips[]
+    this.discovery_queue_status = { pending: 0, completed: 0, failed: 0, results: [] };
     this.raw_clips_collected = [];
-    this.ai_insights = null; // Populated by RankingAgent
+    this.ai_insights = null;
     this.validated_clips = [];
     this.scored_clips = [];
     this.curated_clips = [];
     this.narrative_clips = [];
     this.final_ranked_clips = [];
     this.final_report_output = null;
-    this.confidence_journal = []; // [{ agent_id, score, reasoning, timestamp }]
-    this.explainability_journal = []; // [{ agent_id, decision, reason, timestamp, trace_id }]
-    this.agent_execution_log = []; // [{ agent_id, input_hash, output_hash, duration_ms, status, timestamp }]
+    this.confidence_journal = [];
+    this.explainability_journal = [];
+    this.agent_execution_log = [];
     this.global_constraints = initialInput.constraints || {};
   }
 
-  // Returns a new state with updates (immutable concept simulation)
-  // FIX: The previous implementation did `{ ...this, ...newData }`, which produces
-  // a *plain object* — object spread does NOT copy the prototype chain, so the
-  // returned value lost the `.update()` method itself. The very next call to
-  // `currentState.update(...)` in StateAccessCapability then threw
-  // "currentState.update is not a function", crashing the orchestrator right
-  // after the first agent completed. We now clone onto the same prototype so
-  // every future state snapshot remains a real RuntimeState instance.
   update(newData) {
     const newState = Object.assign(
       Object.create(Object.getPrototypeOf(this)),
@@ -323,40 +513,44 @@ class RuntimeState {
 
 // -----------------------------------------------------------------------------
 // EVENT BUS LAYER (Simulated - In-memory for Phase 1)
+// TODO Architectural Blocker: For Production, this must use a persistent
+// message queue (e.g., Cloudflare Queues or Durable Objects) for reliability
+// and guaranteed delivery.
 // -----------------------------------------------------------------------------
-const eventLog = []; // Simple in-memory log of events for debugging
+const eventLog = [];
 
 const EventPublisher = {
-  publish: (type, payload) => {
+  publish: (type, payload, logger, metricsCollector) => { // Added logger, metricsCollector
     const event = { type, payload, timestamp: new Date().toISOString() };
     eventLog.push(event);
-    console.log(`[EVENT BUS] Published: ${type}`, payload);
-    // In a real implementation, this would push to Cloudflare Queues/Durable Objects.
+    logger.debug(`[EVENT BUS] Published: ${type}`, payload); // Updated logger
+    metricsCollector.increment('event_bus_published_total', 1, { eventType: type, component: 'EventBus' });
   }
 };
 
 // -----------------------------------------------------------------------------
 // POLICY LAYER (Simulated - Always pass for Phase 1)
+// TODO Architectural Blocker: For Production, this needs a robust policy
+// evaluation engine with rules loaded from a persistent store, not hardcoded.
 // -----------------------------------------------------------------------------
 const PolicyEngine = {
-  apply: (policyId, data, context) => {
-    // For Phase 1, policies always pass.
-    // In later phases, this will load rules from KB and execute them.
-    console.log(`[POLICY ENGINE] Applied policy: ${policyId} (Always passing in Phase 1)`);
+  apply: (policyId, data, context, logger, metricsCollector) => { // Added logger, metricsCollector
+    logger.debug(`[POLICY ENGINE] Applied policy: ${policyId} (Always passing in Phase 1)`, { policyId, data }); // Updated logger
     context.explainabilityRecorder.record(`Policy '${policyId}' applied: PASSED (Phase 1 simulation)`, { policyId, data });
+    metricsCollector.increment('policy_applied_total', 1, { policyId: policyId, status: 'passed', component: 'PolicyEngine' });
     return { passed: true, reason: "Phase 1: Policy always passes.", confidence_impact: 0 };
   }
 };
 
 // -----------------------------------------------------------------------------
 // EXPLAINABILITY LAYER (Simulated - In-memory for Phase 1)
+// TODO Architectural Blocker: For Production, this needs to persist detailed
+// traces and explanations to a dedicated store (e.g., Cloudflare D1 table).
 // -----------------------------------------------------------------------------
 const ExplainabilityRecorder = {
-  record: (decision, details) => {
-    // In a real implementation, this would persist detailed traces.
-    console.log(`[EXPLAINABILITY] ${decision}`, details);
-    // For Phase 1, we just log to console.
-    // Full traces would be stored in RuntimeState or a dedicated D1 table.
+  record: (decision, details, logger, metricsCollector) => { // Added logger, metricsCollector
+    logger.debug(`[EXPLAINABILITY] ${decision}`, details); // Updated logger
+    metricsCollector.increment('explainability_records_total', 1, { decision: decision, component: 'Explainability' });
   }
 };
 
@@ -365,19 +559,16 @@ const ExplainabilityRecorder = {
 // CAPABILITY REGISTRY & LAYER
 // -----------------------------------------------------------------------------
 
-// LLM Router Independence
 const LLMRouter = {
-  async route(prompt, schema, modelPreference, env) {
+  // TODO Architectural Improvement: Model configurations should ideally be managed
+  // dynamically (e.g., from a central config service or `env` variables for different Worker versions)
+  // rather than hardcoded here. (LLMRouter Hardcoded Models)
+  async route(prompt, schema, modelPreference, env, logger, metricsCollector) {
     const models = {
       cloudflare: {
         id: modelPreference.cloudflare || "@cf/meta/llama-3.1-8b-instruct-fast",
         fallback: ["@cf/meta/llama-3.1-8b-instruct-fast", "@cf/zai-org/glm-4.7-flash"]
       },
-      // BUGFIX: deepseek/deepseek-r1:free and qwen/qwen3-235b-a22b:free both started
-      // returning 404 "This model is unavailable for free" from OpenRouter — their free
-      // tier availability changes without notice. Removed the dead slugs; gpt-oss-20b:free
-      // is confirmed working from live logs, so it leads the chain now. Paid models remain
-      // available as an explicit user choice in the frontend dropdown.
       openrouter: {
         id: modelPreference.openrouter || "openai/gpt-oss-20b:free",
         fallback: [
@@ -388,64 +579,56 @@ const LLMRouter = {
         ]
       },
       google: {
-        // BUGFIX: "gemini-1.5-flash-latest" alias was returning 404 "not found for API
-        // version v1beta" — Google has retired that alias. Using current model IDs with
-        // multiple fallbacks (including the older "-latest"-free naming) for resilience
-        // against further model deprecations.
         id: modelPreference.google || "gemini-2.0-flash",
         fallback: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
       },
-      // Add other providers as needed: github, huggingface, etc.
     };
 
     const preferredProvider = modelPreference.provider || "cloudflare";
-    const attempts = [preferredProvider];
-    // Add other providers as fallback if preferred fails
-    if (preferredProvider !== "cloudflare") attempts.push("cloudflare");
-    if (preferredProvider !== "openrouter") attempts.push("openrouter");
-    if (preferredProvider !== "google") attempts.push("google");
-
+    const attempts = [...new Set([preferredProvider, "cloudflare", "openrouter", "google"])];
 
     let lastError = null;
-    // BUGFIX: with up to 11 total models across 3 providers, each individually timing
-    // out at 20s, a single agent's LLM call could take 200s+ in the worst case (every
-    // model failing/timing out) — multiplied across 6 agents in the pipeline, this
-    // could genuinely never finish within any reasonable frontend timeout. Cap the
-    // TOTAL time this route() call is allowed to spend trying models, regardless of how
-    // many are configured — once the budget is spent, stop and surface the last error
-    // immediately instead of continuing to burn time on remaining fallbacks.
     const routeStartTime = Date.now();
     const ROUTE_TIME_BUDGET_MS = 25000;
 
+    metricsCollector.increment('llm_router_route_total', 1, { preferredProvider: preferredProvider, component: 'LLMRouter' });
+
     outerLoop:
-    for (const provider of [...new Set(attempts)]) { // Use Set to ensure unique attempts
+    for (const provider of attempts) {
       const modelCfg = models[provider];
-      if (!modelCfg) continue; // Skip if provider config not found
+      if (!modelCfg) {
+        logger.debug(`LLM Router: Skipping unknown provider config for '${provider}'.`);
+        continue;
+      }
 
       const modelList = [modelCfg.id, ...(modelCfg.fallback || [])].filter(Boolean);
 
       for (const currentModel of modelList) {
         if (Date.now() - routeStartTime > ROUTE_TIME_BUDGET_MS) {
-          console.warn(`LLM Router: time budget (${ROUTE_TIME_BUDGET_MS}ms) exceeded, stopping fallback attempts early.`);
+          logger.warn(`LLM Router: time budget (${ROUTE_TIME_BUDGET_MS}ms) exceeded, stopping fallback attempts early.`, { remainingTime: ROUTE_TIME_BUDGET_MS - (Date.now() - routeStartTime) });
+          metricsCollector.increment('llm_router_budget_exceeded_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
           break outerLoop;
         }
         try {
           let responseText = "";
           let success = false;
+          let inputTokens = 0;
+          let outputTokens = 0;
 
           const messages = [
             { role: "system", content: "You are a viral content research analyst. Always respond with valid JSON only, no markdown, no extra text. Ensure JSON is properly formatted and complete. Adhere strictly to the provided JSON schema." },
             { role: "user", content: prompt }
           ];
+          
+          inputTokens = messages.reduce((sum, msg) => sum + (msg.content?.length || 0) + (msg.parts?.[0]?.text?.length || 0), 0) / 4;
+
+          metricsCollector.increment('llm_call_attempt_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
 
           switch (provider) {
             case "cloudflare":
-              if (!env.AI) throw new Error("Cloudflare AI binding not configured.");
+              if (!env.AI) throw new ConfigurationError("Cloudflare AI binding not configured.", 'CF_AI_BINDING_MISSING');
               const cfResp = await withTimeout(env.AI.run(currentModel, {
-                messages: messages,
-                max_tokens: 3000,
-                temperature: 0,
-                response_format: { type: "json_object" }
+                messages: messages, max_tokens: 3000, temperature: 0, response_format: { type: "json_object" }
               }), 20000, `Cloudflare AI (${currentModel})`);
               if (cfResp && (cfResp.response || cfResp.result)) {
                 responseText = typeof cfResp.response === 'string' ? cfResp.response : JSON.stringify(cfResp.response || cfResp.result);
@@ -454,30 +637,15 @@ const LLMRouter = {
               break;
 
             case "openrouter":
-              if (!env.OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured.");
+              if (!env.OPENROUTER_API_KEY) throw new ConfigurationError("OpenRouter API key not configured.", 'OPENROUTER_API_KEY_MISSING');
               const orResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-                  "Content-Type": "application/json",
-                  "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" // Worker's domain
-                },
-                body: JSON.stringify({
-                  model: currentModel,
-                  messages: messages,
-                  max_tokens: 3000,
-                  temperature: 0,
-                  response_format: { type: "json_object" }
-                }),
-                // BUGFIX: free-tier OpenRouter models can queue for a long time with no
-                // upper bound. Without a per-attempt timeout, one slow free model could
-                // stall the whole request past the frontend's timeout. Fail this attempt
-                // fast and let the fallback chain move on.
+                method: "POST", headers: { "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": "https://viral-discovery-proxy.fasterwgseverkh.workers.dev" },
+                body: JSON.stringify({ model: currentModel, messages: messages, max_tokens: 3000, temperature: 0, response_format: { type: "json_object" } }),
                 signal: AbortSignal.timeout(20000)
               });
               if (!orResp.ok) {
                   const errorBody = await orResp.json().catch(() => ({ message: "Unknown OpenRouter error" }));
-                  throw new Error(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+                  throw new LLMError(`OpenRouter API failed: ${orResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`, 'OPENROUTER_API_FAILED', { httpStatus: orResp.status, errorBody: errorBody });
               }
               const orData = await orResp.json();
               if (orData.choices && orData.choices[0] && orData.choices[0].message) {
@@ -487,27 +655,18 @@ const LLMRouter = {
               break;
 
             case "google":
-              if (!env.GEMINI_API_KEY) throw new Error("Gemini API key not configured.");
+              if (!env.GEMINI_API_KEY) throw new ConfigurationError("Gemini API key not configured.", 'GEMINI_API_KEY_MISSING');
               const googleMessages = messages.map(msg => ({
-                  role: msg.role === 'system' ? 'user' : msg.role, // Gemini doesn't have system role directly
-                  parts: [{ text: msg.content }]
+                  role: msg.role === 'system' ? 'user' : msg.role, parts: [{ text: msg.content }]
               }));
               const googleResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${env.GEMINI_API_KEY}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: googleMessages,
-                  generationConfig: {
-                    responseMimeType: "application/json",
-                    maxOutputTokens: 3000,
-                    temperature: 0,
-                  }
-                }),
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: googleMessages, generationConfig: { responseMimeType: "application/json", maxOutputTokens: 3000, temperature: 0, } }),
                 signal: AbortSignal.timeout(20000)
               });
               if (!googleResp.ok) {
                   const errorBody = await googleResp.json().catch(() => ({ message: "Unknown Gemini error" }));
-                  throw new Error(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`);
+                  throw new LLMError(`Gemini API failed: ${googleResp.status} - ${errorBody.message || JSON.stringify(errorBody)}`, 'GEMINI_API_FAILED', { httpStatus: googleResp.status, errorBody: errorBody });
               }
               const googleData = await googleResp.json();
               if (googleData.candidates && googleData.candidates[0] && googleData.candidates[0].content && googleData.candidates[0].content.parts) {
@@ -517,352 +676,462 @@ const LLMRouter = {
               break;
 
             default:
-              throw new Error(`Unsupported LLM provider: ${provider}`);
+              throw new ConfigurationError(`Unsupported LLM provider: ${provider}`, 'UNSUPPORTED_LLM_PROVIDER', { provider: provider });
           }
 
           if (success && responseText.trim()) {
+            outputTokens = responseText.length / 4;
+            metricsCollector.increment('llm_tokens_input_total', inputTokens, { provider: provider, model: currentModel, component: 'LLMRouter' });
+            metricsCollector.increment('llm_tokens_output_total', outputTokens, { provider: provider, model: currentModel, component: 'LLMRouter' });
+
             const cleaned = cleanJson(responseText);
             try {
               const parsedData = JSON.parse(cleaned);
-              return { data: parsedData, provider: provider, model: currentModel, confidence: 0.9 }; // Placeholder confidence
+              metricsCollector.increment('llm_call_success_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
+              return { data: parsedData, provider: provider, model: currentModel, confidence: 0.9 };
             } catch (jsonErr) {
-              // BUGFIX: cheaper models (e.g. Cloudflare's llama-3.1-8b) sometimes produce
-              // near-valid JSON with a trailing comma before a closing brace/bracket —
-              // a single fixable issue that otherwise burns a whole provider attempt.
-              // Try once more with trailing commas stripped before giving up on this model.
               try {
                 const repaired = cleaned.replace(/,(\s*[}\]])/g, "$1");
                 const parsedData = JSON.parse(repaired);
-                console.warn(`JSON repaired (trailing comma) from ${provider}/${currentModel}`);
+                logger.warn(`JSON repaired (trailing comma) from ${provider}/${currentModel}.`, { error: jsonErr.message });
+                metricsCollector.increment('llm_json_repair_success_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
                 return { data: parsedData, provider: provider, model: currentModel, confidence: 0.85 };
               } catch (repairErr) {
-                lastError = new Error(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`);
-                console.warn(lastError.message);
-                // Try next model/provider
+                lastError = new LLMError(`JSON parsing failed from ${provider}/${currentModel}: ${jsonErr.message}. Raw: ${responseText}`, 'LLM_JSON_PARSE_FAILED', { provider, model: currentModel, rawResponse: responseText });
+                logger.error(lastError.message, { error: repairErr.message });
+                metricsCollector.increment('llm_json_repair_failure_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
               }
             }
           } else if (success) {
-            lastError = new Error(`Empty response from ${provider}/${currentModel}.`);
-            console.warn(lastError.message);
+            lastError = new LLMError(`Empty response from ${provider}/${currentModel}.`, 'LLM_EMPTY_RESPONSE', { provider, model: currentModel });
+            logger.warn(lastError.message);
+            metricsCollector.increment('llm_call_empty_response_total', 1, { provider: provider, model: currentModel, component: 'LLMRouter' });
           }
         } catch (e) {
           lastError = e;
-          console.warn(`LLM call failed for ${provider}/${currentModel}:`, e.message);
+          logger.error(`LLM call failed for ${provider}/${currentModel}:`, { error: e.message, stack: e.stack });
+          metricsCollector.increment('llm_call_failure_total', 1, { provider: provider, model: currentModel, errorType: e.name || 'UnknownError', component: 'LLMRouter' });
         }
       }
     }
-    throw new Error("All LLM attempts failed: " + (lastError ? lastError.message : "No models responded."));
+    workerLogger.critical("All LLM attempts failed: " + (lastError ? lastError.message : "No models responded."));
+    throw new LLMError("All LLM attempts failed: " + (lastError ? lastError.message : "No models responded."), 'ALL_LLM_ATTEMPTS_FAILED', { lastError: lastError?.message });
   }
 };
 
 
 const capabilityRegistry = {
-  // 11.1 LLMServiceCapability
   LLMServiceCapability: {
     id: "LLMServiceCapability",
     description: "Executes LLM calls via LLM Router.",
-    execute: async (prompt, schema, modelPreference, env) => {
-      // LLM Router handles model selection based on preferences and availability
-      const { data, provider, model, confidence } = await LLMRouter.route(prompt, schema, modelPreference, env);
-      return { data, provider, model, confidence };
+    execute: async (prompt, schema, modelPreference, env, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const { data, provider, model, confidence } = await LLMRouter.route(prompt, schema, modelPreference, env, logger.child({ component: 'LLMServiceCapability' }), metricsCollector);
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'LLMServiceCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'LLMServiceCapability', component: 'CapabilityRegistry' });
+        return { data, provider, model, confidence };
+      } catch (e) {
+        logger.error(`LLMServiceCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'LLMServiceCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'LLMServiceCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.2 TaxonomyLookupCapability
   TaxonomyLookupCapability: {
     id: "TaxonomyLookupCapability",
     description: "Queries the Knowledge Base for relevant taxonomies, rules, or profiles.",
-    execute: (pluginName, key) => {
-      const plugin = KNOWLEDGE_BASE_PLUGINS[pluginName];
-      if (!plugin) {
-        console.warn(`Knowledge Base Plugin '${pluginName}' not found.`);
-        return null;
+    execute: (pluginName, key, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const plugin = KNOWLEDGE_BASE_PLUGINS[pluginName];
+        if (!plugin) {
+          logger.warn(`Knowledge Base Plugin '${pluginName}' not found.`, { pluginName });
+          metricsCollector.increment('kb_lookup_failure_total', 1, { reason: 'plugin_not_found', pluginName: pluginName, component: 'TaxonomyLookupCapability' });
+          return null;
+        }
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'TaxonomyLookupCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'TaxonomyLookupCapability', component: 'CapabilityRegistry' });
+        return plugin[key] || null;
+      } catch (e) {
+        logger.error(`TaxonomyLookupCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'TaxonomyLookupCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'TaxonomyLookupCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
       }
-      return plugin[key] || null;
     }
   },
-  // 11.3 SearchExecutionCapability
   SearchExecutionCapability: {
     id: "SearchExecutionCapability",
     description: "Interacts with external search APIs (YouTube direct; TikTok and Reddit via Apify).",
-    execute: async (platform, query, filters, env) => {
-      // FIX: LLM-generated platform strings vary in casing ("youtube", "Youtube", "YouTube").
-      // A strict === comparison silently dropped every clip whenever the casing didn't match
-      // exactly. Normalize before comparing.
-      const normalizedPlatform = (platform || "").trim().toLowerCase();
+    execute: async (platform, query, filters, env, logger, metricsCollector) => {
+      const startTime = Date.now();
+      let searchStatus = 'failed';
+      let errorType = 'UnknownError';
+      let resultsCount = 0;
 
-      if (normalizedPlatform === "youtube") {
-        if (!env.YOUTUBE_API_KEY) {
-          console.warn("YouTube search skipped: YOUTUBE_API_KEY not configured on this Worker.");
-          return [];
-        }
+      try {
+        metricsCollector.increment('search_execution_total', 1, { platform: platform, component: 'SearchExecutionCapability' }); // New metric
 
-        // FIX: When filters.max_age_months is missing (LLM omitted the field), the old code
-        // passed `publishedAfter: undefined` straight into URLSearchParams, which stringifies
-        // it to the literal text "undefined" — an invalid ISO date. YouTube's API then
-        // rejected the whole request with a 400, and every single search silently returned
-        // zero clips. We now only add the parameter when we have a real date, and otherwise
-        // default to a sane 12-month window so results aren't accidentally unbounded.
-        const ageMonths = Number(filters.max_age_months) > 0 ? Number(filters.max_age_months) : 12;
-        const publishedAfter = new Date(Date.now() - ageMonths * 30 * 24 * 60 * 60 * 1000).toISOString();
-
-        const paramsObj = {
-          part: "snippet",
-          q: query,
-          key: env.YOUTUBE_API_KEY,
-          maxResults: String(filters.max_results || 10),
-          type: "video",
-          videoDuration: "short",
-          order: "viewCount", // default to viewCount for viral potential
-          publishedAfter: publishedAfter
-        };
-        const params = new URLSearchParams(paramsObj);
-
-        try {
-          const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
-          if (!searchResp.ok) {
-            const errBody = await searchResp.text().catch(() => "");
-            console.warn("YT search failed:", searchResp.status, errBody.slice(0, 300));
+        if (platform.toLowerCase() === "youtube") {
+          if (!env.YOUTUBE_API_KEY) {
+            logger.warn("YouTube search skipped: YOUTUBE_API_KEY not configured on this Worker.", { platform });
+            metricsCollector.increment('search_skipped_total', 1, { platform: 'youtube', reason: 'api_key_missing', component: 'SearchExecutionCapability' });
             return [];
           }
-          const searchData = await searchResp.json();
-          const ids = searchData.items.map(i => i.id.videoId).filter(Boolean).join(",");
-          if (!ids) return [];
-          
-          const detResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${env.YOUTUBE_API_KEY}`);
-          if (!detResp.ok) return [];
-          const detData = await detResp.json();
-          
-          return (detData.items || []).map(v => ({
-            id: v.id,
-            url: `https://www.youtube.com/watch?v=${v.id}`,
-            title: v.snippet.title,
-            platform: "YouTube",
-            creator_handle: v.snippet.channelTitle,
-            channelId: v.snippet.channelId,
-            thumbnail_url: v.snippet.thumbnails?.medium?.url || "",
-            tags: v.snippet.tags || [],
-            description_snippet: (v.snippet.description || "").slice(0, 300),
-            views_approx: parseInt(v.statistics.viewCount || "0", 10),
-            likes_approx: parseInt(v.statistics.likeCount || "0", 10),
-            comments: parseInt(v.statistics.commentCount || "0", 10),
-            published_at: v.snippet.publishedAt,
-            source_type: "YouTube_API"
-          }));
-        } catch (e) {
-          console.warn("YouTube API search failed:", e.message);
-          return [];
-        }
-      }
 
-      // NEW: TikTok via Apify's clockworks/tiktok-scraper Actor.
-      if (normalizedPlatform === "tiktok") {
-        if (!env.APIFY_API_TOKEN) {
-          console.warn("TikTok search skipped: APIFY_API_TOKEN not configured on this Worker.");
-          return [];
-        }
-        try {
-          const apifyUrl = `https://api.apify.com/v2/actors/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(env.APIFY_API_TOKEN)}`;
-          const body = {
-            searchQueries: [query],
-            resultsPerPage: Math.min(Number(filters.max_results) || 10, 30),
-            searchSection: "/video"
+          const ageMonths = Number(filters.max_age_months) > 0 ? Number(filters.max_age_months) : 12;
+          const publishedAfter = new Date(Date.now() - ageMonths * 30 * 24 * 60 * 60 * 1000).toISOString();
+
+          const paramsObj = {
+            part: "snippet", q: query, key: env.YOUTUBE_API_KEY, maxResults: String(filters.max_results || 10),
+            type: "video", videoDuration: "short", order: "viewCount", publishedAfter: publishedAfter
           };
-          const resp = await fetch(apifyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          });
-          if (!resp.ok) {
-            const errBody = await resp.text().catch(() => "");
-            console.warn("TikTok (Apify) search failed:", resp.status, errBody.slice(0, 300));
-            return [];
-          }
-          const items = await resp.json();
-          // Field names follow clockworks/tiktok-scraper's documented dataset item shape.
-          // Wrapped defensively (?? / optional chaining) in case of minor field drift.
-          return (Array.isArray(items) ? items : []).map(v => ({
-            id: v.id || v.videoId || v.webVideoUrl,
-            url: v.webVideoUrl || v.videoUrl || "",
-            title: (v.text || v.desc || "").slice(0, 200),
-            platform: "TikTok",
-            creator_handle: v.authorMeta?.name || v.authorMeta?.nickName || v.author?.uniqueId || "",
-            thumbnail_url: v.videoMeta?.coverUrl || v.covers?.default || "",
-            tags: (v.hashtags || []).map(h => (typeof h === "string" ? h : h.name)).filter(Boolean),
-            description_snippet: (v.text || v.desc || "").slice(0, 300),
-            views_approx: Number(v.playCount || v.videoMeta?.playCount || 0),
-            likes_approx: Number(v.diggCount || 0),
-            comments: Number(v.commentCount || 0),
-            published_at: v.createTimeISO || "",
-            source_type: "TikTok_Apify"
-          })).filter(c => c.url);
-        } catch (e) {
-          console.warn("TikTok (Apify) search failed:", e.message);
-          return [];
-        }
-      }
+          const params = new URLSearchParams(paramsObj);
 
-      // NEW: Reddit via Apify's solidcode/reddit-scraper Actor.
-      if (normalizedPlatform === "reddit") {
-        if (!env.APIFY_API_TOKEN) {
-          console.warn("Reddit search skipped: APIFY_API_TOKEN not configured on this Worker.");
-          return [];
+          try {
+            const searchResp = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+            if (!searchResp.ok) {
+              const errBody = await searchResp.text().catch(() => "");
+              logger.warn("YT search failed:", { status: searchResp.status, errorBody: errBody.slice(0, 300) });
+              throw new RepositoryError(`YouTube search API failed with status ${searchResp.status}`, 'YOUTUBE_SEARCH_API_FAILED', { status: searchResp.status, responseBody: errBody }); // Standardized Error
+            }
+            const searchData = await searchResp.json();
+            const ids = searchData.items.map(i => i.id.videoId).filter(Boolean).join(",");
+            if (!ids) { searchStatus = 'success_no_results'; return []; }
+            
+            const detResp = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${env.YOUTUBE_API_KEY}`);
+            if (!detResp.ok) {
+                const errBody = await detResp.text().catch(() => "");
+                logger.warn("YT details fetch failed:", { status: detResp.status, errorBody: errBody.slice(0, 300) });
+                throw new RepositoryError(`YouTube video details API failed with status ${detResp.status}`, 'YOUTUBE_DETAILS_API_FAILED', { status: detResp.status, responseBody: errBody }); // Standardized Error
+            }
+            const detData = await detResp.json();
+            searchStatus = 'success';
+            resultsCount = detData.items.length;
+            metricsCollector.increment('search_results_total', resultsCount, { platform: 'youtube', component: 'SearchExecutionCapability' });
+            return (detData.items || []).map(v => ({
+              id: v.id, url: `https://www.youtube.com/watch?v=${v.id}`, title: v.snippet.title,
+              platform: "YouTube", creator_handle: v.snippet.channelTitle, channelId: v.snippet.channelId,
+              thumbnail_url: v.snippet.thumbnails?.medium?.url || "", tags: v.snippet.tags || [],
+              description_snippet: (v.snippet.description || "").slice(0, 300),
+              views_approx: parseInt(v.statistics.viewCount || "0", 10),
+              likes_approx: parseInt(v.statistics.likeCount || "0", 10),
+              comments: parseInt(v.statistics.commentCount || "0", 10),
+              published_at: v.snippet.publishedAt, source_type: "YouTube_API"
+            }));
+          } catch (e) {
+            logger.warn("YouTube API search failed:", { error: e.message });
+            errorType = e.name || 'YouTubeAPIError';
+            throw e;
+          }
         }
-        try {
-          const apifyUrl = `https://api.apify.com/v2/actors/solidcode~reddit-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(env.APIFY_API_TOKEN)}`;
-          const body = {
-            searches: [query],
-            searchPosts: true,
-            searchComments: false,
-            searchCommunities: false,
-            searchUsers: false,
-            sort: "relevance",
-            maxItems: Math.min(Number(filters.max_results) || 10, 30),
-            skipComments: true
-          };
-          const resp = await fetch(apifyUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-          });
-          if (!resp.ok) {
-            const errBody = await resp.text().catch(() => "");
-            console.warn("Reddit (Apify) search failed:", resp.status, errBody.slice(0, 300));
+
+        if (platform.toLowerCase() === "tiktok") {
+          if (!env.APIFY_API_TOKEN) {
+            logger.warn("TikTok search skipped: APIFY_API_TOKEN not configured on this Worker.", { platform });
+            metricsCollector.increment('search_skipped_total', 1, { platform: 'tiktok', reason: 'api_key_missing', component: 'SearchExecutionCapability' });
             return [];
           }
-          const items = await resp.json();
-          // recordType discriminator (per actor docs) lets us keep posts only, in case
-          // searchPosts/searchComments settings still return a mixed dataset.
-          const posts = (Array.isArray(items) ? items : []).filter(v => !v.recordType || v.recordType === "post");
-          return posts.map(v => {
-            const permalink = v.permalink || v.url || "";
-            const url = permalink.startsWith("http") ? permalink : `https://www.reddit.com${permalink}`;
-            return {
-              id: v.id || v.postId || url,
-              url,
-              title: v.title || "",
-              platform: "Reddit",
-              creator_handle: v.author || v.username || "",
-              thumbnail_url: (v.thumbnail && v.thumbnail.startsWith("http")) ? v.thumbnail : "",
-              tags: v.subreddit ? [v.subreddit] : [],
-              description_snippet: (v.selftext || v.text || "").slice(0, 300),
-              views_approx: 0,
-              likes_approx: Number(v.score || v.upvotes || 0),
-              comments: Number(v.numComments || v.commentCount || 0),
-              published_at: v.createdAt || v.createdUtc || "",
-              source_type: "Reddit_Apify"
+          try {
+            const apifyUrl = `https://api.apify.com/v2/actors/clockworks~tiktok-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(env.APIFY_API_TOKEN)}`;
+            const body = {
+              searchQueries: [query], resultsPerPage: Math.min(Number(filters.max_results) || 10, 30), searchSection: "/video"
             };
-          }).filter(c => c.url);
-        } catch (e) {
-          console.warn("Reddit (Apify) search failed:", e.message);
-          return [];
+            const resp = await fetch(apifyUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (!resp.ok) {
+              const errBody = await resp.text().catch(() => "");
+              logger.warn("TikTok (Apify) search failed:", { status: resp.status, errorBody: errBody.slice(0, 300) });
+              throw new RepositoryError(`TikTok search API failed with status ${resp.status}`, 'TIKTOK_SEARCH_API_FAILED', { status: resp.status, responseBody: errBody }); // Standardized Error
+            }
+            const items = await resp.json();
+            searchStatus = 'success';
+            resultsCount = items.length;
+            metricsCollector.increment('search_results_total', resultsCount, { platform: 'tiktok', component: 'SearchExecutionCapability' });
+            return (Array.isArray(items) ? items : []).map(v => ({
+              id: v.id || v.videoId || v.webVideoUrl, url: v.webVideoUrl || v.videoUrl || "",
+              title: (v.text || v.desc || "").slice(0, 200), platform: "TikTok",
+              creator_handle: v.authorMeta?.name || v.authorMeta?.nickName || v.author?.uniqueId || "",
+              thumbnail_url: v.videoMeta?.coverUrl || v.covers?.default || "",
+              tags: (v.hashtags || []).map(h => (typeof h === "string" ? h : h.name)).filter(Boolean),
+              description_snippet: (v.text || v.desc || "").slice(0, 300),
+              views_approx: Number(v.playCount || v.videoMeta?.playCount || 0),
+              likes_approx: Number(v.diggCount || 0), comments: Number(v.commentCount || 0),
+              published_at: v.createTimeISO || "", source_type: "TikTok_Apify"
+            })).filter(c => c.url);
+          } catch (e) {
+            logger.warn("TikTok (Apify) search failed:", { error: e.message });
+            errorType = e.name || 'TikTokAPIError';
+            throw e;
+          }
         }
-      }
 
-      return []; // Return empty for unsupported platforms
+        if (platform.toLowerCase() === "reddit") {
+          if (!env.APIFY_API_TOKEN) {
+            logger.warn("Reddit search skipped: APIFY_API_TOKEN not configured on this Worker.", { platform });
+            metricsCollector.increment('search_skipped_total', 1, { platform: 'reddit', reason: 'api_key_missing', component: 'SearchExecutionCapability' });
+            return [];
+          }
+          try {
+            const apifyUrl = `https://api.apify.com/v2/actors/solidcode~reddit-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(env.APIFY_API_TOKEN)}`;
+            const body = {
+              searches: [query], searchPosts: true, searchComments: false, searchCommunities: false, searchUsers: false,
+              sort: "relevance", maxItems: Math.min(Number(filters.max_results) || 10, 30), skipComments: true
+            };
+            const resp = await fetch(apifyUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (!resp.ok) {
+              const errBody = await resp.text().catch(() => "");
+              logger.warn("Reddit (Apify) search failed:", { status: resp.status, errorBody: errBody.slice(0, 300) });
+              throw new RepositoryError(`Reddit search API failed with status ${resp.status}`, 'REDDIT_SEARCH_API_FAILED', { status: resp.status, responseBody: errBody }); // Standardized Error
+            }
+            const items = await resp.json();
+            const posts = (Array.isArray(items) ? items : []).filter(v => !v.recordType || v.recordType === "post");
+            searchStatus = 'success';
+            resultsCount = posts.length;
+            metricsCollector.increment('search_results_total', resultsCount, { platform: 'reddit', component: 'SearchExecutionCapability' });
+            return posts.map(v => {
+              const permalink = v.permalink || v.url || "";
+              const url = permalink.startsWith("http") ? permalink : `https://www.reddit.com${permalink}`;
+              return {
+                id: v.id || v.postId || url, url, title: v.title || "", platform: "Reddit",
+                creator_handle: v.author || v.username || "",
+                thumbnail_url: (v.thumbnail && v.thumbnail.startsWith("http")) ? v.thumbnail : "",
+                tags: v.subreddit ? [v.subreddit] : [],
+                description_snippet: (v.selftext || v.text || "").slice(0, 300),
+                views_approx: 0, likes_approx: Number(v.score || v.upvotes || 0), comments: Number(v.commentCount || 0),
+                published_at: v.createdAt || v.createdUtc || "", source_type: "Reddit_Apify"
+              };
+            }).filter(c => c.url);
+          } catch (e) {
+            logger.warn("Reddit (Apify) search failed:", { error: e.message });
+            errorType = e.name || 'RedditAPIError';
+            throw e;
+          }
+        }
+        searchStatus = 'skipped';
+        return [];
+      } finally {
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'SearchExecutionCapability', status: searchStatus, errorType: errorType, platform: platform, resultsCount: resultsCount, component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_total', 1, { capability: 'SearchExecutionCapability', status: searchStatus, platform: platform, component: 'CapabilityRegistry' });
+      }
     }
   },
-  // 11.4 DataValidationCapability (Simplified for Phase 1)
   DataValidationCapability: {
     id: "DataValidationCapability",
     description: "Applies rules-based validation.",
-    execute: (clips, rules) => {
-      // Phase 1: Simple deduplication by URL
-      const uniqueClips = [];
-      const seenUrls = new Set();
-      for (const clip of clips) {
-        if (!seenUrls.has(clip.url)) {
-          uniqueClips.push(clip);
-          seenUrls.add(clip.url);
+    execute: (clips, rules, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const uniqueClips = [];
+        const seenUrls = new Set();
+        for (const clip of clips) {
+          if (!seenUrls.has(clip.url)) {
+            uniqueClips.push(clip);
+            seenUrls.add(clip.url);
+          }
         }
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'DataValidationCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'DataValidationCapability', component: 'CapabilityRegistry' });
+        return uniqueClips;
+      } catch (e) {
+        logger.error(`DataValidationCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'DataValidationCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'DataValidationCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
       }
-      // Placeholder for actual rule application from KB
-      return uniqueClips;
     }
   },
-  // 11.5 FeatureExtractionCapability (Future)
   FeatureExtractionCapability: {
     id: "FeatureExtractionCapability",
     description: "Future: Extracts features from video/images.",
-    execute: () => {
-      console.log("FeatureExtractionCapability: Not implemented in Phase 1.");
-      return {};
+    execute: (logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        logger.info("FeatureExtractionCapability: Not implemented in Phase 1.");
+        metricsCollector.increment('capability_not_implemented_total', 1, { capability: 'FeatureExtractionCapability', component: 'CapabilityRegistry' });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'FeatureExtractionCapability', status: 'skipped', component: 'CapabilityRegistry' });
+        return {};
+      } catch (e) {
+        logger.error(`FeatureExtractionCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'FeatureExtractionCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'FeatureExtractionCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.6 ScoringAlgorithmCapability (Placeholder for Phase 1)
   ScoringAlgorithmCapability: {
     id: "ScoringAlgorithmCapability",
     description: "Applies predefined scoring algorithms.",
-    execute: (clip, criteria) => {
-      // Phase 1: Simple scoring heuristic
-      return { score: Math.round(Math.random() * 100), reasoning: "Heuristic score in Phase 1." };
+    execute: (clip, criteria, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const score = Math.round(Math.random() * 100);
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ScoringAlgorithmCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'ScoringAlgorithmCapability', component: 'CapabilityRegistry' });
+        return { score: score, reasoning: "Heuristic score in Phase 1." };
+      } catch (e) {
+        logger.error(`ScoringAlgorithmCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ScoringAlgorithmCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'ScoringAlgorithmCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.7 NarrativeConstructionCapability (Placeholder for Phase 1)
   NarrativeConstructionCapability: {
     id: "NarrativeConstructionCapability",
     description: "Applies algorithms or rules to arrange data into a narrative.",
-    execute: (clips, rules) => {
-      // Phase 1: Simple pass-through
-      return clips;
+    execute: (clips, rules, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'NarrativeConstructionCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'NarrativeConstructionCapability', component: 'CapabilityRegistry' });
+        return clips;
+      } catch (e) {
+        logger.error(`NarrativeConstructionCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'NarrativeConstructionCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'NarrativeConstructionCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.8 PersistenceCapability (Simulated in-memory for Phase 1)
   PersistenceCapability: {
     id: "PersistenceCapability",
     description: "Handles saving/loading data to/from Project Memory and Runtime State.",
-    execute: (action, key, data) => {
-      // In Phase 1, just logs. In later phases, would interact with D1/KV.
-      console.log(`[PERSISTENCE] Action: ${action}, Key: ${key}, Data:`, data);
+    execute: async (action, key, data, logger, metricsCollector, env) => {
+      const startTime = Date.now();
+      let status = 'failed';
+      let errorType = 'UnknownError';
+      try {
+        logger.debug(`[PERSISTENCE] Action: ${action}, Key: ${key}, Data:`, data);
+        if (action === "save" && key === "final_report" && env.DB) {
+            // TODO Architectural Blocker: Real D1 write implementation needed.
+            // Placeholder for D1 write. Actual implementation needs to map 'report' to D1 schema.
+            // await env.DB.prepare("INSERT INTO reports (workflow_id, report_data, timestamp) VALUES (?, ?, ?)")
+            //             .bind(data.workflowId, JSON.stringify(data.report), data.timestamp)
+            //             .run();
+            logger.info(`PersistenceCapability: Would save final_report to D1 for workflow ${data.workflowId}`);
+            status = 'success';
+        } else if (action === "save" && key === "final_report" && !env.DB) {
+            logger.warn(`PersistenceCapability: Skipping D1 save for final_report as env.DB is not configured.`);
+            status = 'skipped_no_db';
+        } else {
+            // Other persistence actions (e.g., loading from D1/KV) would go here in future phases.
+            status = 'success'; // Assume success for simulated/logged actions
+        }
+        return;
+      } catch (e) {
+        logger.error(`PersistenceCapability failed: ${e.message}`, { error: e.stack, action: action, key: key });
+        errorType = e.name || 'PersistenceError';
+        throw e;
+      } finally {
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'PersistenceCapability', status: status, action: action, errorType: errorType, component: 'CapabilityRegistry' });
+        if (status === 'success') {
+            metricsCollector.increment('capability_execution_success_total', 1, { capability: 'PersistenceCapability', action: action, component: 'CapabilityRegistry' });
+        } else {
+            metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'PersistenceCapability', action: action, errorType: errorType, component: 'CapabilityRegistry' });
+        }
+      }
     }
   },
-  // 11.9 ConfidenceCalculationCapability (Simplified for Phase 1)
   ConfidenceCalculationCapability: {
     id: "ConfidenceCalculationCapability",
     description: "Computes and propagates confidence scores.",
-    execute: (inputConfidences, agentSpecificFactors) => {
-      // Phase 1: Simple average or fixed score
-      return { score: 85, reasoning: "Phase 1: Heuristic confidence." };
+    execute: (inputConfidences, agentSpecificFactors, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const score = 85;
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ConfidenceCalculationCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'ConfidenceCalculationCapability', component: 'CapabilityRegistry' });
+        return { score: score, reasoning: "Phase 1: Heuristic confidence." };
+      } catch (e) {
+        logger.error(`ConfidenceCalculationCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ConfidenceCalculationCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'ConfidenceCalculationCapability', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.10 PolicyEnforcementCapability (Simplified for Phase 1)
   PolicyEnforcementCapability: {
     id: "PolicyEnforcementCapability",
     description: "Applies policies from the Policy Layer.",
-    execute: (policyId, data, context) => {
-      return PolicyEngine.apply(policyId, data, context);
+    execute: (policyId, data, context, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const result = PolicyEngine.apply(policyId, data, context, logger, metricsCollector); // Pass logger, metrics
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'PolicyEnforcementCapability', status: 'success', policyId: policyId, component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'PolicyEnforcementCapability', component: 'CapabilityRegistry' });
+        return result;
+      } catch (e) {
+        logger.error(`PolicyEnforcementCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'PolicyEnforcementCapability', status: 'failed', policyId: policyId, errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'PolicyEnforcementCapability', errorType: errorType, component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.11 EventPublishingCapability
   EventPublishingCapability: {
     id: "EventPublishingCapability",
     description: "Publishes events to the Event Bus.",
-    execute: (type, payload) => {
-      EventPublisher.publish(type, payload);
+    execute: (type, payload, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        EventPublisher.publish(type, payload, logger, metricsCollector); // Pass logger, metrics
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'EventPublishingCapability', status: 'success', eventType: type, component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'EventPublishingCapability', component: 'CapabilityRegistry' });
+      } catch (e) {
+        logger.error(`EventPublishingCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'EventPublishingCapability', status: 'failed', eventType: type, errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'EventPublishingCapability', errorType: errorType, component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
-  // 11.12 StateAccessCapability
   StateAccessCapability: {
     id: "StateAccessCapability",
     description: "Provides controlled interface for agents to read/write to the Runtime State.",
-    execute: (workflowId, action, data = null) => {
-      const currentState = workflowStates[workflowId];
-      if (!currentState) throw new Error(`Workflow state not found for ID: ${workflowId}`);
-      if (action === "read") {
-        return currentState; // Return current state snapshot
-      } else if (action === "update" && data) {
-        const newState = currentState.update(data);
-        workflowStates[workflowId] = newState; // Update in-memory state
-        return newState;
+    execute: (workflowId, action, data = null, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        const currentState = workflowStates[workflowId];
+        if (!currentState) {
+            throw new MomentNotFoundError(`Workflow state not found for ID: ${workflowId}`, workflowId, 'WORKFLOW_STATE_NOT_FOUND'); // Standardized error
+        }
+        if (action === "read") {
+            metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'StateAccessCapability', status: 'success', action: action, component: 'CapabilityRegistry' });
+            metricsCollector.increment('capability_execution_success_total', 1, { capability: 'StateAccessCapability', action: action, component: 'CapabilityRegistry' });
+            return currentState;
+        } else if (action === "update" && data) {
+            const newState = currentState.update(data);
+            workflowStates[workflowId] = newState;
+            metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'StateAccessCapability', status: 'success', action: action, component: 'CapabilityRegistry' });
+            metricsCollector.increment('capability_execution_success_total', 1, { capability: 'StateAccessCapability', action: action, component: 'CapabilityRegistry' });
+            return newState;
+        }
+        throw new ValidationError(`Invalid action '${action}' for StateAccessCapability.`, 'INVALID_STATE_ACCESS_ACTION', { action }); // Standardized error
+      } catch (e) {
+        logger.error(`StateAccessCapability failed: ${e.message}`, { error: e.stack, workflowId: workflowId, action: action });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'StateAccessCapability', status: 'failed', action: action, errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'StateAccessCapability', action: action, errorType: errorType, component: 'CapabilityRegistry' });
+        throw e;
       }
-      return null;
     }
   },
-  // 11.13 ExplainabilityRecordingCapability
   ExplainabilityRecordingCapability: {
     id: "ExplainabilityRecordingCapability",
     description: "Records decision traces to the Explainability Layer.",
-    execute: (decision, details) => {
-      ExplainabilityRecorder.record(decision, details);
+    execute: (decision, details, logger, metricsCollector) => {
+      const startTime = Date.now();
+      try {
+        ExplainabilityRecorder.record(decision, details, logger, metricsCollector); // Pass logger, metrics
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ExplainabilityRecordingCapability', status: 'success', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_success_total', 1, { capability: 'ExplainabilityRecordingCapability', component: 'CapabilityRegistry' });
+      } catch (e) {
+        logger.error(`ExplainabilityRecordingCapability failed: ${e.message}`, { error: e.stack });
+        metricsCollector.observe('capability_execution_latency_ms', Date.now() - startTime, { capability: 'ExplainabilityRecordingCapability', status: 'failed', errorType: e.name || 'UnknownError', component: 'CapabilityRegistry' });
+        metricsCollector.increment('capability_execution_failure_total', 1, { capability: 'ExplainabilityRecordingCapability', errorType: errorType, component: 'CapabilityRegistry' });
+        throw e;
+      }
     }
   },
 };
@@ -871,8 +1140,7 @@ const capabilityRegistry = {
 // AGENT CONTRACT & IMPLEMENTATIONS
 // -----------------------------------------------------------------------------
 
-// Helper to create AgentContext
-function createAgentContext(workflowId, env) {
+function createAgentContext(workflowId, env, logger, metricsCollector) {
   return {
     workflowId: workflowId,
     knowledge_base: capabilityRegistry.TaxonomyLookupCapability,
@@ -883,21 +1151,12 @@ function createAgentContext(workflowId, env) {
     policy_engine: capabilityRegistry.PolicyEnforcementCapability,
     explainability_recorder: capabilityRegistry.ExplainabilityRecordingCapability,
     env: env, // Pass env to context for capabilities to access bindings
+    logger: logger.child({ component: `AgentContext-${workflowId}` }), // Pass child logger
+    metricsCollector: metricsCollector // Pass metrics collector
   };
 }
 
 const AGENT_REGISTRY = {
-  // (0) Editorial DNA Extraction Agent — NEW
-  // FEATURE: this is the direct response to Dev VOF's feedback — "Style DNA Sources"
-  // (reference channel links) were previously only ever passed to the LLM as a literal
-  // text string; the AI never actually saw what those channels post, so it couldn't
-  // really learn their editorial pattern. This agent fetches REAL recent videos from
-  // each reference channel via the YouTube Data API (title, description, duration,
-  // views) and asks the LLM to infer a structured Editorial DNA profile from that real
-  // evidence — content type, clip type, preferred emotions, clip length range, editing
-  // pattern, source platforms, and an explicit reject list — matching the format Dev
-  // VOF specified. Downstream agents (EditorialIntentAgent, SourceHunterAgent) then use
-  // this profile to guide research and filtering instead of guessing from a topic string.
   EditorialDNAExtractionAgent: {
     id: "EditorialDNAExtractionAgent",
     version: "1.0.0",
@@ -910,123 +1169,134 @@ const AGENT_REGISTRY = {
     read_state_keys: ["input_contract"],
     write_state_keys: ["editorial_dna_profile"],
     run: async (runtimeState, context) => {
-      const { capability_registry, env, explainability_recorder } = context;
+      const { capability_registry, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
       const referenceChannels = (runtimeState.input_contract.referenceChannels || []).map(c => (c || "").trim()).filter(Boolean);
+      
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      const emptyResult = (reason) => ({
-        success: true,
-        result: { editorialDnaProfile: null },
-        metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: 0, explainability_trace_id: 'trace_dna_1' },
-        new_state_data: { editorial_dna_profile: null },
-        events_to_publish: [{ type: "EDITORIAL_DNA_SKIPPED", payload: { reason } }]
-      });
+      const emptyResult = (reason) => {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, status: 'skipped', reason: reason, component: 'AgentRegistry' });
+        agentMetrics.increment('agent_execution_skipped_total', 1, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, reason: reason, component: 'AgentRegistry' });
+        return {
+          success: true,
+          result: { editorialDnaProfile: null },
+          metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: 0, explainability_trace_id: 'trace_dna_1' },
+          new_state_data: { editorial_dna_profile: null },
+          events_to_publish: [{ type: "EDITORIAL_DNA_SKIPPED", payload: { reason } }]
+        };
+      };
 
-      if (referenceChannels.length === 0) {
-        explainability_recorder.execute("EditorialDNAExtractionAgent: No reference channels provided, skipping", {});
-        return emptyResult("no_reference_channels");
-      }
-      if (!env.YOUTUBE_API_KEY) {
-        explainability_recorder.execute("EditorialDNAExtractionAgent: YOUTUBE_API_KEY not configured, skipping", {});
-        return emptyResult("youtube_api_key_missing");
-      }
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, component: 'AgentRegistry' });
 
-      // Resolve each reference channel to real recent video data (capped at 4 channels,
-      // 12 videos each, to keep the LLM prompt a reasonable size and cost).
-      // PERF: process channels in parallel (was a sequential for-loop) — with 2+
-      // reference channels this alone was adding several extra seconds of latency,
-      // contributing to the frontend's request timeout on the expanded pipeline.
-      const channelResults = await Promise.all(referenceChannels.slice(0, 4).map(async (link) => {
-        try {
-          const ref = parseYouTubeChannelRef(link);
-          const channelId = await resolveYouTubeChannelId(ref, env.YOUTUBE_API_KEY);
-          if (!channelId) {
-            explainability_recorder.execute("EditorialDNAExtractionAgent: Could not resolve channel", { link });
+        if (referenceChannels.length === 0) {
+          explainability_recorder.execute("EditorialDNAExtractionAgent: No reference channels provided, skipping", {}, agentLogger, agentMetrics); // Pass logger, metrics
+          return emptyResult("no_reference_channels");
+        }
+        if (!env.YOUTUBE_API_KEY) {
+          explainability_recorder.execute("EditorialDNAExtractionAgent: YOUTUBE_API_KEY not configured, skipping", {}, agentLogger, agentMetrics); // Pass logger, metrics
+          return emptyResult("youtube_api_key_missing");
+        }
+
+        const channelResults = await Promise.all(referenceChannels.slice(0, 4).map(async (link) => {
+          try {
+            const ref = parseYouTubeChannelRef(link);
+            const channelId = await resolveYouTubeChannelId(ref, env.YOUTUBE_API_KEY, agentLogger, agentMetrics); // Pass logger, metrics
+            if (!channelId) {
+              explainability_recorder.execute("EditorialDNAExtractionAgent: Could not resolve channel", { link }, agentLogger, agentMetrics); // Pass logger, metrics
+              return null;
+            }
+            const videos = await fetchRecentVideosForChannel(channelId, env.YOUTUBE_API_KEY, 12, agentLogger, agentMetrics); // Pass logger, metrics
+            return videos.length > 0 ? { channel: link, videos } : null;
+          } catch (e) {
+            agentLogger.warn("EditorialDNAExtractionAgent: failed for", { link: link, error: e.message });
             return null;
           }
-          const videos = await fetchRecentVideosForChannel(channelId, env.YOUTUBE_API_KEY, 12);
-          return videos.length > 0 ? { channel: link, videos } : null;
-        } catch (e) {
-          console.warn("EditorialDNAExtractionAgent: failed for", link, e.message);
-          return null;
+        }));
+        const channelSummaries = channelResults.filter(Boolean);
+
+        if (channelSummaries.length === 0) {
+          explainability_recorder.execute("EditorialDNAExtractionAgent: Could not fetch real data for any reference channel", { referenceChannels }, agentLogger, agentMetrics); // Pass logger, metrics
+          return emptyResult("no_channel_data_fetched");
         }
-      }));
-      const channelSummaries = channelResults.filter(Boolean);
 
-      if (channelSummaries.length === 0) {
-        explainability_recorder.execute("EditorialDNAExtractionAgent: Could not fetch real data for any reference channel", { referenceChannels });
-        return emptyResult("no_channel_data_fetched");
+        const prompt =
+          "You are analyzing REAL, actual recent videos from one or more YouTube creator channels that a user wants to model new content after. " +
+          "This is REAL evidence — not a guess from a channel name. Base your analysis ONLY on what you observe below.\n\n" +
+          "Channel data (channel, then its recent videos with title/description/duration in seconds/views):\n" +
+          JSON.stringify(channelSummaries) + "\n\n" +
+          "Extract a structured Editorial DNA profile per this exact contract:\n" +
+          "- clip_archetypes: SPECIFIC recurring moment types you can infer from these titles (e.g. 'public fail with instant crowd reaction'), not generic labels like 'funny'\n" +
+          "- hook_patterns: how these videos open / grab attention in the first moments (e.g. 'cold open directly on the failure moment, no intro or narration')\n" +
+          "- emotion_patterns: the VIEWER'S EMOTIONAL ARC across a video, as a sequence (e.g. 'confusion -> shock -> laugh'), not a single word\n" +
+          "- reject_patterns: content types this channel's style clearly does NOT do based on what you see (e.g. 'long-form commentary', 'tutorials', 'news')\n" +
+          "- ranking_logic: ONE sentence on what you infer separates a #1 (best) from a #6 (weakest) for this channel's countdown format\n" +
+          "- clip_length_range: object {min_sec, max_sec} — typical length of an individual moment referenced, inferred from video duration/pacing\n" +
+          "- source_platforms: array of platforms this kind of content is typically sourced from (e.g. 'TikTok', 'YouTube Shorts', 'Instagram Reels', 'Reddit videos')\n" +
+          "Be honest: you are inferring this from titles/descriptions/durations, not watching the actual footage. Do not overstate certainty.\n" +
+          "Return ONLY JSON matching this structure.";
+
+        const schema = {
+          type: "object",
+          properties: {
+            clip_archetypes: { type: "array", items: { type: "string" } },
+            hook_patterns: { type: "array", items: { type: "string" } },
+            emotion_patterns: { type: "array", items: { type: "string" } },
+            reject_patterns: { type: "array", items: { type: "string" } },
+            ranking_logic: { type: "string" },
+            clip_length_range: { type: "object", properties: { min_sec: { type: "number" }, max_sec: { type: "number" } } },
+            source_platforms: { type: "array", items: { type: "string" } }
+          },
+          required: ["clip_archetypes", "hook_patterns", "emotion_patterns", "reject_patterns", "ranking_logic", "clip_length_range", "source_platforms"]
+        };
+
+        const { data, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
+        if (error) {
+          agentLogger.warn("EditorialDNAExtractionAgent: LLM failed:", { error: error });
+          throw new LLMError("EditorialDNAExtractionAgent: LLM failed to extract DNA.", 'DNA_LLM_FAILED', { originalError: error }); // Standardized error
+        }
+
+        const dnaProfile = {
+          clip_archetypes: coerceToArray(data?.clip_archetypes), hook_patterns: coerceToArray(data?.hook_patterns), emotion_patterns: coerceToArray(data?.emotion_patterns),
+          reject_patterns: coerceToArray(data?.reject_patterns), ranking_logic: typeof data?.ranking_logic === 'string' ? data.ranking_logic : "",
+          clip_length_range: (data?.clip_length_range && typeof data.clip_length_range === 'object') ? data.clip_length_range : { min_sec: 5, max_sec: 20 },
+          source_platforms: coerceToArray(data?.source_platforms), source_channels: referenceChannels,
+          based_on_real_video_count: channelSummaries.reduce((sum, c) => sum + c.videos.length, 0)
+        };
+
+        explainability_recorder.execute("EditorialDNAExtractionAgent: Extracted DNA profile from real channel data", { dnaProfile, model, provider, confidence }, agentLogger, agentMetrics); // Pass logger, metrics
+        agentStatus = 'completed';
+        return {
+          success: true, result: { editorialDnaProfile: dnaProfile },
+          metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_dna_1' },
+          new_state_data: { editorial_dna_profile: dnaProfile },
+          events_to_publish: [{ type: "EDITORIAL_DNA_EXTRACTED", payload: { channels: referenceChannels.length, videos_analyzed: dnaProfile.based_on_real_video_count } }]
+        };
+      } catch (e) {
+        agentLogger.error("EditorialDNAExtractionAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
       }
-
-      const prompt =
-        "You are analyzing REAL, actual recent videos from one or more YouTube creator channels that a user wants to model new content after. " +
-        "This is REAL evidence — not a guess from a channel name. Base your analysis ONLY on what you observe below.\n\n" +
-        "Channel data (channel, then its recent videos with title/description/duration in seconds/views):\n" +
-        JSON.stringify(channelSummaries) + "\n\n" +
-        "Extract a structured Editorial DNA profile per this exact contract:\n" +
-        "- clip_archetypes: SPECIFIC recurring moment types you can infer from these titles (e.g. 'public fail with instant crowd reaction'), not generic labels like 'funny'\n" +
-        "- hook_patterns: how these videos open / grab attention in the first moments (e.g. 'cold open directly on the failure moment, no intro or narration')\n" +
-        "- emotion_patterns: the VIEWER'S EMOTIONAL ARC across a video, as a sequence (e.g. 'confusion -> shock -> laugh'), not a single word\n" +
-        "- reject_patterns: content types this channel's style clearly does NOT do based on what you see (e.g. 'long-form commentary', 'tutorials', 'news')\n" +
-        "- ranking_logic: ONE sentence on what you infer separates a #1 (best) from a #6 (weakest) for this channel's countdown format\n" +
-        "- clip_length_range: object {min_sec, max_sec} — typical length of an individual moment referenced, inferred from video duration/pacing\n" +
-        "- source_platforms: array of platforms this kind of content is typically sourced from (e.g. 'TikTok', 'YouTube Shorts', 'Instagram Reels', 'Reddit videos')\n" +
-        "Be honest: you are inferring this from titles/descriptions/durations, not watching the actual footage. Do not overstate certainty.\n" +
-        "Return ONLY JSON matching this structure.";
-
-      const schema = {
-        type: "object",
-        properties: {
-          clip_archetypes: { type: "array", items: { type: "string" } },
-          hook_patterns: { type: "array", items: { type: "string" } },
-          emotion_patterns: { type: "array", items: { type: "string" } },
-          reject_patterns: { type: "array", items: { type: "string" } },
-          ranking_logic: { type: "string" },
-          clip_length_range: { type: "object", properties: { min_sec: { type: "number" }, max_sec: { type: "number" } } },
-          source_platforms: { type: "array", items: { type: "string" } }
-        },
-        required: ["clip_archetypes", "hook_patterns", "emotion_patterns", "reject_patterns", "ranking_logic", "clip_length_range", "source_platforms"]
-      };
-
-      const { data, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
-      if (error) {
-        console.warn("EditorialDNAExtractionAgent: LLM failed:", error);
-        return emptyResult("llm_failed");
-      }
-
-      // CONTRACT §1: this exact shape (clip_archetypes/hook_patterns/emotion_patterns/
-      // reject_patterns/ranking_logic) is what every downstream agent reads. No agent
-      // may invent alternate field names for DNA data.
-      const dnaProfile = {
-        clip_archetypes: coerceToArray(data?.clip_archetypes),
-        hook_patterns: coerceToArray(data?.hook_patterns),
-        emotion_patterns: coerceToArray(data?.emotion_patterns),
-        reject_patterns: coerceToArray(data?.reject_patterns),
-        ranking_logic: typeof data?.ranking_logic === 'string' ? data.ranking_logic : "",
-        clip_length_range: (data?.clip_length_range && typeof data.clip_length_range === 'object') ? data.clip_length_range : { min_sec: 5, max_sec: 20 },
-        source_platforms: coerceToArray(data?.source_platforms),
-        source_channels: referenceChannels,
-        based_on_real_video_count: channelSummaries.reduce((sum, c) => sum + c.videos.length, 0)
-      };
-
-      explainability_recorder.execute("EditorialDNAExtractionAgent: Extracted DNA profile from real channel data", { dnaProfile, model, provider, confidence });
-
-      return {
-        success: true,
-        result: { editorialDnaProfile: dnaProfile },
-        metadata: { agent_id: AGENT_REGISTRY.EditorialDNAExtractionAgent.id, version: AGENT_REGISTRY.EditorialDNAExtractionAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_dna_1' },
-        new_state_data: { editorial_dna_profile: dnaProfile },
-        events_to_publish: [{ type: "EDITORIAL_DNA_EXTRACTED", payload: { channels: referenceChannels.length, videos_analyzed: dnaProfile.based_on_real_video_count } }]
-      };
     }
   },
 
-  // (A) Opportunity Generator
   OpportunityGenerator: {
     id: "OpportunityGenerator",
     version: "1.0.0",
     description: "Generates novel, trending, and high-potential Content Opportunity Topics.",
-    input_schema: {}, // Will use global_constraints
+    input_schema: {},
     output_schema: { type: "array", items: { type: "string" } },
     dependencies: [],
     required_capabilities: ["LLMServiceCapability", "TaxonomyLookupCapability", "ConfidenceCalculationCapability", "ExplainabilityRecordingCapability"],
@@ -1034,30 +1304,51 @@ const AGENT_REGISTRY = {
     read_state_keys: ["global_constraints"],
     write_state_keys: ["opportunity_topics"],
     run: async (runtimeState, context) => {
-      const { capability_registry, knowledge_base, env, explainability_recorder } = context;
+      const { capability_registry, knowledge_base, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
-      const topicTaxonomy = knowledge_base.execute('core', 'content_taxonomy');
-      const trendProfiles = knowledge_base.execute('core', 'trend_profiles');
+      const topicTaxonomy = knowledge_base.execute('core', 'content_taxonomy', logger, metricsCollector);
+      const trendProfiles = knowledge_base.execute('core', 'trend_profiles', logger, metricsCollector);
 
-      const prompt = "Based on current trends (e.g., seasonal, evergreen from " + JSON.stringify(trendProfiles) + ") and content categories (" + JSON.stringify(topicTaxonomy) + "), generate 5-8 novel and high-potential \"Ranking\" format video topic ideas. Focus on unique combinations, current relevance, and high replay value. Ensure varied topics. Return ONLY JSON array of strings.";
-      
-      const { data: topics, confidence, error, model, provider } = await llmService.execute(prompt, { type: "array", items: { type: "string" } }, runtimeState.input_contract.model_preference, env);
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.OpportunityGenerator.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      if (error) throw new Error("LLM for OpportunityGenerator failed: " + error);
-      const safeTopics = coerceToArray(topics);
-      explainability_recorder.execute("OpportunityGenerator: Generated topics", { topics: safeTopics, model, provider, confidence });
-      
-      return {
-        success: true,
-        result: { topics: safeTopics },
-        metadata: { agent_id: AGENT_REGISTRY.OpportunityGenerator.id, version: AGENT_REGISTRY.OpportunityGenerator.version, confidence_score: confidence, explainability_trace_id: 'trace_og_1' },
-        new_state_data: { opportunity_topics: safeTopics },
-        events_to_publish: [{ type: "OPPORTUNITIES_GENERATED", payload: { topics: safeTopics } }]
-      };
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.OpportunityGenerator.id, component: 'AgentRegistry' });
+        const prompt = "Based on current trends (e.g., seasonal, evergreen from " + JSON.stringify(trendProfiles) + ") and content categories (" + JSON.stringify(topicTaxonomy) + "), generate 5-8 novel and high-potential \"Ranking\" format video topic ideas. Focus on unique combinations, current relevance, and high replay value. Ensure varied topics. Return ONLY JSON array of strings.";
+        
+        const { data: topics, confidence, error, model, provider } = await llmService.execute(prompt, { type: "array", items: { type: "string" } }, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
+
+        if (error) {
+            agentLogger.warn("LLM for OpportunityGenerator failed:", { error: error });
+            throw new LLMError("LLM for OpportunityGenerator failed: " + error, 'OPPORTUNITY_LLM_FAILED', { originalError: error });
+        }
+        const safeTopics = coerceToArray(topics);
+        explainability_recorder.execute("OpportunityGenerator: Generated topics", { topics: safeTopics, model, provider, confidence }, agentLogger, agentMetrics); // Pass logger, metrics
+        agentStatus = 'completed';
+        return {
+          success: true, result: { topics: safeTopics },
+          metadata: { agent_id: AGENT_REGISTRY.OpportunityGenerator.id, version: AGENT_REGISTRY.OpportunityGenerator.version, confidence_score: confidence, explainability_trace_id: 'trace_og_1' },
+          new_state_data: { opportunity_topics: safeTopics },
+          events_to_publish: [{ type: "OPPORTUNITIES_GENERATED", payload: { topics: safeTopics } }]
+        };
+      } catch (e) {
+        agentLogger.error("OpportunityGenerator failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.OpportunityGenerator.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.OpportunityGenerator.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.OpportunityGenerator.id, errorType: errorType, component: 'AgentRegistry' });
+        }
+      }
     }
   },
 
-  // (B) Editorial Intent Agent
   EditorialIntentAgent: {
     id: "EditorialIntentAgent",
     version: "1.0.0",
@@ -1070,69 +1361,83 @@ const AGENT_REGISTRY = {
     read_state_keys: ["input_contract", "opportunity_topics", "editorial_dna_profile"],
     write_state_keys: ["editorial_intent"],
     run: async (runtimeState, context) => {
-      const { capability_registry, knowledge_base, env, explainability_recorder } = context;
+      const { capability_registry, knowledge_base, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
-      const emotionTaxonomy = knowledge_base.execute('core', 'emotion_taxonomy');
-      const platformProfiles = knowledge_base.execute('core', 'platform_profiles');
-      const contentTaxonomy = knowledge_base.execute('core', 'content_taxonomy'); // General content taxonomy
+      const emotionTaxonomy = knowledge_base.execute('core', 'emotion_taxonomy', logger, metricsCollector);
+      const platformProfiles = knowledge_base.execute('core', 'platform_profiles', logger, metricsCollector);
+      const contentTaxonomy = knowledge_base.execute('core', 'content_taxonomy', logger, metricsCollector);
 
       const { topic, creativeBrief, referenceChannels, constraints } = runtimeState.input_contract;
-      // FEATURE: use the REAL, evidence-based Editorial DNA profile (extracted from
-      // actual channel videos) when available, instead of just the raw channel URL text.
       const dnaProfile = runtimeState.editorial_dna_profile;
 
-      const prompt = "Given the topic \"" + topic + "\", creative brief \"" + creativeBrief + "\", and reference channels \"" + (referenceChannels || 'none') + "\", define the precise Editorial Intent.\n" +
-      (dnaProfile
-        ? "IMPORTANT: an Editorial DNA profile was already extracted from REAL recent videos on the reference channel(s) (based on " + dnaProfile.based_on_real_video_count + " actual videos analyzed): " + JSON.stringify(dnaProfile) + ". Align the Editorial Intent tightly with this real, evidence-based profile — its reject_patterns in particular should directly inform reject_content_types below.\n"
-        : "") +
-      "Consider target emotions (" + JSON.stringify(emotionTaxonomy) + "), platform characteristics (" + JSON.stringify(platformProfiles) + "), and content categories (" + JSON.stringify(contentTaxonomy) + ").\n" +
-      "Think like a human video editor planning a research strategy for THIS SPECIFIC topic — not a generic search. " +
-      "For 'acceptable_event_types', list 5-8 SPECIFIC real-world scenario types that would genuinely satisfy this topic as single short moments (e.g. for \"perfect timing coincidences\": photobombs, object collisions, camera-timing illusions, lucky near-misses — NOT generic restatements of the topic words). " +
-      "For 'reject_content_types', list content categories a search for this topic could easily surface but that DO NOT belong (e.g. DIY/craft tutorials, podcasts, news reports, movie/TV clips, reaction videos, gaming clips, long compilations — pick whichever of these are actually plausible false positives for THIS topic, add others if relevant).\n" +
-      "Output JSON with fields: topic, creative_brief_summary, primary_moment_categories[], acceptable_event_types[], reject_content_types[], target_emotions[], desired_clip_characteristics{}, target_platform_intents[] (platform, specific_criteria, priority_score), target_audience_profile, overall_content_goal.";
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.EditorialIntentAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      const schema = {
-        type: "object",
-        properties: {
-          topic: { type: "string" },
-          creative_brief_summary: { type: "string" },
-          primary_moment_categories: { type: "array", items: { type: "string" } },
-          acceptable_event_types: { type: "array", items: { type: "string" } },
-          reject_content_types: { type: "array", items: { type: "string" } },
-          target_emotions: { type: "array", items: { type: "string" } },
-          desired_clip_characteristics: { type: "object" },
-          target_platform_intents: { type: "array", items: { type: "object" } },
-          target_audience_profile: { type: "string" },
-          overall_content_goal: { type: "string" },
-        },
-        required: ["topic", "creative_brief_summary", "primary_moment_categories", "acceptable_event_types", "reject_content_types", "target_emotions", "desired_clip_characteristics", "target_platform_intents", "target_audience_profile", "overall_content_goal"]
-      };
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.EditorialIntentAgent.id, component: 'AgentRegistry' });
+        const prompt = "Given the topic \"" + topic + "\", creative brief \"" + creativeBrief + "\", and reference channels \"" + (referenceChannels || 'none') + "\", define the precise Editorial Intent.\n" +
+        (dnaProfile
+          ? "IMPORTANT: an Editorial DNA profile was already extracted from REAL recent videos on the reference channel(s) (based on " + dnaProfile.based_on_real_video_count + " actual videos analyzed): " + JSON.stringify(dnaProfile) + ". Align the Editorial Intent tightly with this real, evidence-based profile — its reject_patterns in particular should directly inform reject_content_types below.\n"
+          : "") +
+        "Consider target emotions (" + JSON.stringify(emotionTaxonomy) + "), platform characteristics (" + JSON.stringify(platformProfiles) + "), and content categories (" + JSON.stringify(contentTaxonomy) + ").\n" +
+        "Think like a human video editor planning a research strategy for THIS SPECIFIC topic — not a generic search. " +
+        "For 'acceptable_event_types', list 5-8 SPECIFIC real-world scenario types that would genuinely satisfy this topic as single short moments (e.g. for \"perfect timing coincidences\": photobombs, object collisions, camera-timing illusions, lucky near-misses — NOT generic restatements of the topic words). " +
+        "For 'reject_content_types', list content categories a search for this topic could easily surface but that DO NOT belong (e.g. DIY/craft tutorials, podcasts, news reports, movie/TV clips, reaction videos, gaming clips, long compilations — pick whichever of these are actually plausible false positives for THIS topic, add others if relevant).\n" +
+        "Output JSON with fields: topic, creative_brief_summary, primary_moment_categories[], acceptable_event_types[], reject_content_types[], target_emotions[], desired_clip_characteristics{}, target_platform_intents[] (platform, specific_criteria, priority_score), target_audience_profile, overall_content_goal.";
 
-      const { data: llmData, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
+        const schema = {
+          type: "object",
+          properties: {
+            topic: { type: "string" }, creative_brief_summary: { type: "string" }, primary_moment_categories: { type: "array", items: { type: "string" } },
+            acceptable_event_types: { type: "array", items: { type: "string" } }, reject_content_types: { type: "array", items: { type: "string" } },
+            target_emotions: { type: "array", items: { type: "string" } }, desired_clip_characteristics: { type: "object" },
+            target_platform_intents: { type: "array", items: { type: "object" } }, target_audience_profile: { type: "string" },
+            overall_content_goal: { type: "string" },
+          },
+          required: ["topic", "creative_brief_summary", "primary_moment_categories", "acceptable_event_types", "reject_content_types", "target_emotions", "desired_clip_characteristics", "target_platform_intents", "target_audience_profile", "overall_content_goal"]
+        };
 
-      if (error) throw new Error("LLM for EditorialIntentAgent failed: " + error);
-      
-      const finalEditorialIntent = {
-          ...llmData,
-          topic: llmData.topic || topic, // Fallback to original input
-          creative_brief_summary: llmData.creative_brief_summary || creativeBrief, // Fallback to original input
-          acceptable_event_types: coerceToArray(llmData.acceptable_event_types),
-          reject_content_types: coerceToArray(llmData.reject_content_types)
-      };
+        const { data: llmData, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
 
-      explainability_recorder.execute("EditorialIntentAgent: Generated intent", { editorialIntent: finalEditorialIntent, model, provider, confidence });
+        if (error) {
+            agentLogger.warn("LLM for EditorialIntentAgent failed:", { error: error });
+            throw new LLMError("LLM for EditorialIntentAgent failed: " + error, 'EDITORIAL_INTENT_LLM_FAILED', { originalError: error });
+        }
+        
+        const finalEditorialIntent = {
+            ...llmData,
+            topic: llmData.topic || topic,
+            creative_brief_summary: llmData.creative_brief_summary || creativeBrief,
+            acceptable_event_types: coerceToArray(llmData.acceptable_event_types),
+            reject_content_types: coerceToArray(llmData.reject_content_types)
+        };
 
-      return {
-        success: true,
-        result: { editorialIntent: finalEditorialIntent || {} },
-        metadata: { agent_id: AGENT_REGISTRY.EditorialIntentAgent.id, version: AGENT_REGISTRY.EditorialIntentAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_ei_1' },
-        new_state_data: { editorial_intent: finalEditorialIntent || {} },
-        events_to_publish: [{ type: "EDITORIAL_INTENT_GENERATED", payload: { editorialIntent: finalEditorialIntent || {} } }]
-      };
+        explainability_recorder.execute("EditorialIntentAgent: Generated intent", { editorialIntent: finalEditorialIntent, model, provider, confidence }, agentLogger, agentMetrics);
+        agentStatus = 'completed';
+        return {
+          success: true, result: { editorialIntent: finalEditorialIntent || {} },
+          metadata: { agent_id: AGENT_REGISTRY.EditorialIntentAgent.id, version: AGENT_REGISTRY.EditorialIntentAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_ei_1' },
+          new_state_data: { editorial_intent: finalEditorialIntent || {} },
+          events_to_publish: [{ type: "EDITORIAL_INTENT_GENERATED", payload: { editorialIntent: finalEditorialIntent || {} } }]
+        };
+      } catch (e) {
+        agentLogger.error("EditorialIntentAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.EditorialIntentAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.EditorialIntentAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.EditorialIntentAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
+      }
     }
   },
 
-  // (C) Moment Ontology Agent
   MomentOntologyAgent: {
     id: "MomentOntologyAgent",
     version: "1.0.0",
@@ -1145,59 +1450,70 @@ const AGENT_REGISTRY = {
     read_state_keys: ["editorial_intent"],
     write_state_keys: ["moment_ontology"],
     run: async (runtimeState, context) => {
-      const { capability_registry, knowledge_base, env, explainability_recorder } = context;
+      const { capability_registry, knowledge_base, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
       const primaryCategories = runtimeState.editorial_intent?.primary_moment_categories || [];
 
-      // Example: Load specific plugin taxonomy for 'fails'
-      const momentTaxonomyCore = knowledge_base.execute('core', 'moment_taxonomy') || {};
-      // BUGFIX: only pull in the 'fails' plugin taxonomy when the topic is actually
-      // about fails/pranks — previously this ran unconditionally on every topic.
-      const topicText = runtimeState.editorial_intent?.topic || runtimeState.input_contract?.topic || "";
-      const briefText = runtimeState.editorial_intent?.creative_brief_summary || runtimeState.input_contract?.creativeBrief || "";
-      const momentTaxonomyFails = isPluginRelevant("fails", topicText, briefText)
-        ? (knowledge_base.execute('fails', 'moment_taxonomy') || {})
-        : {};
-      const combinedMomentTaxonomy = { ...momentTaxonomyCore, ...momentTaxonomyFails };
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.MomentOntologyAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
+
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.MomentOntologyAgent.id, component: 'AgentRegistry' });
+        const momentTaxonomyCore = knowledge_base.execute('core', 'moment_taxonomy', agentLogger, agentMetrics);
+        const topicText = runtimeState.editorial_intent?.topic || runtimeState.input_contract?.topic || "";
+        const briefText = runtimeState.editorial_intent?.creative_brief_summary || runtimeState.input_contract?.creativeBrief || "";
+        const momentTaxonomyFails = isPluginRelevant("fails", topicText, briefText)
+          ? (knowledge_base.execute('fails', 'moment_taxonomy', agentLogger, agentMetrics) || {})
+          : {};
+        const combinedMomentTaxonomy = { ...momentTaxonomyCore, ...momentTaxonomyFails };
 
 
-      const prompt = "Given primary moment categories " + JSON.stringify(primaryCategories) + " and existing moment taxonomies like " + JSON.stringify(combinedMomentTaxonomy) + ", expand them into detailed Moment Types and associated Scene Types (visualizable scenarios).\n" +
-      "Output JSON as an array of objects, each with 'category', 'moment_types' (array of {type:string, scene_types:string[]}).";
+        const prompt = "Given primary moment categories " + JSON.stringify(primaryCategories) + " and existing moment taxonomies like " + JSON.stringify(combinedMomentTaxonomy) + ", expand them into detailed Moment Types and associated Scene Types (visualizable scenarios).\n" +
+        "Output JSON as an array of objects, each with 'category', 'moment_types' (array of {type:string, scene_types:string[]}).";
 
-      const schema = {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            category: { type: "string" },
-            moment_types: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: { type: { type: "string" }, scene_types: { type: "array", items: { type: "string" } } }
-              }
+        const schema = {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              category: { type: "string" }, moment_types: { type: "array", items: { type: "object", properties: { type: { type: "string" }, scene_types: { type: "array", items: { type: "string" } } } } }
             }
           }
+        };
+
+        const { data: momentOntology, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
+
+        if (error) {
+            agentLogger.warn("LLM for MomentOntologyAgent failed:", { error: error });
+            throw new LLMError("LLM for MomentOntologyAgent failed: " + error, 'MOMENT_ONTOLOGY_LLM_FAILED', { originalError: error });
         }
-      };
-
-      const { data: momentOntology, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
-
-      if (error) throw new Error("LLM for MomentOntologyAgent failed: " + error);
-      const safeMomentOntology = coerceToArray(momentOntology);
-      explainability_recorder.execute("MomentOntologyAgent: Generated ontology", { momentOntology: safeMomentOntology, model, provider, confidence });
-
-      return {
-        success: true,
-        result: { momentOntology: safeMomentOntology },
-        metadata: { agent_id: AGENT_REGISTRY.MomentOntologyAgent.id, version: AGENT_REGISTRY.MomentOntologyAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_mo_1' },
-        new_state_data: { moment_ontology: safeMomentOntology },
-        events_to_publish: [{ type: "MOMENT_ONTOLOGY_CREATED", payload: { momentOntology: safeMomentOntology } }]
-      };
+        const safeMomentOntology = coerceToArray(momentOntology);
+        explainability_recorder.execute("MomentOntologyAgent: Generated ontology", { momentOntology: safeMomentOntology, model, provider, confidence }, agentLogger, agentMetrics);
+        agentStatus = 'completed';
+        return {
+          success: true, result: { momentOntology: safeMomentOntology },
+          metadata: { agent_id: AGENT_REGISTRY.MomentOntologyAgent.id, version: AGENT_REGISTRY.MomentOntologyAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_mo_1' },
+          new_state_data: { moment_ontology: safeMomentOntology },
+          events_to_publish: [{ type: "MOMENT_ONTOLOGY_CREATED", payload: { momentOntology: safeMomentOntology } }]
+        };
+      } catch (e) {
+        agentLogger.error("MomentOntologyAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.MomentOntologyAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.MomentOntologyAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.MomentOntologyAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
+      }
     }
   },
 
-  // (E) Discovery Strategy Planner Agent
   DiscoveryStrategyPlannerAgent: {
     id: "DiscoveryStrategyPlannerAgent",
     version: "1.0.0",
@@ -1210,90 +1526,92 @@ const AGENT_REGISTRY = {
     read_state_keys: ["editorial_intent", "moment_ontology", "global_constraints"],
     write_state_keys: ["discovery_missions"],
     run: async (runtimeState, context) => {
-      const { capability_registry, knowledge_base, env, explainability_recorder } = context;
+      const { capability_registry, knowledge_base, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
-      const platformProfiles = knowledge_base.execute('core', 'platform_profiles');
-      const hookTypes = knowledge_base.execute('core', 'hook_types') || [];
-      const originalSourceTypes = knowledge_base.execute('core', 'original_source_types') || [];
-      // BUGFIX: only pull in the 'fails' plugin moment patterns when the topic is
-      // actually about fails/pranks — previously this ran unconditionally on every
-      // topic, biasing the LLM toward generating gym-fail/prank discovery missions
-      // even for completely unrelated topics (e.g. "don't trust your eyes illusions").
+      const platformProfiles = knowledge_base.execute('core', 'platform_profiles', logger, metricsCollector);
+      const hookTypes = knowledge_base.execute('core', 'hook_types', logger, metricsCollector) || [];
+      const originalSourceTypes = knowledge_base.execute('core', 'original_source_types', logger, metricsCollector) || [];
       const dspTopicText = runtimeState.editorial_intent?.topic || runtimeState.input_contract?.topic || "";
       const dspBriefText = runtimeState.editorial_intent?.creative_brief_summary || runtimeState.input_contract?.creativeBrief || "";
       const momentPatternsFails = isPluginRelevant("fails", dspTopicText, dspBriefText)
-        ? knowledge_base.execute('fails', 'moment_patterns')
+        ? knowledge_base.execute('fails', 'moment_patterns', logger, metricsCollector)
         : null;
 
       const editorialIntent = runtimeState.editorial_intent;
       const momentOntology = runtimeState.moment_ontology;
       const constraints = runtimeState.global_constraints;
 
-      const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 4-6 Discovery Missions (keep this count — more than 6 tends to get truncated by smaller models).\n" +
-      "IMPORTANT: build primary_queries/keywords from the SPECIFIC acceptable_event_types in the Editorial Intent (e.g. 'photobomb', 'object collision') — do NOT just restate the topic words verbatim as the only query, since that tends to surface pre-made compilation/ranking videos about the topic rather than raw individual moments.\n" +
-      "Hook mechanisms to consider when framing missions (what actually makes a moment grab attention, not just a topic label): " + JSON.stringify(hookTypes) + ".\n" +
-      "Prefer search terms that point at RAW original footage types: " + JSON.stringify(originalSourceTypes) + " — these surface single original moments far more reliably than generic topic searches.\n" +
-      (momentPatternsFails
-        ? "Relevant moment patterns for this topic (each with narrative shape + searchSignals that are already policy-safe, i.e. never 'compilation'/'best of'/'top 10'): " + JSON.stringify(momentPatternsFails) + ". Use the searchSignals as a starting point for primary_queries/keywords, combined with the specific acceptable_event_types.\n"
-        : "") +
-      "Each mission should include: mission_focus, clip_criteria (from editorialIntent.desired_clip_characteristics), priority_score (1-100), confidence_score (1-100), estimated_cost (Low/Medium/High), expected_yield (Low/Medium/High), and platform_strategies[] (platform, search_approach, primary_queries[], secondary_queries[], hashtags[], keywords[], filters{}).\n" +
-      "Return ONLY JSON array of Discovery Mission objects.";
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      const schema = {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            mission_focus: { type: "string" },
-            clip_criteria: { type: "object" },
-            priority_score: { type: "integer" },
-            confidence_score: { type: "integer" },
-            estimated_cost: { type: "string" },
-            expected_yield: { type: "string" },
-            platform_strategies: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  platform: { type: "string" }, search_approach: { type: "string" },
-                  primary_queries: { type: "array", items: { type: "string" } },
-                  secondary_queries: { type: "array", items: { type: "string" } },
-                  hashtags: { type: "array", items: { type: "string" } },
-                  keywords: { type: "array", items: { type: "string" } },
-                  filters: { type: "object" }
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, component: 'AgentRegistry' });
+        const prompt = "Based on the Editorial Intent (" + JSON.stringify(editorialIntent) + "), Moment Ontology (" + JSON.stringify(momentOntology) + "), global constraints (" + JSON.stringify(constraints) + "), and platform profiles (" + JSON.stringify(platformProfiles) + "), generate 4-6 Discovery Missions (keep this count — more than 6 tends to get truncated by smaller models).\n" +
+        "IMPORTANT: build primary_queries/keywords from the SPECIFIC acceptable_event_types in the Editorial Intent (e.g. 'photobomb', 'object collision') — do NOT just restate the topic words verbatim as the only query, since that tends to surface pre-made compilation/ranking videos about the topic rather than raw individual moments.\n" +
+        "Hook mechanisms to consider when framing missions (what actually makes a moment grab attention, not just a topic label): " + JSON.stringify(hookTypes) + ".\n" +
+        "Prefer search terms that point at RAW original footage types: " + JSON.stringify(originalSourceTypes) + " — these surface single original moments far more reliably than generic topic searches.\n" +
+        (momentPatternsFails
+          ? "Relevant moment patterns for this topic (each with narrative shape + searchSignals that are already policy-safe, i.e. never 'compilation'/'best of'/'top 10', which are already globally rejected above): " + JSON.stringify(momentPatternsFails) + ". Use the searchSignals as a starting point for primary_queries/keywords, combined with the specific acceptable_event_types.\n"
+          : "") +
+        "Each mission should include: mission_focus, clip_criteria (from editorialIntent.desired_clip_characteristics), priority_score (1-100), confidence_score (1-100), estimated_cost (Low/Medium/High), expected_yield (Low/Medium/High), and platform_strategies[] (platform, search_approach, primary_queries[], secondary_queries[], hashtags[], keywords[], filters{}).\n" +
+        "Return ONLY JSON array of Discovery Mission objects.";
+
+        const schema = {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              mission_focus: { type: "string" }, clip_criteria: { type: "object" }, priority_score: { type: "integer" },
+              confidence_score: { type: "integer" }, estimated_cost: { type: "string" }, expected_yield: { type: "string" },
+              platform_strategies: {
+                type: "array",
+                items: {
+                  type: "object", properties: {
+                    platform: { type: "string" }, search_approach: { type: "string" },
+                    primary_queries: { type: "array", items: { type: "string" } }, secondary_queries: { type: "array", items: { type: "string" } },
+                    hashtags: { type: "array", items: { type: "string" } }, keywords: { type: "array", items: { type: "string" } }, filters: { type: "object" }
+                  }
                 }
               }
-            }
-          },
-          required: ["mission_focus", "clip_criteria", "priority_score", "confidence_score", "estimated_cost", "expected_yield", "platform_strategies"]
+            },
+            required: ["mission_focus", "clip_criteria", "priority_score", "confidence_score", "estimated_cost", "expected_yield", "platform_strategies"]
+          }
+        };
+
+        const { data: discoveryMissions, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
+
+        if (error) {
+            agentLogger.warn("LLM for DiscoveryStrategyPlannerAgent failed:", { error: error });
+            throw new LLMError("LLM for DiscoveryStrategyPlannerAgent failed: " + error, 'DISCOVERY_PLANNER_LLM_FAILED', { originalError: error });
         }
-      };
-
-      const { data: discoveryMissions, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
-
-      if (error) throw new Error("LLM for DiscoveryStrategyPlannerAgent failed: " + error);
-      // BUGFIX: discoveryMissions can arrive as a non-array (e.g. an object like
-      // { "missions": [...] } when the provider's JSON mode forces an object
-      // root), which previously crashed here with "(discoveryMissions || []).sort
-      // is not a function" because `|| []` only triggers on falsy values, not
-      // on truthy non-array objects. coerceToArray() normalizes it safely.
-      const safeDiscoveryMissions = coerceToArray(discoveryMissions);
-      explainability_recorder.execute("DiscoveryStrategyPlannerAgent: Generated missions", { discoveryMissions: safeDiscoveryMissions, model, provider, confidence });
-
-      // Sort missions by priority_score descending
-      const sortedMissions = safeDiscoveryMissions.sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
-
-      return {
-        success: true,
-        result: { discoveryMissions: sortedMissions },
-        metadata: { agent_id: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, version: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_dsp_1' },
-        new_state_data: { discovery_missions: sortedMissions },
-        events_to_publish: [{ type: "DISCOVERY_MISSIONS_PLANNED", payload: { missions: sortedMissions } }]
-      };
+        const safeDiscoveryMissions = coerceToArray(discoveryMissions);
+        explainability_recorder.execute("DiscoveryStrategyPlannerAgent: Generated missions", { discoveryMissions: safeDiscoveryMissions, model, provider, confidence }, agentLogger, agentMetrics);
+        const sortedMissions = safeDiscoveryMissions.sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
+        agentStatus = 'completed';
+        return {
+          success: true, result: { discoveryMissions: sortedMissions },
+          metadata: { agent_id: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, version: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_dsp_1' },
+          new_state_data: { discovery_missions: sortedMissions },
+          events_to_publish: [{ type: "DISCOVERY_MISSIONS_PLANNED", payload: { missions: sortedMissions } }]
+        };
+      } catch (e) {
+        agentLogger.error("DiscoveryStrategyPlannerAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.DiscoveryStrategyPlannerAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
+      }
     }
   },
 
-  // (F) Source Hunter Agent
   SourceHunterAgent: {
     id: "SourceHunterAgent",
     version: "1.0.0",
@@ -1306,7 +1624,7 @@ const AGENT_REGISTRY = {
     read_state_keys: ["discovery_missions", "editorial_intent", "editorial_dna_profile"],
     write_state_keys: ["raw_clips_collected", "discovery_queue_status"],
     run: async (runtimeState, context) => {
-      const { capability_registry, env, explainability_recorder } = context;
+      const { capability_registry, env, explainability_recorder, logger, metricsCollector } = context;
       const searchExecution = capability_registry.SearchExecutionCapability;
       const persistence = capability_registry.PersistenceCapability;
       const eventPublishing = capability_registry.EventPublishingCapability;
@@ -1315,133 +1633,118 @@ const AGENT_REGISTRY = {
       const allRawClips = [];
       let pendingSearches = 0;
 
-      explainability_recorder.execute("SourceHunterAgent: Starting clip discovery", { missions: discoveryMissions.length });
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.SourceHunterAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      // Execute search for each mission across platforms in parallel
-      const searchPromises = discoveryMissions.flatMap(mission =>
-        (mission.platform_strategies || []).map(async (strategy) => {
-          pendingSearches++;
-          // FIX: primary_queries and/or keywords can be undefined if the LLM
-          // omits a field. Guard each with `|| []` before calling .join(),
-          // otherwise this throws "Cannot read properties of undefined (reading 'join')"
-          // and silently kills the whole SourceHunterAgent (and therefore the workflow).
-          const primaryQueries = strategy.primary_queries || [];
-          const keywords = strategy.keywords || [];
-          const query = (primaryQueries.length ? primaryQueries : keywords).join(" ");
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.SourceHunterAgent.id, component: 'AgentRegistry' });
+        explainability_recorder.execute("SourceHunterAgent: Starting clip discovery", { missions: discoveryMissions.length }, agentLogger, agentMetrics);
 
-          if (!query) {
+        const searchPromises = discoveryMissions.flatMap(mission =>
+          (mission.platform_strategies || []).map(async (strategy) => {
+            pendingSearches++;
+            const primaryQueries = strategy.primary_queries || [];
+            const keywords = strategy.keywords || [];
+            const query = (primaryQueries.length ? primaryQueries : keywords).join(" ");
+
+            if (!query) {
+              pendingSearches--;
+              explainability_recorder.execute("SourceHunterAgent: Skipped strategy with no query terms", { mission_focus: mission.mission_focus, platform: strategy.platform }, agentLogger, agentMetrics);
+              agentLogger.debug("Skipped search strategy due to no query terms.", { mission_focus: mission.mission_focus, platform: strategy.platform });
+              return;
+            }
+
+            const clips = await searchExecution.execute(strategy.platform, query, {
+              ...strategy.filters,
+              max_results: 10,
+              max_age_months: runtimeState.editorial_intent?.desired_clip_characteristics?.max_age_months
+            }, env, agentLogger, agentMetrics);
+
+            allRawClips.push(...clips);
+            eventPublishing.execute("RAW_CLIP_COLLECTED", { workflowId: context.workflowId, mission_focus: mission.mission_focus, platform: strategy.platform, count: clips.length }, agentLogger, agentMetrics);
+            explainability_recorder.execute("SourceHunterAgent: Found " + clips.length + " clips for '" + mission.mission_focus + "' on " + strategy.platform, { query, count: clips.length }, agentLogger, agentMetrics);
             pendingSearches--;
-            explainability_recorder.execute("SourceHunterAgent: Skipped strategy with no query terms", { mission_focus: mission.mission_focus, platform: strategy.platform });
-            return;
-          }
-
-          const clips = await searchExecution.execute(strategy.platform, query, {
-            ...strategy.filters,
-            max_results: 10, // Limit results per query for Phase 1
-            max_age_months: runtimeState.editorial_intent?.desired_clip_characteristics?.max_age_months
-          }, env);
-
-          allRawClips.push(...clips);
-          eventPublishing.execute("RAW_CLIP_COLLECTED", { mission_focus: mission.mission_focus, platform: strategy.platform, count: clips.length });
-          explainability_recorder.execute("SourceHunterAgent: Found " + clips.length + " clips for '" + mission.mission_focus + "' on " + strategy.platform, { query, count: clips.length });
-          pendingSearches--;
-        })
-      );
-
-      await Promise.all(searchPromises);
-
-      // BUGFIX/FEATURE: NO_COMPILATION_KEYWORDS / NO_RANKING_KEYWORDS were defined in
-      // the knowledge base's policy_rules, and editorial_intent even captures explicit
-      // not_compilation/not_ranking_video flags from the LLM — but nothing ever actually
-      // checked a clip's title against them. PolicyEngine.apply() always returned
-      // "passed: true" unconditionally, and no agent even called it. So every search
-      // just returned whatever YouTube/TikTok/Reddit's own algorithm ranked highest for
-      // the query — which, for a topic like "funniest chicken scream compilations", is
-      // dominated by *other creators' own ranking/compilation videos*, not raw single
-      // moments. That's the real reason results looked like "manual search" instead of
-      // curated original clips. This applies the policy for real.
-      const dcc = runtimeState.editorial_intent?.desired_clip_characteristics || {};
-      const wantsNoCompilation = dcc.not_compilation !== false; // default true: this tool's whole point is original clips
-      const wantsNoRanking = dcc.not_ranking_video !== false;
-      const policyRules = context.knowledge_base.execute('core', 'policy_rules') || {};
-      const compilationWords = policyRules.NO_COMPILATION_KEYWORDS || [];
-      const rankingWords = policyRules.NO_RANKING_KEYWORDS || [];
-
-      // FEATURE: also reject anything matching the real, evidence-based reject_list from
-      // EditorialDNAExtractionAgent (e.g. "Commentary videos", "Podcasts", "Reaction
-      // videos", "News videos") — derived from actual reference-channel videos, not a
-      // static hardcoded list. Reduce each reject phrase to its meaningful keyword(s).
-      const STOPWORDS = new Set(["videos", "video", "content", "clips", "clip", "and", "or", "the", "a", "an", "long"]);
-      const dnaRejectWords = (runtimeState.editorial_dna_profile?.reject_patterns || [])
-        .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
-        .filter(w => w.length > 3 && !STOPWORDS.has(w));
-
-      // FEATURE: this is the direct fix for topics leaking irrelevant categories (DIY,
-      // news, podcasts, gaming, movie clips, etc.) when no reference channels were given —
-      // EditorialIntentAgent now generates a per-topic reject_content_types list via LLM
-      // reasoning about THIS specific topic, independent of the (optional) DNA profile.
-      const intentRejectWords = (runtimeState.editorial_intent?.reject_content_types || [])
-        .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
-        .filter(w => w.length > 3 && !STOPWORDS.has(w));
-
-      const looksLikeCompilationOrRanking = (clip) => {
-        const haystack = ((clip.title || "") + " " + (clip.description_snippet || "")).toLowerCase();
-        if (wantsNoCompilation && compilationWords.some(w => haystack.includes(w.toLowerCase()))) return true;
-        if (wantsNoRanking && rankingWords.some(w => haystack.includes(w.toLowerCase()))) return true;
-        if (dnaRejectWords.some(w => haystack.includes(w))) return true;
-        if (intentRejectWords.some(w => haystack.includes(w))) return true;
-        return false;
-      };
-
-      const filteredOut = allRawClips.filter(looksLikeCompilationOrRanking);
-      const keptClips = allRawClips.filter(c => !looksLikeCompilationOrRanking(c));
-      if (filteredOut.length > 0) {
-        explainability_recorder.execute(
-          "SourceHunterAgent: Policy filter removed " + filteredOut.length + " compilation/ranking-style results",
-          { removed_titles: filteredOut.slice(0, 10).map(c => c.title) }
+          })
         );
+
+        await Promise.all(searchPromises);
+
+        const dcc = runtimeState.editorial_intent?.desired_clip_characteristics || {};
+        const wantsNoCompilation = dcc.not_compilation !== false;
+        const wantsNoRanking = dcc.not_ranking_video !== false;
+        const policyRules = knowledge_base.execute('core', 'policy_rules', agentLogger, agentMetrics) || {};
+        const compilationWords = policyRules.NO_COMPILATION_KEYWORDS || [];
+        const rankingWords = policyRules.NO_RANKING_KEYWORDS || [];
+
+        const STOPWORDS = new Set(["videos", "video", "content", "clips", "clip", "and", "or", "the", "a", "an", "long"]);
+        const dnaRejectWords = (runtimeState.editorial_dna_profile?.reject_patterns || [])
+          .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
+          .filter(w => w.length > 3 && !STOPWORDS.has(w));
+
+        const intentRejectWords = (runtimeState.editorial_intent?.reject_content_types || [])
+          .flatMap(phrase => phrase.toLowerCase().split(/\s+/))
+          .filter(w => w.length > 3 && !STOPWORDS.has(w));
+
+        const looksLikeCompilationOrRanking = (clip) => {
+          const haystack = ((clip.title || "") + " " + (clip.description_snippet || "")).toLowerCase();
+          if (wantsNoCompilation && compilationWords.some(w => haystack.includes(w.toLowerCase()))) return true;
+          if (wantsNoRanking && rankingWords.some(w => haystack.includes(w.toLowerCase()))) return true;
+          if (dnaRejectWords.some(w => haystack.includes(w))) return true;
+          if (intentRejectWords.some(w => haystack.includes(w))) return true;
+          return false;
+        };
+
+        const filteredOut = allRawClips.filter(looksLikeCompilationOrRanking);
+        const keptClips = allRawClips.filter(c => !looksLikeCompilationOrRanking(c));
+        if (filteredOut.length > 0) {
+          explainability_recorder.execute(
+            "SourceHunterAgent: Policy filter removed " + filteredOut.length + " compilation/ranking-style results",
+            { removed_titles: filteredOut.slice(0, 10).map(c => c.title) }, agentLogger, agentMetrics
+          );
+          agentLogger.info(`Policy filter removed ${filteredOut.length} compilation/ranking-style results.`, { removed_count: filteredOut.length });
+        }
+        const finalClips = keptClips.length > 0 ? keptClips : allRawClips;
+
+        const confidence = capability_registry.ConfidenceCalculationCapability.execute({
+          search_coverage_success: finalClips.length > 0 ? 1 : 0
+        }, null, agentLogger, agentMetrics);
+
+        const newDiscoveryQueueStatus = {
+          pending: pendingSearches,
+          completed: discoveryMissions.length - pendingSearches,
+          failed: 0,
+          results: finalClips.map(clip => ({ id: clip.id, url: clip.url }))
+        };
+        agentStatus = 'completed';
+        return {
+          success: true, result: { raw_clips: finalClips },
+          metadata: { agent_id: AGENT_REGISTRY.SourceHunterAgent.id, version: AGENT_REGISTRY.SourceHunterAgent.version, confidence_score: confidence.score, explainability_trace_id: 'trace_sh_1' },
+          new_state_data: {
+            raw_clips_collected: finalClips,
+            discovery_queue_status: newDiscoveryQueueStatus
+          },
+          events_to_publish: [
+            { type: "DISCOVERY_PHASE_COMPLETED", payload: { total_clips: allRawClips.length } }
+          ]
+        };
+      } catch (e) {
+        agentLogger.error("SourceHunterAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.SourceHunterAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.SourceHunterAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.SourceHunterAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
       }
-      // Safety net: if the filter would wipe out every single result (e.g. because the
-      // whole niche is inherently "ranking"-named on YouTube), keep the originals rather
-      // than handing RankingAgent an empty list and a dead report.
-      const finalClips = keptClips.length > 0 ? keptClips : allRawClips;
-
-      const confidence = capability_registry.ConfidenceCalculationCapability.execute({
-        search_coverage_success: finalClips.length > 0 ? 1 : 0
-      });
-
-      // Update queue status and raw clips collected in RuntimeState
-      const newDiscoveryQueueStatus = {
-        pending: pendingSearches,
-        completed: discoveryMissions.length - pendingSearches,
-        failed: 0, // Placeholder
-        results: finalClips.map(clip => ({ id: clip.id, url: clip.url })) // Only store minimal info in queue status
-      };
-
-      return {
-        success: true,
-        result: { raw_clips: finalClips },
-        metadata: { agent_id: AGENT_REGISTRY.SourceHunterAgent.id, version: AGENT_REGISTRY.SourceHunterAgent.version, confidence_score: confidence.score, explainability_trace_id: 'trace_sh_1' },
-        new_state_data: {
-          raw_clips_collected: finalClips,
-          discovery_queue_status: newDiscoveryQueueStatus
-        },
-        events_to_publish: [
-          { type: "DISCOVERY_PHASE_COMPLETED", payload: { total_clips: allRawClips.length } }
-        ]
-      };
     }
   },
 
-  // (G) Ranking Agent — NEW
-  // BUGFIX/FEATURE: previously "ranked_clip_opportunities" was NOT actually ranked by AI at
-  // all — it was just `raw_clips_collected.slice(0, 6)` (whatever order the search APIs
-  // happened to return) with completely hardcoded text: "editorial_repost_analysis: 'High
-  // view count clip found (Phase 1 placeholder)'" and "confidence_score: 75" for every single
-  // clip. ScoringAlgorithmCapability was also just `Math.round(Math.random() * 100)`. None of
-  // that was real curation. This agent sends the actually-collected clips to the LLM and asks
-  // it to select and rank a genuine #6→#1 countdown with real per-clip reasoning tied to the
-  // editorial brief, plus real (non-placeholder) insight text.
   RankingAgent: {
     id: "RankingAgent",
     version: "1.0.0",
@@ -1454,333 +1757,317 @@ const AGENT_REGISTRY = {
     read_state_keys: ["raw_clips_collected", "editorial_intent", "input_contract"],
     write_state_keys: ["ai_insights"],
     run: async (runtimeState, context) => {
-      const { capability_registry, env, explainability_recorder } = context;
+      const { capability_registry, env, explainability_recorder, logger, metricsCollector } = context;
       const llmService = capability_registry.LLMServiceCapability;
       const clips = runtimeState.raw_clips_collected || [];
       const editorialIntent = runtimeState.editorial_intent || {};
       const topic = editorialIntent.topic || runtimeState.input_contract?.topic || "";
 
-      if (clips.length === 0) {
-        const emptyInsights = {
-          overall_opportunity_reasoning: "No source clips were collected for this topic, so no ranking could be generated. Try a broader topic, a longer date window, or check that platform API keys/tokens are configured.",
-          trend_status: "Unknown",
-          hook_suggestions: [],
-          hashtag_strategy: [],
-          key_search_phrases_for_discoverability: [],
-          seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
-          ranked_clip_opportunities: []
-        };
-        explainability_recorder.execute("RankingAgent: No clips to rank", {});
-        return {
-          success: true,
-          result: { aiInsights: emptyInsights },
-          metadata: { agent_id: AGENT_REGISTRY.RankingAgent.id, version: AGENT_REGISTRY.RankingAgent.version, confidence_score: 0, explainability_trace_id: 'trace_ra_1' },
-          new_state_data: { ai_insights: emptyInsights },
-          events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: 0 } }]
-        };
-      }
+      const agentLogger = logger.child({ agentId: AGENT_REGISTRY.RankingAgent.id });
+      const agentMetrics = metricsCollector;
+      const startTime = Date.now();
+      let agentStatus = 'failed';
+      let errorType = 'UnknownError';
 
-      // Cap prompt size: summarize at most 40 candidate clips (LLM only needs enough
-      // signal to pick 6 good ones, not every field of every clip).
-      const candidates = clips.slice(0, 40).map((c, i) => ({
-        index: i,
-        url: c.url,
-        platform: c.platform,
-        title: c.title,
-        description: (c.description_snippet || "").slice(0, 200),
-        views: c.views_approx || 0,
-        likes: c.likes_approx || 0,
-        comments: c.comments || 0
-      }));
-
-      const dnaProfile = runtimeState.editorial_dna_profile;
-
-      // CONTRACT §3: every ranked clip must carry explicit reasoning across 5 required
-      // fields plus a weighted score_breakdown. No field is optional; entries missing
-      // any of them are dropped (see REJECT-over-FALLBACK rule below), never shipped
-      // with a placeholder.
-      const prompt =
-        "You are curating a ranked #6-#1 countdown video for the topic \"" + topic + "\".\n" +
-        "Creative brief: " + (editorialIntent.creative_brief_summary || "") + "\n" +
-        "Target emotions: " + JSON.stringify(editorialIntent.target_emotions || []) + "\n" +
-        "Acceptable event types: " + JSON.stringify(editorialIntent.acceptable_event_types || []) + "\n" +
-        (dnaProfile
-          ? "Editorial DNA profile (from " + dnaProfile.based_on_real_video_count + " real reference videos): " + JSON.stringify(dnaProfile) + " — every selection MUST be justified against this DNA, not generic virality.\n"
-          : "No reference channel DNA is available for this run — judge against the creative brief and target emotions only.\n") +
-        "Here are candidate source clips actually found (index, url, platform, title, description, views, likes, comments):\n" +
-        JSON.stringify(candidates) + "\n\n" +
-        "Select up to 6 of the BEST, most distinct real moments from this list (avoid near-duplicates). " +
-        "Rank as a countdown: rank 1 = single best/most impactful (final reveal), rank 6 = weakest of your chosen set (opens the countdown). " +
-        "You MUST reuse the exact 'url' from the candidate list above for each pick — never invent a URL. " +
-        "IMPORTANT — moment_strength bar: viral countdown channels (like PolarRanks/Oogway Ranks) only use moments with a genuinely SHOCKING, jaw-dropping, or 'wait, WHAT?' quality — not mundane, mild, or merely-mildly-amusing fails. When scoring moment_strength, actively PENALIZE clips that are just an ordinary fail with nothing exceptional about the reaction, timing, or outcome. A high moment_strength score requires the clip to make someone stop scrolling.\n" +
-        "For EVERY selected clip you MUST provide ALL of these non-empty, specific (not generic) reasoning fields:\n" +
-        "- moment_idea: the SPECIFIC visual moment as a punchy countdown phrase (not the raw title)\n" +
-        "- style_dna_match_reason: specifically why this fits the Editorial DNA / creative brief (not a generic 'it's funny')\n" +
-        "- countdown_position_reason: why THIS rank specifically, not a different one\n" +
-        "- viral_mechanism: the specific mechanic that makes it shareable (e.g. 'expectation subversion', 'relatable failure')\n" +
-        "- emotion_trigger: the specific emotional trigger for the viewer\n" +
-        "- source_confidence: why this looks like an original/traceable source (not just 'it has views')\n" +
-        "- suggested_caption_overlay: a punchy, HIGH-ENERGY caption with emoji the creator could overlay on this clip when editing the final countdown video (e.g. '\uD83D\uDE31\uD83D\uDC80 HE DIDN'T SEE THAT COMING...') — this is packaging guidance for the finished edit, not a claim about the raw source clip itself\n" +
-        "- score_breakdown: object with style_dna_match, moment_strength, viewer_emotion, original_source, engagement — each 0-100, justified by the fields above\n" +
-        "If you cannot honestly justify all of these for a candidate, DO NOT include it — fewer than 6 well-justified picks is better than 6 weak ones.\n" +
-        "Also produce overall_opportunity_reasoning (2-3 sentences), trend_status (Growing/Stable/Declining/Emerging), " +
-        "hook_suggestions (3-5 short lines), hashtag_strategy (5-8 tags), and key_search_phrases_for_discoverability (3-5 phrases).\n" +
-        "Return ONLY JSON matching the schema.";
-
-      const scoreProps = {
-        style_dna_match: { type: "integer" }, moment_strength: { type: "integer" },
-        viewer_emotion: { type: "integer" }, original_source: { type: "integer" }, engagement: { type: "integer" }
-      };
-
-      const schema = {
-        type: "object",
-        properties: {
-          overall_opportunity_reasoning: { type: "string" },
-          trend_status: { type: "string" },
-          hook_suggestions: { type: "array", items: { type: "string" } },
-          hashtag_strategy: { type: "array", items: { type: "string" } },
-          key_search_phrases_for_discoverability: { type: "array", items: { type: "string" } },
-          ranked_clip_opportunities: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                rank: { type: "integer" },
-                moment_idea: { type: "string" },
-                suggested_source_platform: { type: "string" },
-                url_to_potential_original_clip: { type: "string" },
-                style_dna_match_reason: { type: "string" },
-                countdown_position_reason: { type: "string" },
-                viral_mechanism: { type: "string" },
-                emotion_trigger: { type: "string" },
-                source_confidence: { type: "string" },
-                suggested_caption_overlay: { type: "string" },
-                score_breakdown: { type: "object", properties: scoreProps }
-              },
-              required: ["rank", "moment_idea", "suggested_source_platform", "url_to_potential_original_clip", "style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence", "score_breakdown"]
-            }
-          }
-        },
-        required: ["overall_opportunity_reasoning", "trend_status", "ranked_clip_opportunities"]
-      };
-
-      const { data, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env);
-      if (error) throw new Error("LLM for RankingAgent failed: " + error);
-
-      // BUGFIX: normalizeUrl previously did NOT strip a "www." prefix, so a clip stored
-      // as "https://www.youtube.com/watch?v=X" would never match the LLM echoing back
-      // "https://youtube.com/watch?v=X" (no www) — causing every ranked entry to fail
-      // validation. Also extract the YouTube video ID as a second, more robust key.
-      const normalizeUrl = (u) => (u || "").trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").split(/[?#]/)[0].toLowerCase();
-      const extractYouTubeVideoId = (u) => {
-        const m = /(?:[?&]v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/.exec(u || "");
-        return m ? m[1] : null;
-      };
-      const urlToClip = new Map();
-      const videoIdToClip = new Map();
-      clips.forEach(c => {
-        urlToClip.set(normalizeUrl(c.url), c);
-        const vid = extractYouTubeVideoId(c.url);
-        if (vid) videoIdToClip.set(vid, c);
-      });
-
-      // CONTRACT §3 — REJECT over FALLBACK: a clip is only kept if (a) its URL matches
-      // a real collected clip, AND (b) every required reasoning field is present and
-      // non-empty. There is no views/likes-only fallback path — if nothing survives,
-      // ranked_clip_opportunities is honestly empty.
-      const REQUIRED_REASONING_FIELDS = ["style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence"];
-      const rawRanked = coerceToArray(data?.ranked_clip_opportunities);
-      const rejectedForMissingReasoning = [];
-      const finalRanked = rawRanked
-        .map(r => {
-          if (!r) return null;
-          const givenUrl = r.url_to_potential_original_clip;
-          const norm = normalizeUrl(givenUrl);
-          const vid = extractYouTubeVideoId(givenUrl);
-          const matchedClip = urlToClip.get(norm) || (vid && videoIdToClip.get(vid));
-          if (!matchedClip) return null;
-
-          const missingFields = REQUIRED_REASONING_FIELDS.filter(f => !r[f] || typeof r[f] !== 'string' || !r[f].trim());
-          if (missingFields.length > 0) {
-            rejectedForMissingReasoning.push({ title: matchedClip.title, missingFields });
-            return null;
-          }
-
-          const sb = r.score_breakdown || {};
-          const clamp = (n) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
-          const scoreBreakdown = {
-            style_dna_match: clamp(sb.style_dna_match),
-            moment_strength: clamp(sb.moment_strength),
-            viewer_emotion: clamp(sb.viewer_emotion),
-            original_source: clamp(sb.original_source),
-            engagement: clamp(sb.engagement)
+      try {
+        agentMetrics.increment('agent_execution_total', 1, { agentId: AGENT_REGISTRY.RankingAgent.id, component: 'AgentRegistry' });
+        if (clips.length === 0) {
+          const emptyInsights = {
+            overall_opportunity_reasoning: "No source clips were collected for this topic, so no ranking could be generated. Try a broader topic, a longer date window, or check that platform API keys/tokens are configured.",
+            trend_status: "Unknown",
+            hook_suggestions: [], hashtag_strategy: [], key_search_phrases_for_discoverability: [],
+            seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
+            ranked_clip_opportunities: []
           };
-          // CONTRACT: weighted editorial score — engagement contributes only 10%.
-          const finalScore = Math.round(
-            scoreBreakdown.style_dna_match * 0.30 +
-            scoreBreakdown.moment_strength * 0.25 +
-            scoreBreakdown.viewer_emotion * 0.20 +
-            scoreBreakdown.original_source * 0.15 +
-            scoreBreakdown.engagement * 0.10
-          );
-
-          const searchTerms = (matchedClip.tags && matchedClip.tags.length > 0) ? matchedClip.tags.slice(0, 5) : [topic];
-
+          explainability_recorder.execute("RankingAgent: No clips to rank", {}, agentLogger, agentMetrics);
+          agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.RankingAgent.id, status: 'skipped', reason: 'no_clips', component: 'AgentRegistry' });
+          agentMetrics.increment('agent_execution_skipped_total', 1, { agentId: AGENT_REGISTRY.RankingAgent.id, reason: 'no_clips', component: 'AgentRegistry' });
           return {
-            rank: Number(r.rank) || 0,
-            moment_idea: r.moment_idea || matchedClip.title,
-            suggested_source_platform: matchedClip.platform,
-            url_to_potential_original_clip: matchedClip.url,
-            style_dna_match_reason: r.style_dna_match_reason,
-            countdown_position_reason: r.countdown_position_reason,
-            viral_mechanism: r.viral_mechanism,
-            emotion_trigger: r.emotion_trigger,
-            source_confidence: r.source_confidence,
-            suggested_caption_overlay: r.suggested_caption_overlay || "",
-            score_breakdown: scoreBreakdown,
-            final_score: finalScore,
-            confidence_score: finalScore, // kept for backward-compat with older frontend field name
-            human_editor_search_terms: searchTerms
+            success: true, result: { aiInsights: emptyInsights },
+            metadata: { agent_id: AGENT_REGISTRY.RankingAgent.id, version: AGENT_REGISTRY.RankingAgent.version, confidence_score: 0, explainability_trace_id: 'trace_ra_1' },
+            new_state_data: { ai_insights: emptyInsights },
+            events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: 0 } }]
           };
-        })
-        .filter(Boolean)
-        .sort((a, b) => b.rank - a.rank) // rank 6 first, rank 1 last (countdown order)
-        .slice(0, 6);
+        }
 
-      if (rejectedForMissingReasoning.length > 0) {
-        explainability_recorder.execute("RankingAgent: rejected clips missing required reasoning (contract §3)", { rejected: rejectedForMissingReasoning });
+        const candidates = clips.slice(0, 40).map((c, i) => ({
+          index: i, url: c.url, platform: c.platform, title: c.title,
+          description: (c.description_snippet || "").slice(0, 200),
+          views: c.views_approx || 0, likes: c.likes_approx || 0, comments: c.comments || 0
+        }));
+
+        const dnaProfile = runtimeState.editorial_dna_profile;
+
+        const prompt =
+          "You are curating a ranked #6-#1 countdown video for the topic \"" + topic + "\".\n" +
+          "Creative brief: " + (editorialIntent.creative_brief_summary || "") + "\n" +
+          "Target emotions: " + JSON.stringify(editorialIntent.target_emotions || []) + "\n" +
+          "Acceptable event types: " + JSON.stringify(editorialIntent.acceptable_event_types || []) + "\n" +
+          (dnaProfile
+            ? "Editorial DNA profile (from " + dnaProfile.based_on_real_video_count + " real reference videos): " + JSON.stringify(dnaProfile) + " — every selection MUST be justified against this DNA, not generic virality.\n"
+            : "No reference channel DNA is available for this run — judge against the creative brief and target emotions only.\n") +
+          "Here are candidate source clips actually found (index, url, platform, title, description, views, likes, comments):\n" +
+          JSON.stringify(candidates) + "\n\n" +
+          "Select up to 6 of the BEST, most distinct real moments from this list (avoid near-duplicates). " +
+          "Rank as a countdown: rank 1 = single best/most impactful (final reveal), rank 6 = weakest of your chosen set (opens the countdown). " +
+          "You MUST reuse the exact 'url' from the candidate list above for each pick — never invent a URL. " +
+          "IMPORTANT — moment_strength bar: viral countdown channels (like PolarRanks/Oogway Ranks) only use moments with a genuinely SHOCKING, jaw-dropping, or 'wait, WHAT?' quality — not mundane, mild, or merely-mildly-amusing fails. When scoring moment_strength, actively PENALIZE clips that are just an ordinary fail with nothing exceptional about the reaction, timing, or outcome. A high moment_strength score requires the clip to make someone stop scrolling.\n" +
+          "For EVERY selected clip you MUST provide ALL of these non-empty, specific (not generic) reasoning fields:\n" +
+          "- moment_idea: the SPECIFIC visual moment as a punchy countdown phrase (not the raw title)\n" +
+          "- style_dna_match_reason: specifically why this fits the Editorial DNA / creative brief (not a generic 'it's funny')\n" +
+          "- countdown_position_reason: why THIS rank specifically, not a different one\n" +
+          "- viral_mechanism: the specific mechanic that makes it shareable (e.g. 'expectation subversion', 'relatable failure')\n" +
+          "- emotion_trigger: the specific emotional trigger for the viewer\n" +
+          "- source_confidence: why this looks like an original/traceable source (not just 'it has views')\n" +
+          "- suggested_caption_overlay: a punchy, HIGH-ENERGY caption with emoji the creator could overlay on this clip when editing the final countdown video (e.g. '\uD83D\uDE31\uD83D\uDC80 HE DIDN'T SEE THAT COMING...') — this is packaging guidance for the finished edit, not a claim about the raw source clip itself\n" +
+          "- score_breakdown: object with style_dna_match, moment_strength, viewer_emotion, original_source, engagement — each 0-100, justified by the fields above\n" +
+          "If you cannot honestly justify all of these for a candidate, DO NOT include it — fewer than 6 well-justified picks is better than 6 weak ones.\n" +
+          "Also produce overall_opportunity_reasoning (2-3 sentences), trend_status (Growing/Stable/Declining/Emerging), " +
+          "hook_suggestions (3-5 short lines), hashtag_strategy (5-8 tags), and key_search_phrases_for_discoverability (3-5 phrases).\n" +
+          "Return ONLY JSON matching the schema.";
+
+        const scoreProps = {
+          style_dna_match: { type: "integer" }, moment_strength: { type: "integer" },
+          viewer_emotion: { type: "integer" }, original_source: { type: "integer" }, engagement: { type: "integer" }
+        };
+
+        const schema = {
+          type: "object",
+          properties: {
+            overall_opportunity_reasoning: { type: "string" }, trend_status: { type: "string" },
+            hook_suggestions: { type: "array", items: { type: "string" } }, hashtag_strategy: { type: "array", items: { type: "string" } },
+            key_search_phrases_for_discoverability: { type: "array", items: { type: "string" } },
+            ranked_clip_opportunities: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  rank: { type: "integer" }, moment_idea: { type: "string" }, suggested_source_platform: { type: "string" },
+                  url_to_potential_original_clip: { type: "string" }, style_dna_match_reason: { type: "string" },
+                  countdown_position_reason: { type: "string" }, viral_mechanism: { type: "string" },
+                  emotion_trigger: { type: "string" }, source_confidence: { type: "string" },
+                  suggested_caption_overlay: { type: "string" }, score_breakdown: { type: "object", properties: scoreProps }
+                },
+                required: ["rank", "moment_idea", "suggested_source_platform", "url_to_potential_original_clip", "style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence", "score_breakdown"]
+              }
+            }
+          },
+          required: ["overall_opportunity_reasoning", "trend_status", "ranked_clip_opportunities"]
+        };
+
+        const { data, confidence, error, model, provider } = await llmService.execute(prompt, schema, runtimeState.input_contract.model_preference, env, agentLogger, agentMetrics);
+        if (error) {
+          agentLogger.warn("LLM for RankingAgent failed:", { error: error });
+          throw new LLMError("LLM for RankingAgent failed: " + error, 'RANKING_LLM_FAILED', { originalError: error });
+        }
+
+        const normalizeUrl = (u) => (u || "").trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").split(/[?#]/)[0].toLowerCase();
+        const extractYouTubeVideoId = (u) => {
+          const m = /(?:[?&]v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/.exec(u || "");
+          return m ? m[1] : null;
+        };
+        const urlToClip = new Map();
+        const videoIdToClip = new Map();
+        clips.forEach(c => {
+          urlToClip.set(normalizeUrl(c.url), c);
+          const vid = extractYouTubeVideoId(c.url);
+          if (vid) videoIdToClip.set(vid, c);
+        });
+
+        const REQUIRED_REASONING_FIELDS = ["style_dna_match_reason", "countdown_position_reason", "viral_mechanism", "emotion_trigger", "source_confidence"];
+        const rawRanked = coerceToArray(data?.ranked_clip_opportunities);
+        const rejectedForMissingReasoning = [];
+        const finalRanked = rawRanked
+          .map(r => {
+            if (!r) return null;
+            const givenUrl = r.url_to_potential_original_clip;
+            const norm = normalizeUrl(givenUrl);
+            const vid = extractYouTubeVideoId(givenUrl);
+            const matchedClip = urlToClip.get(norm) || (vid && videoIdToClip.get(vid));
+            if (!matchedClip) {
+                agentLogger.warn(`RankingAgent: LLM suggested URL not found in raw clips: ${givenUrl}`);
+                return null;
+            }
+
+            const missingFields = REQUIRED_REASONING_FIELDS.filter(f => !r[f] || typeof r[f] !== 'string' || !r[f].trim());
+            if (missingFields.length > 0) {
+              rejectedForMissingReasoning.push({ title: matchedClip.title, missingFields });
+              return null;
+            }
+
+            const sb = r.score_breakdown || {};
+            const clamp = (n) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+            const scoreBreakdown = {
+              style_dna_match: clamp(sb.style_dna_match), moment_strength: clamp(sb.moment_strength),
+              viewer_emotion: clamp(sb.viewer_emotion), original_source: clamp(sb.original_source), engagement: clamp(sb.engagement)
+            };
+            const finalScore = Math.round(
+              scoreBreakdown.style_dna_match * 0.30 + scoreBreakdown.moment_strength * 0.25 +
+              scoreBreakdown.viewer_emotion * 0.20 + scoreBreakdown.original_source * 0.15 +
+              scoreBreakdown.engagement * 0.10
+            );
+
+            const searchTerms = (matchedClip.tags && matchedClip.tags.length > 0) ? matchedClip.tags.slice(0, 5) : [topic];
+
+            return {
+              rank: Number(r.rank) || 0, moment_idea: r.moment_idea || matchedClip.title,
+              suggested_source_platform: matchedClip.platform, url_to_potential_original_clip: matchedClip.url,
+              style_dna_match_reason: r.style_dna_match_reason, countdown_position_reason: r.countdown_position_reason,
+              viral_mechanism: r.viral_mechanism, emotion_trigger: r.emotion_trigger,
+              source_confidence: r.source_confidence, suggested_caption_overlay: r.suggested_caption_overlay || "",
+              score_breakdown: scoreBreakdown, final_score: finalScore, confidence_score: finalScore,
+              human_editor_search_terms: searchTerms
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.rank - a.rank)
+          .slice(0, 6);
+
+        if (rejectedForMissingReasoning.length > 0) {
+          explainability_recorder.execute("RankingAgent: rejected clips missing required reasoning (contract §3)", { rejected: rejectedForMissingReasoning }, agentLogger, agentMetrics);
+          agentLogger.warn(`RankingAgent: ${rejectedForMissingReasoning.length} clips rejected for missing required reasoning.`);
+        }
+        if (finalRanked.length === 0) {
+          explainability_recorder.execute("RankingAgent: 0 clips passed the editorial reasoning bar this run — honestly reporting empty, no engagement fallback per contract", { candidate_count: clips.length }, agentLogger, agentMetrics);
+          agentLogger.warn("RankingAgent: 0 clips passed the editorial reasoning bar this run.");
+        }
+
+        const finalInsights = {
+          overall_opportunity_reasoning: data?.overall_opportunity_reasoning || (finalRanked.length === 0 ? "Ranking could not be generated with the required editorial reasoning this run. Try again, broaden the topic, or provide reference channels for a stronger Editorial DNA match." : ""),
+          trend_status: data?.trend_status || "Unknown",
+          hook_suggestions: coerceToArray(data?.hook_suggestions), hashtag_strategy: coerceToArray(data?.hashtag_strategy), key_search_phrases_for_discoverability: coerceToArray(data?.key_search_phrases_for_discoverability),
+          seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
+          ranked_clip_opportunities: finalRanked
+        };
+        agentStatus = 'completed';
+        explainability_recorder.execute("RankingAgent: Ranked clips", { count: finalRanked.length, model, provider, confidence }, agentLogger, agentMetrics);
+
+        return {
+          success: true, result: { aiInsights: finalInsights },
+          metadata: { agent_id: AGENT_REGISTRY.RankingAgent.id, version: AGENT_REGISTRY.RankingAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_ra_1' },
+          new_state_data: { ai_insights: finalInsights },
+          events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: finalRanked.length } }]
+        };
+      } catch (e) {
+        agentLogger.error("RankingAgent failed:", { error: e.message, stack: e.stack });
+        errorType = e.name || 'AgentError';
+        throw e;
+      } finally {
+        agentMetrics.observe('agent_execution_latency_ms', Date.now() - startTime, { agentId: AGENT_REGISTRY.RankingAgent.id, status: agentStatus, errorType: errorType, component: 'AgentRegistry' });
+        if (agentStatus === 'completed') {
+            agentMetrics.increment('agent_execution_success_total', 1, { agentId: AGENT_REGISTRY.RankingAgent.id, component: 'AgentRegistry' });
+        } else {
+            agentMetrics.increment('agent_execution_failure_total', 1, { agentId: AGENT_REGISTRY.RankingAgent.id, errorType: errorType, component: 'AgentRegistry' });
+        }
       }
-      if (finalRanked.length === 0) {
-        explainability_recorder.execute("RankingAgent: 0 clips passed the editorial reasoning bar this run — honestly reporting empty, no engagement fallback per contract", { candidate_count: clips.length });
-      }
-
-      const finalInsights = {
-        overall_opportunity_reasoning: data?.overall_opportunity_reasoning || (finalRanked.length === 0 ? "Ranking could not be generated with the required editorial reasoning this run. Try again, broaden the topic, or provide reference channels for a stronger Editorial DNA match." : ""),
-        trend_status: data?.trend_status || "Unknown",
-        hook_suggestions: coerceToArray(data?.hook_suggestions),
-        hashtag_strategy: coerceToArray(data?.hashtag_strategy),
-        key_search_phrases_for_discoverability: coerceToArray(data?.key_search_phrases_for_discoverability),
-        seo_elements_for_upload: {
-          title_insights: "Craft catchy titles based on topic",
-          description_hook: "Engage early with a strong hook",
-          tags_to_prioritize: [topic.split(' ')[0]].filter(Boolean)
-        },
-        ranked_clip_opportunities: finalRanked
-      };
-
-      explainability_recorder.execute("RankingAgent: Ranked clips", { count: finalRanked.length, model, provider, confidence });
-
-      return {
-        success: true,
-        result: { aiInsights: finalInsights },
-        metadata: { agent_id: AGENT_REGISTRY.RankingAgent.id, version: AGENT_REGISTRY.RankingAgent.version, confidence_score: confidence, explainability_trace_id: 'trace_ra_1' },
-        new_state_data: { ai_insights: finalInsights },
-        events_to_publish: [{ type: "RANKING_COMPLETED", payload: { count: finalRanked.length } }]
-      };
     }
   },
-
-  // Add other agents (H, I, J, K, L) here for future phases.
-  // For Phase 1, only these initial agents are implemented.
 };
 
 // -----------------------------------------------------------------------------
 // ORCHESTRATOR LAYER
 // -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// VIRAL OPPORTUNITY GENERATOR (powers the 🎲 Dice button) — CONTRACT §2
-// FEATURE: previously the Dice button just picked a random string from a static
-// hardcoded list (SURPRISE_NICHES) client-side — no AI involved at all. This is a
-// real LLM call that produces a structured Viral Opportunity (title + format +
-// viewer emotion arc + search strategy + reject list), optionally informed by a
-// real Editorial DNA profile if the user has already analyzed reference channels
-// in this session.
-// -----------------------------------------------------------------------------
-async function generateViralOpportunity(env, modelPreference, dnaProfile) {
+async function generateViralOpportunity(env, modelPreference, dnaProfile, logger, metricsCollector) {
   const trendProfiles = KNOWLEDGE_BASE_PLUGINS.core.trend_profiles;
   const storyPatterns = KNOWLEDGE_BASE_PLUGINS.core.story_patterns;
 
-  const prompt =
-    "You are a viral short-form video editor brainstorming a new \"Ranking #6-#1 countdown\" video idea. " +
-    "Trend context: " + JSON.stringify(trendProfiles) + ". Countdown story structure: " + JSON.stringify(storyPatterns) + ".\n" +
-    (dnaProfile
-      ? "IMPORTANT: base this idea on the user's own Editorial DNA profile (extracted from " + dnaProfile.based_on_real_video_count + " real videos on their reference channel(s)): " + JSON.stringify(dnaProfile) + ". The idea must fit this DNA, not just be generically viral.\n"
-      : "No reference channel DNA is available yet — brainstorm a generally strong, specific countdown idea.\n") +
-    "Generate ONE single viral opportunity idea. Output JSON with:\n" +
-    "- title: a specific 'Ranking [specific thing]' style topic (NOT generic, e.g. 'Ranking Don't Trust Your Eyes Moments' not 'Ranking Funny Videos')\n" +
-    "- format: one short phrase describing the visual/structural format (e.g. 'Visual illusion + unexpected reveal')\n" +
-    "- viewer_emotion_arc: the emotional sequence a viewer goes through, as 'A -> B -> C' (e.g. 'Confusion -> surprise -> laugh')\n" +
-    "- search_strategy: array of 4-6 SPECIFIC search phrases to find source clips for this idea (not just the title restated)\n" +
-    "- reject: array of 4-6 content types to explicitly avoid surfacing for this idea (e.g. 'tutorial', 'compilation', 'news')\n" +
-    "Return ONLY JSON matching this structure.";
+  const llmService = capabilityRegistry.LLMServiceCapability;
+  const explainabilityRecorder = capabilityRegistry.ExplainabilityRecordingCapability;
 
-  const schema = {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      format: { type: "string" },
-      viewer_emotion_arc: { type: "string" },
-      search_strategy: { type: "array", items: { type: "string" } },
-      reject: { type: "array", items: { type: "string" } }
-    },
-    required: ["title", "format", "viewer_emotion_arc", "search_strategy", "reject"]
-  };
+  const startTime = Date.now();
+  let status = 'failed';
+  let errorType = 'UnknownError';
 
-  const { data, confidence, error } = await capabilityRegistry.LLMServiceCapability.execute(prompt, schema, modelPreference, env);
-  if (error) throw new Error("Viral Opportunity generation failed: " + error);
+  try {
+    metricsCollector.increment('api_generate_opportunity_total', 1, { component: 'Orchestrator' });
 
-  return {
-    title: data?.title || "",
-    format: data?.format || "",
-    viewer_emotion_arc: data?.viewer_emotion_arc || "",
-    search_strategy: coerceToArray(data?.search_strategy),
-    reject: coerceToArray(data?.reject),
-    confidence
-  };
+    const prompt =
+      "You are a viral short-form video editor brainstorming a new \"Ranking #6-#1 countdown\" video idea. " +
+      "Trend context: " + JSON.stringify(trendProfiles) + ". Countdown story structure: " + JSON.stringify(storyPatterns) + ".\n" +
+      (dnaProfile
+        ? "IMPORTANT: base this idea on the user's own Editorial DNA profile (extracted from " + dnaProfile.based_on_real_video_count + " real videos on their reference channel(s)): " + JSON.stringify(dnaProfile) + ". The idea must fit this DNA, not just be generically viral.\n"
+        : "No reference channel DNA is available yet — brainstorm a generally strong, specific countdown idea.\n") +
+      "Generate ONE single viral opportunity idea. Output JSON with:\n" +
+      "- title: a specific 'Ranking [specific thing]' style topic (NOT generic, e.g. 'Ranking Don't Trust Your Eyes Moments' not 'Ranking Funny Videos')\n" +
+      "- format: one short phrase describing the visual/structural format (e.g. 'Visual illusion + unexpected reveal')\n" +
+      "- viewer_emotion_arc: the emotional sequence a viewer goes through, as 'A -> B -> C' (e.g. 'Confusion -> surprise -> laugh')\n" +
+      "- search_strategy: array of 4-6 SPECIFIC search phrases to find source clips for this idea (not just the title restated)\n" +
+      "- reject: array of 4-6 content types to explicitly avoid surfacing for this idea (e.g. 'tutorial', 'compilation', 'news')\n" +
+      "Return ONLY JSON matching this structure.";
+
+    const schema = {
+      type: "object",
+      properties: {
+        title: { type: "string" }, format: { type: "string" }, viewer_emotion_arc: { type: "string" },
+        search_strategy: { type: "array", items: { type: "string" } }, reject: { type: "array", items: { type: "string" } }
+      },
+      required: ["title", "format", "viewer_emotion_arc", "search_strategy", "reject"]
+    };
+
+    const { data, confidence, error } = await llmService.execute(prompt, schema, modelPreference, env, logger.child({ component: 'generateViralOpportunity' }), metricsCollector);
+    if (error) {
+        logger.warn("Viral Opportunity generation failed:", { error: error });
+        throw new LLMError("Viral Opportunity generation failed: " + error, 'VIRAL_OPP_LLM_FAILED', { originalError: error });
+    }
+    status = 'success';
+    return {
+      title: data?.title || "", format: data?.format || "", viewer_emotion_arc: data?.viewer_emotion_arc || "",
+      search_strategy: coerceToArray(data?.search_strategy), reject: coerceToArray(data?.reject), confidence
+    };
+  } catch (e) {
+    logger.error("generateViralOpportunity failed:", { error: e.message, stack: e.stack });
+    errorType = e.name || 'OrchestrationError';
+    throw e;
+  } finally {
+    metricsCollector.observe('api_generate_opportunity_latency_ms', Date.now() - startTime, { status: status, errorType: errorType, component: 'Orchestrator' });
+    if (status === 'success') {
+        metricsCollector.increment('api_generate_opportunity_success_total', 1, { component: 'Orchestrator' });
+    } else {
+        metricsCollector.increment('api_generate_opportunity_failure_total', 1, { errorType: errorType, component: 'Orchestrator' });
+    }
+  }
 }
 
-async function orchestrate(workflowId, inputContract, env) {
+async function orchestrate(workflowId, inputContract, env, logger, metricsCollector) {
   const stateAccess = capabilityRegistry.StateAccessCapability;
   let runtimeState = new RuntimeState(workflowId, inputContract);
-  workflowStates[workflowId] = runtimeState; // Initialize global in-memory state for this workflow
+  workflowStates[workflowId] = runtimeState;
 
-  const agentContext = createAgentContext(workflowId, env);
+  const agentContext = createAgentContext(workflowId, env, logger, metricsCollector);
   
-  // Set global constraints from input
-  runtimeState = stateAccess.execute(workflowId, "update", { global_constraints: inputContract.constraints || {} }); // Ensure constraints are explicitly in state
+  runtimeState = await stateAccess.execute(workflowId, "update", { global_constraints: inputContract.constraints || {} }, logger, metricsCollector);
 
   const executionLog = [];
 
   const executeAgent = async (agentId) => {
     const agent = AGENT_REGISTRY[agentId];
-    if (!agent) throw new Error(`Agent '${agentId}' not found in registry.`);
+    if (!agent) {
+        throw new ConfigurationError(`Agent '${agentId}' not found in registry.`, 'AGENT_NOT_FOUND', { agentId });
+    }
 
     const startTime = Date.now();
     let agentOutput;
     try {
-      // Agents read from the current workflow state
       agentOutput = await agent.run(workflowStates[workflowId], agentContext);
       
-      // Update runtime state with agent's output
-      runtimeState = stateAccess.execute(workflowId, "update", {
+      runtimeState = await stateAccess.execute(workflowId, "update", {
         ...agentOutput.new_state_data,
         agent_execution_log: [...runtimeState.agent_execution_log, {
           agent_id: agentId,
           status: "COMPLETED",
           duration_ms: Date.now() - startTime,
           timestamp: new Date().toISOString(),
-          metadata: agentOutput.metadata // include agent specific metadata like confidence
+          metadata: agentOutput.metadata
         }]
-      });
+      }, logger, metricsCollector);
 
-      // Publish events
       (agentOutput.events_to_publish || []).forEach(event => {
-        agentContext.event_bus.execute(event.type, { workflowId, ...event.payload });
+        agentContext.event_bus.execute(event.type, { workflowId, ...event.payload }, logger, metricsCollector);
       });
 
     } catch (e) {
-      console.error("Orchestration: Agent '" + agentId + "' failed:", e.message);
-      runtimeState = stateAccess.execute(workflowId, "update", {
+      logger.error("Orchestration: Agent '" + agentId + "' failed:", { error: e.message, stack: e.stack, agentId });
+      runtimeState = await stateAccess.execute(workflowId, "update", {
         status: "FAILED",
         agent_execution_log: [...runtimeState.agent_execution_log, {
           agent_id: agentId,
@@ -1789,19 +2076,16 @@ async function orchestrate(workflowId, inputContract, env) {
           duration_ms: Date.now() - startTime,
           timestamp: new Date().toISOString()
         }]
-      });
-      throw new Error("Agent '" + agentId + "' failed: " + e.message);
+      }, logger, metricsCollector);
+      throw e;
     }
     executionLog.push({ agent: agentId, status: "completed", duration: Date.now() - startTime });
     return agentOutput;
   };
 
   try {
-    // Phase 1 Workflow - Simplified Linear Flow
-    // PERF: these two agents are independent of each other (both only read
-    // input_contract) — running them in parallel instead of sequentially shaves real
-    // latency off the total pipeline time, which matters now that free-tier models can
-    // be slower to respond.
+    metricsCollector.increment('orchestration_workflow_total', 1, { workflowId: workflowId, component: 'Orchestrator' });
+
     await Promise.all([
       executeAgent("EditorialDNAExtractionAgent"),
       executeAgent("OpportunityGenerator")
@@ -1811,40 +2095,26 @@ async function orchestrate(workflowId, inputContract, env) {
     await executeAgent("DiscoveryStrategyPlannerAgent");
     await executeAgent("SourceHunterAgent");
     await executeAgent("RankingAgent");
-    // Other agents (G, H, I, J, K, L) will be integrated in future phases
 
-    runtimeState = stateAccess.execute(workflowId, "update", { status: "COMPLETED" });
-    agentContext.event_bus.execute("WORKFLOW_COMPLETED", { workflowId, finalStatus: "COMPLETED" });
+    runtimeState = await stateAccess.execute(workflowId, "update", { status: "COMPLETED" }, logger, metricsCollector);
+    agentContext.event_bus.execute("WORKFLOW_COMPLETED", { workflowId, finalStatus: "COMPLETED" }, logger, metricsCollector);
     
-    // For Phase 1, just return the collected raw clips and placeholder insights
+    metricsCollector.increment('orchestration_workflow_success_total', 1, { workflowId: workflowId, component: 'Orchestrator' });
     const finalResult = {
       pipeline: { status: runtimeState.status, steps: runtimeState.agent_execution_log },
-      // FIX: Use editorial_intent directly as editorial_objective for consistency and robust field population
       editorial_objective: {
-        topic: runtimeState.editorial_intent?.topic || inputContract.topic,
-        creative_brief_summary: runtimeState.editorial_intent?.creative_brief_summary || inputContract.creativeBrief,
-        // BUGFIX: this previously read `desired_clip_characteristics?.length_range` and
-        // `?.pacing`, but EditorialIntentAgent's schema never produces fields with those
-        // names (it produces min_duration_sec/max_duration_sec and content_tone instead),
-        // so "Clip Length" and "Hook Style" on the report always showed "N/A" even when
-        // the LLM generated real duration/tone data. Map to the actual schema fields.
+        topic: runtimeState.editorial_intent?.topic || inputContract.topic, creative_brief_summary: runtimeState.editorial_intent?.creative_brief_summary || inputContract.creativeBrief,
         editorial_dna: (() => {
           const dcc = runtimeState.editorial_intent?.desired_clip_characteristics || {};
           const clipLength = (dcc.min_duration_sec != null && dcc.max_duration_sec != null)
             ? `${dcc.min_duration_sec}-${dcc.max_duration_sec}s`
             : 'N/A';
           return {
-            clip_length: clipLength,
-            hook_style: dcc.content_tone || 'N/A',
+            clip_length: clipLength, hook_style: dcc.content_tone || 'N/A',
             emotion_focus: (runtimeState.editorial_intent?.target_emotions || []).join(', ') || 'N/A',
             source_preference: 'Original Clips'
           };
         })(),
-        // BUGFIX: this previously read `global_constraints?.user_defined_constraints`,
-        // but the frontend always sends that field as a hardcoded empty array — so this
-        // section always displayed "No research constraints applied" even when real
-        // constraints (date window, engagement level, etc.) were in fact applied to the
-        // search. Build a human-readable list from the constraints that were actually used.
         research_constraints_applied: (() => {
           const c = runtimeState.global_constraints || {};
           const applied = [];
@@ -1859,218 +2129,227 @@ async function orchestrate(workflowId, inputContract, env) {
         })()
       },
       raw_evidence_found: (() => {
-        // BUGFIX: previously ALL platforms' clips (YouTube + TikTok + Reddit) were dumped
-        // into `youtube_clips` (a leftover from when only YouTube existed), while
-        // tiktok_clips/reddit_posts/etc. were hardcoded to []. The frontend renders each
-        // platform from its own dedicated field, so TikTok/Reddit tabs always showed
-        // "No evidence found" even when clips were successfully collected. Bucket by the
-        // `platform` field each clip already carries instead.
         const allClips = runtimeState.raw_clips_collected || [];
         const byPlatform = (name) => allClips.filter(c => (c.platform || "").trim().toLowerCase() === name);
-        const youtube_clips = byPlatform("youtube");
-        const tiktok_clips = byPlatform("tiktok");
-        const reddit_posts = byPlatform("reddit");
-        const instagram_reels = byPlatform("instagram");
-        const facebook_posts = byPlatform("facebook");
-        const telegram_clips = byPlatform("telegram");
+        const youtube_clips = byPlatform("youtube"); const tiktok_clips = byPlatform("tiktok");
+        const reddit_posts = byPlatform("reddit"); const instagram_reels = byPlatform("instagram");
+        const facebook_posts = byPlatform("facebook"); const telegram_clips = byPlatform("telegram");
         return {
           youtube_clips, tiktok_clips, reddit_posts, instagram_reels, facebook_posts, telegram_clips,
-          total_youtube: youtube_clips.length,
-          total_tiktok: tiktok_clips.length,
-          total_reddit: reddit_posts.length,
-          past_clips_from_memory: 0, // Not implemented in Phase 1
-          platform_search_links: {} // Not fully implemented in Phase 1
+          total_youtube: youtube_clips.length, total_tiktok: tiktok_clips.length, total_reddit: reddit_posts.length,
+          past_clips_from_memory: 0, platform_search_links: {}
         };
       })(),
-      // FIX: this used to be 100% hardcoded placeholder text ("Phase 1: Basic insights
-      // generated...", "Placeholder Hook 1", confidence_score: 75 for every clip) and
-      // ranked_clip_opportunities was just the first 6 raw search results in whatever
-      // order they came back — no actual AI curation happened. Now this uses the real,
-      // LLM-generated ranking + reasoning produced by RankingAgent, with a safe fallback
-      // in case that agent didn't run for some reason.
       ai_actionable_insights: runtimeState.ai_insights || {
         overall_opportunity_reasoning: "Ranking could not be generated for this run.",
-        trend_status: "Unknown",
-        hook_suggestions: [],
-        hashtag_strategy: [],
-        key_search_phrases_for_discoverability: [],
+        trend_status: "Unknown", hook_suggestions: [], hashtag_strategy: [], key_search_phrases_for_discoverability: [],
         seo_elements_for_upload: { title_insights: "", description_hook: "", tags_to_prioritize: [] },
         ranked_clip_opportunities: []
       },
-      // FEATURE: previously always null. Now surfaces the structured Editorial DNA
-      // profile extracted from REAL reference-channel videos by EditorialDNAExtractionAgent
-      // (null if no reference channels were provided, or their real data couldn't be fetched).
       ref_channel_analysis: runtimeState.editorial_dna_profile,
-      overall_confidence_score: capabilityRegistry.ConfidenceCalculationCapability.execute().score,
+      overall_confidence_score: capabilityRegistry.ConfidenceCalculationCapability.execute(null, null, logger, metricsCollector).score,
       explainability_trace_id: 'workflow_trace_1'
     };
 
-    // Store final report in D1 if DB is configured
     if (env.DB) {
       capabilityRegistry.PersistenceCapability.execute("save", "final_report", {
-        workflowId,
-        report: finalResult,
-        timestamp: new Date().toISOString()
-      });
+        workflowId, report: finalResult, timestamp: new Date().toISOString()
+      }, logger, metricsCollector, env);
     }
-
     return finalResult;
-
   } catch (e) {
-    console.error("Orchestration workflow failed:", e);
+    logger.error("Orchestration workflow failed:", { error: e.message, stack: e.stack });
+    metricsCollector.increment('orchestration_workflow_failure_total', 1, { workflowId: workflowId, errorType: e.name || 'UnknownError', component: 'Orchestrator' });
     return {
       pipeline: { status: "FAILED", steps: workflowStates[workflowId]?.agent_execution_log || [] },
-      // Ensure error output also has expected structure
       editorial_objective: {
-        topic: inputContract.topic,
-        creative_brief_summary: inputContract.creativeBrief,
-        editorial_dna: {}, // Placeholder for new architecture
-        research_constraints_applied: inputContract.constraints || []
+        topic: inputContract.topic, creative_brief_summary: inputContract.creativeBrief,
+        editorial_dna: {}, research_constraints_applied: inputContract.constraints || []
       },
-      raw_evidence_found: null,
-      ai_actionable_insights: null,
-      ref_channel_analysis: null,
-      error: "Workflow orchestration failed: " + e.message,
-      overall_confidence_score: 0,
+      raw_evidence_found: null, ai_actionable_insights: null, ref_channel_analysis: null,
+      error: "Workflow orchestration failed: " + e.message, overall_confidence_score: 0,
       explainability_trace_id: 'workflow_trace_fail_final'
     };
   } finally {
-    // Clean up in-memory state after a while, or immediately if using persistent storage
-    // For Phase 1, we keep it for immediate debugging. In real app, would have garbage collection.
   }
 }
 
 // -----------------------------------------------------------------------------
-// WORKER FETCH HANDLER (API routes only — static index.html/CSS/JS are served
-// automatically by Cloudflare Workers Assets via the `assets` binding in
-// wrangler.jsonc; this fetch handler only needs to define the /api/* routes.)
+// WORKER FETCH HANDLER (API routes only)
 // -----------------------------------------------------------------------------
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+    const requestLogger = workerLogger.child({ requestId: Math.random().toString(36).substring(2, 9), traceId: Math.random().toString(36).substring(2, 9) });
+    const requestMetrics = workerMetricsCollector;
 
-    // Status endpoint: tells the frontend which providers/bindings are configured
-    // so it can auto-select a working AI provider and show binding health.
-    if (url.pathname === "/api/status" && request.method === "GET") {
-      return json({
-        status: "ok",
-        providers_configured: {
-          cloudflare: Boolean(env.AI),
-          openrouter: Boolean(env.OPENROUTER_API_KEY),
-          google: Boolean(env.GEMINI_API_KEY),
-          github: Boolean(env.GITHUB_MODELS_TOKEN),
-          huggingface: Boolean(env.HF_TOKEN),
-          cloudflare_account_id: Boolean(env.CLOUDFLARE_ACCOUNT_ID)
-        },
-        bindings: {
-          ai: Boolean(env.AI),
-          youtube: Boolean(env.YOUTUBE_API_KEY),
-          apify: Boolean(env.APIFY_API_TOKEN),
-          d1: Boolean(env.DB),
-          r2: Boolean(env.MY_BUCKET),
-          ai_search: Boolean(env.AI_SEARCH),
-          media: Boolean(env.MEDIA),
-          images: Boolean(env.IMAGES),
-          stream: Boolean(env.STREAM),
+    requestLogger.info(`Incoming request: ${request.method} ${url.pathname}`);
+    requestMetrics.increment('http_requests_total', 1, { method: request.method, pathname: url.pathname, component: 'WorkerFetchHandler' });
+    const startTime = Date.now();
+    let handlerStatus = 'failed';
+    let errorType = 'UnknownError';
+    let httpStatusCode = 500; // Default error status
+
+    if (request.method === "OPTIONS") {
+        handlerStatus = 'success';
+        httpStatusCode = 200;
+        requestMetrics.observe('http_request_latency_ms', Date.now() - startTime, { method: request.method, pathname: url.pathname, status: handlerStatus, component: 'WorkerFetchHandler' });
+        requestMetrics.increment('http_requests_success_total', 1, { method: request.method, pathname: url.pathname, component: 'WorkerFetchHandler' });
+        return new Response(null, { headers: CORS });
+    }
+
+    try {
+        if (url.pathname === "/api/status" && request.method === "GET") {
+            handlerStatus = 'success';
+            httpStatusCode = 200;
+            return json({
+                status: "ok",
+                providers_configured: {
+                    cloudflare: Boolean(env.AI), openrouter: Boolean(env.OPENROUTER_API_KEY),
+                    google: Boolean(env.GEMINI_API_KEY), github: Boolean(env.GITHUB_MODELS_TOKEN),
+                    huggingface: Boolean(env.HF_TOKEN), cloudflare_account_id: Boolean(env.CLOUDFLARE_ACCOUNT_ID)
+                },
+                bindings: {
+                    ai: Boolean(env.AI), youtube: Boolean(env.YOUTUBE_API_KEY), apify: Boolean(env.APIFY_API_TOKEN),
+                    d1: Boolean(env.DB), r2: Boolean(env.MY_BUCKET), ai_search: Boolean(env.AI_SEARCH),
+                    media: Boolean(env.MEDIA), images: Boolean(env.IMAGES), stream: Boolean(env.STREAM),
+                },
+                worker_metrics_snapshot: requestMetrics.getMetricsSnapshot()
+            });
         }
-      });
+
+        if (url.pathname === "/api/generate-opportunity" && request.method === "POST") {
+            let body;
+            try { body = await request.json(); } catch (e) {
+                requestLogger.warn("Invalid JSON body for generate-opportunity.", { error: e.message });
+                errorType = 'InvalidJsonBody';
+                httpStatusCode = 400;
+                return json({ error: "Invalid JSON body" }, httpStatusCode);
+            }
+            const { provider, model, dnaProfile } = body || {};
+            try {
+                const opportunity = await generateViralOpportunity(env, { provider, [provider]: model }, dnaProfile || null, requestLogger, requestMetrics);
+                handlerStatus = 'success';
+                httpStatusCode = 200;
+                return json(opportunity);
+            } catch (e) {
+                requestLogger.error("generate-opportunity failed:", { error: e.message, stack: e.stack });
+                errorType = e.name || 'OpportunityGenerationError';
+                httpStatusCode = (e instanceof ConfigurationError || e instanceof LLMError) ? 500 : 500; // Standardize HTTP status
+                return json({ error: e.message }, httpStatusCode);
+            }
+        }
+
+        if (url.pathname === "/api/complete" && request.method === "POST") {
+            let body;
+            try { body = await request.json(); } catch (e) {
+                requestLogger.warn("Invalid JSON body for /api/complete.", { error: e.message });
+                errorType = 'InvalidJsonBody';
+                httpStatusCode = 400;
+                return json({ error: "Invalid JSON body" }, httpStatusCode);
+            }
+            const { prompt, provider, model, outputSchema } = body;
+            if (!prompt || !provider || !model) {
+                requestLogger.warn("Missing required fields for /api/complete.", { prompt: Boolean(prompt), provider: Boolean(provider), model: Boolean(model) });
+                errorType = 'MissingRequiredFields';
+                httpStatusCode = 400;
+                return json({ error: "Missing required fields: prompt, provider, or model" }, httpStatusCode);
+            }
+            try {
+                const llmService = capabilityRegistry.LLMServiceCapability;
+                const { data, provider: usedProvider, model: usedModel } = await llmService.execute(
+                  prompt, outputSchema, { provider, [provider]: model }, env, requestLogger, requestMetrics
+                );
+                handlerStatus = 'success';
+                httpStatusCode = 200;
+                return json({ text: JSON.stringify(data), provider_used: usedProvider, model_used: usedModel });
+            } catch (e) {
+                requestLogger.error("/api/complete failed:", { error: e.message, stack: e.stack });
+                errorType = e.name || 'LLMCompleteError';
+                httpStatusCode = (e instanceof ConfigurationError || e instanceof LLMError) ? 500 : 500;
+                return json({ error: e.message }, httpStatusCode);
+            }
+        }
+
+        if (url.pathname === "/api/generate-insights" && request.method === "POST") {
+            let body;
+            try { body = await request.json(); } catch (e) {
+                requestLogger.warn("Invalid JSON body for generate-insights.", { error: e.message });
+                errorType = 'InvalidJsonBody';
+                httpStatusCode = 400;
+                return json({ error: "Invalid JSON body" }, httpStatusCode);
+            }
+            const { topic, creativeBrief, referenceChannels, provider, model, constraints } = body;
+            if (!topic) {
+                requestLogger.warn("Missing required field 'topic' for generate-insights.");
+                errorType = 'MissingRequiredFields';
+                httpStatusCode = 400;
+                return json({ error: "Missing required field: topic" }, httpStatusCode);
+            }
+
+            const workflowId = `workflow-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            const inputContract = { topic, creativeBrief, referenceChannels, constraints, model_preference: { provider, [provider]: model } };
+
+            try {
+                const result = await orchestrate(workflowId, inputContract, env, requestLogger, requestMetrics);
+                handlerStatus = 'success';
+                httpStatusCode = 200;
+                return json(result);
+            } catch (e) {
+                requestLogger.error("Workflow orchestration failed:", { error: e.message, stack: e.stack });
+                errorType = e.name || 'OrchestrationWorkflowError';
+                // Issue 6: Change API Error Status Codes
+                httpStatusCode = (e instanceof ConfigurationError || e instanceof LLMError || e instanceof EmbeddingError || e instanceof MomentNotFoundError) ? 500 : 500;
+                return json({
+                    pipeline: { status: "FAILED", steps: workflowStates[workflowId]?.agent_execution_log || [] },
+                    editorial_objective: {
+                        topic: inputContract.topic, creative_brief_summary: inputContract.creativeBrief,
+                        editorial_dna: {}, research_constraints_applied: inputContract.constraints || []
+                    },
+                    raw_evidence_found: null, ai_actionable_insights: null, ref_channel_analysis: null,
+                    error: "Workflow orchestration failed: " + e.message, overall_confidence_score: 0,
+                    explainability_trace_id: 'workflow_trace_fail_final'
+                }, httpStatusCode);
+            }
+        }
+
+        if (url.pathname === "/api/history" && request.method === "GET") {
+            if (!env.DB) {
+                requestLogger.warn("D1 binding not configured for history fetch.");
+                errorType = 'DB_BindingMissing';
+                httpStatusCode = 500;
+                return json({ history: [] }, httpStatusCode);
+            }
+            try {
+                const result = await env.DB.prepare("SELECT topic, created_at FROM research_history ORDER BY created_at DESC LIMIT 10").all();
+                handlerStatus = 'success';
+                httpStatusCode = 200;
+                return json({ history: result.results || [] });
+            } catch (e) {
+                requestLogger.error("D1 history fetch failed:", { error: e.message, stack: e.stack });
+                errorType = e.name || 'DBFetchError';
+                httpStatusCode = 500;
+                return json({ history: [] }, httpStatusCode);
+            }
+        }
+
+        requestLogger.warn("API route not found.", { pathname: url.pathname, method: request.method });
+        errorType = 'NotFound';
+        httpStatusCode = 404;
+        return json({ error: "Not found" }, httpStatusCode);
+    } catch (outerError) {
+        requestLogger.critical("Unhandled error in Worker fetch handler:", { error: outerError.message, stack: outerError.stack });
+        errorType = outerError.name || 'UnhandledWorkerError';
+        httpStatusCode = 500;
+        return json({ error: `An unhandled server error occurred: ${outerError.message}` }, httpStatusCode);
+    } finally {
+        requestMetrics.observe('http_request_latency_ms', Date.now() - startTime, { method: request.method, pathname: url.pathname, status: handlerStatus, errorType: errorType, httpStatus: httpStatusCode, component: 'WorkerFetchHandler' });
+        if (handlerStatus === 'success') {
+            requestMetrics.increment('http_requests_success_total', 1, { method: request.method, pathname: url.pathname, httpStatus: httpStatusCode, component: 'WorkerFetchHandler' });
+        } else {
+            requestMetrics.increment('http_requests_failure_total', 1, { method: request.method, pathname: url.pathname, errorType: errorType, httpStatus: httpStatusCode, component: 'WorkerFetchHandler' });
+        }
     }
-
-    // FEATURE: powers the 🎲 Dice button — CONTRACT §2 (Viral Opportunity).
-    // Previously the Dice button picked a random string client-side with no AI
-    // involved. This runs a real LLM call and returns a structured opportunity
-    // (title/format/viewer_emotion_arc/search_strategy/reject), optionally informed
-    // by a DNA profile the frontend already has in its session state.
-    if (url.pathname === "/api/generate-opportunity" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { body = {}; }
-      const { provider, model, dnaProfile } = body || {};
-      try {
-        const opportunity = await generateViralOpportunity(env, { provider, [provider]: model }, dnaProfile || null);
-        return json(opportunity);
-      } catch (e) {
-        console.warn("generate-opportunity failed:", e.message);
-        return json({ error: e.message }, 500);
-      }
-    }
-
-    // Generic LLM call endpoint for any ad-hoc frontend use.
-    if (url.pathname === "/api/complete" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
-      const { prompt, provider, model, outputSchema } = body;
-      if (!prompt || !provider || !model) {
-        return json({ error: "Missing required fields: prompt, provider, or model" }, 400);
-      }
-      try {
-        const llmService = capabilityRegistry.LLMServiceCapability;
-        const { data, provider: usedProvider, model: usedModel } = await llmService.execute(
-          prompt, outputSchema, { provider, [provider]: model }, env
-        );
-        return json({ text: JSON.stringify(data), provider_used: usedProvider, model_used: usedModel });
-      } catch (e) {
-        return json({ error: e.message }, 500);
-      }
-    }
-
-    // Main entry point: runs the full agent pipeline end-to-end.
-    if (url.pathname === "/api/generate-insights" && request.method === "POST") {
-      let body;
-      try { body = await request.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
-      const { topic, creativeBrief, referenceChannels, provider, model, constraints } = body;
-      if (!topic) return json({ error: "Missing required field: topic" }, 400);
-
-      const workflowId = `workflow-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const inputContract = { topic, creativeBrief, referenceChannels, constraints, model_preference: { provider, [provider]: model } };
-
-      try {
-        const result = await orchestrate(workflowId, inputContract, env);
-        return json(result);
-      } catch (e) {
-        console.error("Workflow orchestration failed:", e);
-        return json({
-          pipeline: { status: "FAILED", steps: workflowStates[workflowId]?.agent_execution_log || [] },
-          editorial_objective: {
-            topic: inputContract.topic,
-            creative_brief_summary: inputContract.creativeBrief,
-            editorial_dna: {},
-            research_constraints_applied: []
-          },
-          raw_evidence_found: null,
-          ai_actionable_insights: null,
-          ref_channel_analysis: null,
-          error: "Workflow orchestration failed: " + e.message,
-          overall_confidence_score: 0,
-          explainability_trace_id: 'workflow_trace_fail_final'
-        }, 200); // Return 200 so the frontend can parse and display the error nicely
-      }
-    }
-
-    // Legacy history endpoint.
-    if (url.pathname === "/api/history" && request.method === "GET") {
-      if (!env.DB) return json({ history: [] });
-      try {
-        const result = await env.DB.prepare("SELECT topic, created_at FROM research_history ORDER BY created_at DESC LIMIT 10").all();
-        return json({ history: result.results || [] });
-      } catch (e) {
-        console.warn("D1 history fetch failed:", e.message);
-        return json({ history: [] });
-      }
-    }
-
-    // FIX: previously "/" served an HTML page built by concatenating a giant JS
-    // template literal (HTML_STYLES + HTML_CONTENT) that *embedded a second,
-    // client-side <script> block inside itself*. Because the whole thing was one
-    // template literal, every `${...}` inside the embedded client-side script was
-    // evaluated immediately, server-side, at HTML-generation time — not deferred to
-    // the browser. Any `${...}` referencing client-only variables (state, item, m,
-    // clip, etc.) would throw a ReferenceError server-side. The frontend is now a
-    // real standalone index.html file (see repo root), served as a static asset by
-    // Cloudflare Workers Assets automatically — this Worker no longer needs to (and
-    // must not try to) generate HTML at all. Any GET request that isn't one of the
-    // /api/* routes above and isn't matched by a static file falls through here.
-    return json({ error: "Not found" }, 404);
   },
 };
